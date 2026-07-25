@@ -1,0 +1,914 @@
+﻿<Window x:Class="BookStitch.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BookStitch"
+        Icon="/Assets/Icons/BookStitchAppIcon-Simplified-multisize.ico"
+        Height="860"
+        Width="1250"
+        MinHeight="760"
+        MinWidth="1050"
+        Background="#101418"
+        Foreground="#E8EDF2"
+        FontFamily="Segoe UI"
+        PreviewMouseWheel="MainWindow_PreviewMouseWheel"
+        PreviewMouseDown="MainWindow_PreviewMouseDown">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+
+            <Style x:Key="ExportOptionLabelStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource AccentSoftBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+
+            <Style x:Key="PrimaryRepeatButtonStyle" TargetType="RepeatButton">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="11,4"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RepeatButton">
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="9"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter x:Name="ContentPresenter"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#0F5F63"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#0F5F63"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource DisabledButtonTextBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
+                                    <Setter Property="Cursor" Value="Arrow"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
+                                    <Setter TargetName="ContentPresenter" Property="Opacity" Value="0.82"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+
+            <Style x:Key="SpecialTrackColumnHeaderStyle" TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Padding" Value="6,0,6,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DataGridColumnHeader">
+                            <Border Background="{StaticResource AccentBrush}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="TrackIndexColumnHeaderStyle"
+                   TargetType="DataGridColumnHeader"
+                   BasedOn="{StaticResource SpecialTrackColumnHeaderStyle}">
+                <Setter Property="ToolTip" Value="Index: Zeigt die aktuelle Zusammenfüge-Reihenfolge. In dieser Reihenfolge werden die Tracks am Ende gemerged."/>
+            </Style>
+
+            <Style x:Key="ChapterPreviewColumnHeaderStyle"
+                   TargetType="DataGridColumnHeader"
+                   BasedOn="{StaticResource SpecialTrackColumnHeaderStyle}">
+                <Setter Property="ToolTip" Value="Generiert fortlaufende Kapitelvorschläge aus der aktuellen Liste. Sortierung, Reihenfolge und Vollständigkeit bitte über die anderen Spalten prüfen."/>
+            </Style>
+
+            <Style x:Key="ExportProgressBarStyle" TargetType="ProgressBar">
+                <Setter Property="Height" Value="14"/>
+                <Setter Property="Background" Value="#11161B"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource InputBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+
+            <Style x:Key="DiscAnalysisProgressBarStyle"
+                   TargetType="ProgressBar"
+                   BasedOn="{StaticResource ExportProgressBarStyle}">
+                <Setter Property="Height" Value="14"/>
+                <Setter Property="Background" Value="#241416"/>
+                <Setter Property="Foreground" Value="#D35B62"/>
+                <Setter Property="BorderBrush" Value="#A5444A"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <DockPanel Margin="8">
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
+
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Image Grid.Column="0"
+                       Source="/Assets/Icons/BookStitchLogo-Round.png"
+                       Width="38"
+                       Height="38"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       SnapsToDevicePixels="True"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"
+                       ToolTip="BookStitch"
+                       MouseLeftButtonDown="BookStitchLogo_MouseLeftButtonDown"/>
+
+                <TextBlock Grid.Column="1"
+                           Text="BookStitch"
+                           FontSize="26"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource AccentSoftBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,30,0"/>
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="0,0,14,0">
+                    <Button Content="{Binding FolderButtonGlyph}"
+                            Width="44"
+                            Height="34"
+                            Padding="0"
+                            FontSize="17"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanStartNewProject}"
+                            ToolTip="Hörbuch-Ordner auswählen"
+                            Click="SelectFolder_Click"
+                            Margin="0,0,8,0"/>
+
+                    <Button Content="{Binding DiscButtonGlyph}"
+                            Width="44"
+                            Height="34"
+                            Padding="0"
+                            FontSize="17"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanStartNewProject}"
+                            ToolTip="MP3-CD / Audio-CD auswählen"
+                            Click="SelectDiscSource_Click"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="3"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Left"
+                            Cursor="Hand"
+                            ToolTip="{Binding SelectedSourceOpenPath}"
+                            MouseLeftButtonUp="OpenSelectedFolder_Click"
+                            Margin="0,0,14,0">
+                    <TextBlock Text="{Binding SelectedSourceDisplayText}"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource AccentSoftBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="730"/>
+                </StackPanel>
+
+                <Button Grid.Column="4"
+                        Content="FFmpeg einrichten..."
+                        MinWidth="145"
+                        Height="32"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        IsEnabled="{Binding CanConfigureFfmpeg}"
+                        Visibility="{Binding FfmpegSetupButtonVisibility}"
+                        Click="ConfigureFfmpeg_Click"
+                        Margin="0,0,16,0"/>
+
+                <StackPanel Grid.Column="5"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <Button Content="Projekte"
+                            MinWidth="92"
+                            Height="34"
+                            Padding="12,0"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanRefreshResumeProjects}"
+                            ToolTip="Vollständige Projekte öffnen"
+                            Click="OpenResumeProjects_Click"
+                            Margin="0,0,8,0"/>
+
+                    <Button Width="44"
+                            Height="38"
+                            Padding="4"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Einstellungen"
+                            Click="Settings_Click"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Right"
+                            Margin="4,0,2,0"
+                            IsEnabled="{Binding CanOpenSettings}">
+                        <TextBlock Text="&#xE713;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="24"
+                                   Foreground="{StaticResource AccentSoftBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Border Background="{StaticResource PanelBackgroundBrush}"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="7"
+                    Margin="0,0,0,10"
+                    ClipToBounds="True">
+                <StackPanel>
+                    <Grid Height="44"
+                          Margin="12,0"
+                          Background="Transparent"
+                          Cursor="Hand"
+                          ToolTip="Metadaten ein- oder ausklappen"
+                          MouseLeftButtonUp="MetadataHeader_MouseLeftButtonUp">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding MetadataSummaryTitle}"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource MainTextBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding MetadataSummaryDetails}"
+                                       Margin="0,2,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="1"
+                                   Width="34"
+                                   Text="{Binding MetadataToggleGlyph}"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="15"
+                                   Foreground="{StaticResource AccentSoftBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"/>
+                    </Grid>
+
+                    <Border x:Name="MetadataDetailsBorder"
+                            Height="0"
+                            Opacity="0"
+                            BorderBrush="{StaticResource PanelBorderBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="12,12,12,10">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="240"/>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="240"/>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="240"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Titel" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <TextBox Grid.Row="0" Grid.Column="1"
+                                     Text="{Binding BookTitle, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanChangeBookMetadata}"
+                                     Margin="0,0,16,8"/>
+
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Autor" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <TextBox Grid.Row="0" Grid.Column="3"
+                                     Text="{Binding Author, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanChangeBookMetadata}"
+                                     Margin="0,0,16,8"/>
+
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Sprecher" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <TextBox Grid.Row="0" Grid.Column="5"
+                                     Text="{Binding Narrator, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanChangeBookMetadata}"
+                                     Margin="0,0,0,8"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Text="Album"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Cursor="Hand"
+                                       ToolTip="{Binding AlbumLinkToggleToolTip}"
+                                       MouseLeftButtonUp="AlbumLabel_MouseLeftButtonUp"/>
+                            <TextBox x:Name="AlbumTextBox"
+                                     Grid.Row="1" Grid.Column="1"
+                                     Text="{Binding Album, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding CanChangeBookMetadata}"
+                                     IsTabStop="{Binding IsAlbumTabStop}"
+                                     Margin="0,0,16,0"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Genre" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="GenreComboBox"
+                                      Grid.Row="1" Grid.Column="3"
+                                      Style="{StaticResource DarkComboBoxStyle}"
+                                      PreviewKeyDown="GenreComboBox_PreviewKeyDown"
+                                      Text="{Binding Genre, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEditable="True"
+                                      IsEnabled="{Binding CanChangeBookMetadata}"
+                                      Margin="0,0,16,0">
+                                <ComboBoxItem Content="iBook Hörbuch"/>
+                                <ComboBoxItem Content="iBook Kleinkunst"/>
+                                <ComboBoxItem Content="iBook Wissen"/>
+                                <ComboBoxItem Content="Podcast"/>
+                                <ComboBoxItem Content="iBook Kinderbücher DE"/>
+                                <ComboBoxItem Content="iBook Kinderbücher CH"/>
+                                <ComboBoxItem Content="Audiobook"/>
+                                <ComboBoxItem Content="Hörbuch"/>
+                            </ComboBox>
+
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Grid Margin="0,-4,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Text="{Binding StatusText}"
+                           Margin="8,6,0,4"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding StandardProgressVisibility}"/>
+
+                <Grid Grid.Row="0" Grid.Column="0" Margin="8,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="190"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="104"/>
+                        <ColumnDefinition Width="20"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="360"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               Text="Export-Preset:"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource ExportOptionLabelStyle}"
+                               Margin="0,0,6,0"
+                               Cursor="Hand"
+                               ToolTip="Projektordner öffnen"
+                               MouseLeftButtonUp="OpenWorkFolder_Click"/>
+
+                    <ComboBox x:Name="ExportPresetComboBox"
+                              Grid.Column="1"
+                              Style="{StaticResource DarkComboBoxStyle}"
+                              ItemsSource="{Binding ExportPresets}"
+                              SelectedItem="{Binding SelectedExportPreset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectionChanged="ExportPresetComboBox_SelectionChanged"
+                              IsEnabled="{Binding CanChangeExportPreset}"
+                              IsEditable="False"/>
+
+                    <TextBlock Grid.Column="3"
+                               Text="Parallel:"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource ExportOptionLabelStyle}"
+                               Margin="0,0,6,0"
+                               Cursor="Hand"
+                               ToolTip="Windows-Task-Manager öffnen"
+                               MouseLeftButtonUp="OpenTaskManager_Click"/>
+
+                    <Grid Grid.Column="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="2"/>
+                            <ColumnDefinition Width="22"/>
+                            <ColumnDefinition Width="2"/>
+                            <ColumnDefinition Width="22"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="ParallelJobsTextBox"
+                                 Grid.Column="0"
+                                 Text="{Binding ParallelJobsInput, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                 IsEnabled="{Binding CanChangeExportOptions}"
+                                 HorizontalContentAlignment="Center"
+                                 VerticalContentAlignment="Center"
+                                 Padding="4,0"
+                                 Background="#11161B"
+                                 ToolTip="Auto = logische Prozessoren + 4, maximal 32. Manuell: Zahl von 1 bis 40"
+                                 LostFocus="ParallelJobsInput_LostFocus"
+                                 KeyDown="ParallelJobsInput_KeyDown"
+                                 PreviewMouseWheel="ParallelJobsInput_PreviewMouseWheel"/>
+
+                        <RepeatButton Grid.Column="2"
+                                Content="▲"
+                                Delay="400"
+                                Interval="90"
+                                Height="24"
+                                Padding="0"
+                                Style="{StaticResource PrimaryRepeatButtonStyle}"
+                                IsEnabled="{Binding CanChangeExportOptions}"
+                                ToolTip="Parallelität erhöhen"
+                                Click="IncreaseParallelJobs_Click"/>
+
+                        <RepeatButton Grid.Column="4"
+                                Content="▼"
+                                Delay="400"
+                                Interval="90"
+                                Height="24"
+                                Padding="0"
+                                Style="{StaticResource PrimaryRepeatButtonStyle}"
+                                IsEnabled="{Binding CanChangeExportOptions}"
+                                ToolTip="Parallelität verringern"
+                                Click="DecreaseParallelJobs_Click"/>
+                    </Grid>
+
+                    <TextBlock Grid.Column="6"
+                               Text="Ausgabeordner:"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource ExportOptionLabelStyle}"
+                               Margin="0,0,6,0"
+                               Cursor="Hand"
+                               ToolTip="Ausgabeordner im Explorer öffnen"
+                               MouseLeftButtonUp="OpenOutputFolder_Click"/>
+
+                    <Border Grid.Column="7"
+                            Background="#11161B"
+                            BorderBrush="{StaticResource InputBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="3"
+                            MinHeight="30"
+                            Padding="8,0"
+                            Cursor="Hand"
+                            IsEnabled="{Binding CanChooseOutputFolder}"
+                            ToolTip="Klicken, um Ausgabeordner auszuwählen"
+                            MouseLeftButtonUp="OutputFolderPath_Click">
+                        <TextBlock Text="{Binding OutputFolder, Mode=OneWay}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource MainTextBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CanChooseOutputFolder}" Value="False">
+                                            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+
+                    <Button Grid.Column="9"
+                            Content="Öffnen"
+                            MinWidth="78"
+                            Height="30"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanOpenOutputFolder}"
+                            Click="OpenOutputFolder_Click"/>
+                </Grid>
+
+                <StackPanel Grid.Row="0" Grid.Column="0"
+                            Orientation="Horizontal"
+                            Visibility="Collapsed"
+                            Margin="8,0,0,0">
+                    <TextBlock Text="{Binding ExportPreviewTrackCount}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewTotalDuration}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewActionSummary}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewChapterSummary}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewIssueSummary}" Foreground="{StaticResource MutedTextBrush}"/>
+                </StackPanel>
+
+                <Grid Grid.Row="2" Grid.Column="0" Margin="8,0,0,9">
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding StandardProgressVisibility}">
+                        <ProgressBar Width="220"
+                                     Style="{StaticResource ExportProgressBarStyle}"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     Value="{Binding ExportProgressPercent}"
+                                     Foreground="{Binding ExportProgressForeground}"
+                                     IsIndeterminate="{Binding IsProgressIndeterminate}"/>
+
+                        <TextBlock Text="{Binding ExportProgressText}"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"/>
+
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding TrackWarningSummaryVisibility}">
+                            <TextBlock Text="|"
+                                       Foreground="{StaticResource InputBorderBrush}"
+                                       Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding TrackFileWarningSummary}"
+                                       Foreground="#E4B84A"
+                                       FontWeight="SemiBold"
+                                       Cursor="Hand"
+                                       ToolTip="Zur nächsten Dateiwarnung springen"
+                                       Visibility="{Binding TrackFileWarningSummaryVisibility}"
+                                       MouseLeftButtonUp="TrackFileWarningSummary_MouseLeftButtonUp"/>
+                            <TextBlock Text="|"
+                                       Foreground="{StaticResource InputBorderBrush}"
+                                       Margin="8,0,8,0"
+                                       Visibility="{Binding TrackWarningSummarySeparatorVisibility}"/>
+                            <TextBlock Text="{Binding TrackChapterWarningSummary}"
+                                       Foreground="#E4B84A"
+                                       FontWeight="SemiBold"
+                                       Cursor="Hand"
+                                       ToolTip="Zur nächsten Kapitelwarnung springen"
+                                       Visibility="{Binding TrackChapterWarningSummaryVisibility}"
+                                       MouseLeftButtonUp="TrackChapterWarningSummary_MouseLeftButtonUp"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Visibility="{Binding DiscSourceAnalysisVisibility}"
+                            HorizontalAlignment="Left"
+                            Background="#1D1416"
+                            BorderBrush="#71383C"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="8,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="💿"
+                                       FontSize="23"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0"/>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Width="470"
+                                           Text="{Binding DiscSourceAnalysisText}"
+                                           TextAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="#F1C8CB"
+                                           Margin="0,0,0,3"/>
+                                <ProgressBar Width="470"
+                                             Style="{StaticResource DiscAnalysisProgressBarStyle}"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             IsIndeterminate="True"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <StackPanel Grid.Row="4" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,0">
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Auswahl nach oben"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedUp_Click"
+                            Margin="0,0,4,0">
+                        <Grid Width="44" Height="44">
+                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
+                            <Path Data="M 22 31 L 22 13 M 14 21 L 22 13 L 30 21"
+                                  Stroke="{StaticResource AccentSoftBrush}"
+                                  StrokeThickness="3.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"/>
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Auswahl nach unten"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedDown_Click"
+                            Margin="0,0,12,0">
+                        <Grid Width="44" Height="44">
+                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
+                            <Path Data="M 22 13 L 22 31 M 14 23 L 22 31 L 30 23"
+                                  Stroke="{StaticResource AccentSoftBrush}"
+                                  StrokeThickness="3.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"/>
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Auswahl ganz nach oben"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedToTop_Click"
+                            Margin="0,0,4,0">
+                        <Grid Width="44" Height="44">
+                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
+                            <Path Data="M 14 12 L 30 12 M 22 32 L 22 17 M 14 25 L 22 17 L 30 25"
+                                  Stroke="{StaticResource AccentSoftBrush}"
+                                  StrokeThickness="3.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"/>
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Auswahl ganz nach unten"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedToBottom_Click"
+                            Margin="0,0,16,0">
+                        <Grid Width="44" Height="44">
+                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
+                            <Path Data="M 14 32 L 30 32 M 22 12 L 22 27 M 14 19 L 22 27 L 30 19"
+                                  Stroke="{StaticResource AccentSoftBrush}"
+                                  StrokeThickness="3.2"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round"/>
+                        </Grid>
+                    </Button>
+
+                    <Button Content="{Binding ExportButtonText}"
+                            MinWidth="120"
+                            Height="32"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanStartExport}"
+                            Click="Export_Click"
+                            Margin="0,0,8,0"/>
+
+                    <Button Content="{Binding AddProjectSourcesButtonText}"
+                            MinWidth="170"
+                            Height="32"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanAddProjectSources}"
+                            Visibility="{Binding AddProjectSourcesVisibility}"
+                            Click="AddProjectSources_Click"
+                            Margin="0,0,8,0"/>
+
+                    <Grid>
+                        <Button Content="{Binding SecondaryButtonText}"
+                                MinWidth="100"
+                                Height="32"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanCancelExport}"
+                                Click="CancelExport_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SecondaryButtonText}" Value="Projekt abbrechen">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <Button Content="Projekt abbrechen"
+                                MinWidth="100"
+                                Height="32"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding CanCancelExport}"
+                                Click="CancelExport_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource DangerButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SecondaryButtonText}" Value="Projekt abbrechen">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+
+                    <Border Margin="26,0,0,0"
+                            Padding="10,5"
+                            VerticalAlignment="Center"
+                            Background="#111A20"
+                            BorderBrush="{StaticResource InputBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Visibility="{Binding PipelineStateDebugVisibility}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Debug · "
+                                       Foreground="{StaticResource MutedTextBrush}"/>
+                            <TextBlock Text="{Binding PipelineStateDebugText}"
+                                       Foreground="{StaticResource AccentSoftBrush}"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Border Grid.Row="0"
+                        Grid.RowSpan="5"
+                        Grid.Column="1"
+                        Width="190"
+                        Height="190"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,0,8,0"
+                        Background="#11161B"
+                        BorderBrush="{StaticResource AccentBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        AllowDrop="True"
+                        Cursor="Hand"
+                        ToolTip="Cover auswählen oder Bild hier ablegen"
+                        MouseLeftButtonUp="Cover_MouseLeftButtonUp"
+                        ContextMenuOpening="Cover_ContextMenuOpening"
+                        DragOver="Cover_DragOver"
+                        Drop="Cover_Drop">
+                    <Border.ContextMenu>
+                        <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}">
+                            <MenuItem Header="Cover entfernen"
+                                      Style="{StaticResource BookStitchContextMenuItemStyle}"
+                                      Click="RemoveCover_Click"/>
+                        </ContextMenu>
+                    </Border.ContextMenu>
+                    <Grid ClipToBounds="True">
+                        <Image Source="{Binding CoverPreviewSource}"
+                               Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               SnapsToDevicePixels="True"
+                               Opacity="0.95"/>
+
+                        <Border Background="#99000000"
+                                VerticalAlignment="Bottom"
+                                Padding="4,3"
+                                Visibility="{Binding CoverHintVisibility}">
+                            <TextBlock Text="Cover wählen"
+                                       Foreground="{StaticResource AccentSoftBrush}"
+                                       FontSize="11"
+                                       HorizontalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </StackPanel>
+
+        <DataGrid x:Name="TracksGrid"
+                  ItemsSource="{Binding Tracks}"
+                  Sorting="TracksGrid_Sorting"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  CanUserResizeColumns="True"
+                  SelectionMode="Extended"
+                  SelectionUnit="FullRow"
+                  PreviewKeyDown="TracksGrid_PreviewKeyDown"
+                  KeyDown="TracksGrid_KeyDown"
+                  PreviewMouseRightButtonDown="TracksGrid_PreviewMouseRightButtonDown"
+                  ContextMenuOpening="TracksGrid_ContextMenuOpening"
+                  ColumnReordered="TracksGrid_ColumnReordered"
+                  HeadersVisibility="Column"
+                  AlternationCount="2"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+            <DataGrid.Style>
+                <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+                    <Setter Property="Opacity" Value="1"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding CanEditTrackOrder}" Value="False">
+                            <Setter Property="Opacity" Value="0.62"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.Style>
+
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsExcluded}" Value="True">
+                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Foreground" Value="#8A939B"/>
+                            <Setter Property="ToolTip" Value="Dieser Track ist ausgeschlossen und wird nicht exportiert."/>
+                        </DataTrigger>
+
+                        <DataTrigger Binding="{Binding HasBlockingFileWarning}" Value="True">
+                            <Setter Property="Background" Value="#3A2024"/>
+                            <Setter Property="Foreground" Value="#F5E8E9"/>
+                            <Setter Property="BorderBrush" Value="#86454B"/>
+                            <Setter Property="BorderThickness" Value="1,0,1,1"/>
+                            <Setter Property="ToolTip" Value="Diese Datei enthält keine gültige Audiospur und blockiert den Export."/>
+                        </DataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasBlockingFileWarning}" Value="True"/>
+                                <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Background" Value="#4A272C"/>
+                        </MultiDataTrigger>
+
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding HasBlockingFileWarning}" Value="True"/>
+                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Background" Value="#67343A"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush" Value="#D35B62"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+
+            <DataGrid.ContextMenu>
+                <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}">
+                    <MenuItem Header="Ausgewählte Tracks ausschließen"
+                              Style="{StaticResource BookStitchContextMenuItemStyle}"
+                              Click="RemoveSelectedTracks_Click"/>
+                    <MenuItem Header="Ausgewählte Tracks wiederherstellen"
+                              Style="{StaticResource BookStitchContextMenuItemStyle}"
+                              Click="RestoreSelectedTracks_Click"/>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="#"
+                                    Binding="{Binding DisplayIndex}"
+                                    Width="Auto"
+                                    CanUserSort="False"
+                                    HeaderStyle="{StaticResource TrackIndexColumnHeaderStyle}"/>
+                <DataGridTextColumn Header="Disc" Binding="{Binding DiscNumber}" SortMemberPath="DiscNumber" Width="55"/>
+                <DataGridTextColumn Header="Track" Binding="{Binding TrackNumber}" SortMemberPath="TrackNumber" Width="60"/>
+                <DataGridTextColumn Header="Datei" Binding="{Binding FileName}" SortMemberPath="FileName" Width="200"/>
+                <DataGridTextColumn Header="Ordner" Binding="{Binding RelativeFolder}" SortMemberPath="RelativeFolder" Width="100"/>
+                <DataGridTextColumn Header="Tag-Titel" Binding="{Binding TagTitle}" SortMemberPath="TagTitle" Width="220"/>
+                <DataGridTextColumn Header="Kapitelvorschlag"
+                                    Binding="{Binding ChapterTitle}"
+                                    Width="160"
+                                    CanUserSort="False"
+                                    HeaderStyle="{StaticResource ChapterPreviewColumnHeaderStyle}"/>
+                <DataGridTextColumn Header="Dauer" Binding="{Binding Duration}" SortMemberPath="Duration" Width="75"/>
+                <DataGridTextColumn Header="Bitrate" Binding="{Binding BitrateKbps}" SortMemberPath="BitrateKbps" Width="70"/>
+                <DataGridTextColumn Header="Mono/Stereo" Binding="{Binding ChannelLayout}" SortMemberPath="ChannelLayout" Width="95"/>
+                <DataGridTextColumn Header="Dateiwarnung" Binding="{Binding DisplayFileWarning}" SortMemberPath="FileWarningText" Width="150" MinWidth="150"/>
+                <DataGridTextColumn Header="Kapitelwarnung" Binding="{Binding DisplayChapterWarning}" SortMemberPath="ChapterWarningText" Width="130" MinWidth="130"/>
+                <DataGridTextColumn Header="Typ" Binding="{Binding Extension}" SortMemberPath="Extension" Width="60" Visibility="Collapsed"/>
+                <DataGridTextColumn Header="Codec" Binding="{Binding Codec}" SortMemberPath="Codec" Width="75"/>
+                <DataGridTextColumn Header="Output MB" Binding="{Binding DisplayOutputSizeMb}" SortMemberPath="ConvertedSizeMb" Width="90" MinWidth="90"/>
+            </DataGrid.Columns>
+
+        </DataGrid>
+
+    </DockPanel>
+</Window>

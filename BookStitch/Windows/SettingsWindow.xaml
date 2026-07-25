@@ -1,0 +1,905 @@
+﻿<Window x:Class="BookStitch.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dialog="clr-namespace:BookStitch.Dialog"
+        Title="Einstellungen"
+        Icon="/Assets/Icons/BookStitchAppIcon-Simplified-multisize.ico"
+        Width="960"
+        Height="650"
+        MinWidth="820"
+        MinHeight="440"
+        ResizeMode="CanResizeWithGrip"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ShowInTaskbar="False"
+        KeyDown="SettingsWindow_KeyDown"
+        Background="#101418"
+        Foreground="#E8EDF2"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="BookStitchSliderStyle" TargetType="Slider">
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid VerticalAlignment="Center">
+                                <Border Height="6"
+                                        Background="#202830"
+                                        BorderBrush="#35414D"
+                                        BorderThickness="1"
+                                        CornerRadius="3"
+                                        VerticalAlignment="Center"/>
+                                <Track x:Name="PART_Track"
+                                       VerticalAlignment="Center"
+                                       IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                      Background="{StaticResource AccentBrush}"
+                                                      BorderThickness="0">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Height="6"
+                                                            Background="{TemplateBinding Background}"
+                                                            CornerRadius="3"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Width="18" Height="18">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border Background="{StaticResource AccentSoftBrush}"
+                                                            BorderBrush="#8CE7EA"
+                                                            BorderThickness="1"
+                                                            CornerRadius="9"/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                      Background="Transparent"
+                                                      BorderThickness="0"/>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SettingsTabControlStyle" TargetType="TabControl">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+
+            <Style x:Key="SettingsTabItemStyle" TargetType="TabItem">
+                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                <Setter Property="Background" Value="#141B21"/>
+                <Setter Property="BorderBrush" Value="{StaticResource PanelBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="18,8"/>
+                <Setter Property="Margin" Value="0,0,6,8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabItem">
+                            <Border x:Name="TabBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="7"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header" HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="TabBorder" Property="Background" Value="#123D41"/>
+                                    <Setter Property="Foreground" Value="{StaticResource AccentSoftBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="QuietDangerButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+                <Setter Property="Foreground" Value="#D58B91"/>
+                <Setter Property="BorderBrush" Value="#7B3D45"/>
+                <Setter Property="Background" Value="#211719"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="DangerBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="9"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="DangerBorder" Property="Background" Value="#2C1A1D"/>
+                                    <Setter TargetName="DangerBorder" Property="BorderBrush" Value="#A3545D"/>
+                                    <Setter Property="Foreground" Value="#E3A0A6"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="DangerBorder" Property="Background" Value="#2C1A1D"/>
+                                    <Setter TargetName="DangerBorder" Property="BorderBrush" Value="#A3545D"/>
+                                    <Setter Property="Foreground" Value="#E3A0A6"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="DangerBorder" Property="Background" Value="#351C20"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.55"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{StaticResource PanelBackgroundBrush}"
+            BorderBrush="{StaticResource AccentBrush}"
+            BorderThickness="1"
+            dialog:DialogWindowBehavior.IsDragRegion="True"
+            dialog:DialogWindowBehavior.DragRegionHeight="86">
+    <DockPanel Margin="14">
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,14" Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="⚙"
+                       FontSize="28"
+                       Foreground="{StaticResource AccentSoftBrush}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,12,0"
+                       Cursor="Hand"
+                       ToolTip="Einstellungen"/>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Einstellungen"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource AccentSoftBrush}"/>
+                <TextBlock Text="Globale Optionen für Export-Ablauf und Projektverwaltung."
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <Button Grid.Column="2"
+                    Content="Schließen"
+                    MinWidth="100"
+                    Height="32"
+                    Margin="0,0,8,0"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    ToolTip="Einstellungen schließen"
+                    Click="Close_Click"
+                    VerticalAlignment="Top"
+                    TabIndex="0"/>
+
+            <Button Grid.Column="3"
+                    Content="×"
+                    Width="34"
+                    Height="30"
+                    Style="{StaticResource DialogCloseButtonStyle}"
+                    ToolTip="Schließen"
+                    Click="Close_Click"
+                    VerticalAlignment="Top"
+                    IsTabStop="False"/>
+        </Grid>
+
+        <TabControl x:Name="SettingsTabControl" Style="{StaticResource SettingsTabControlStyle}">
+            <TabItem Header="Allgemein" Style="{StaticResource SettingsTabItemStyle}">
+                <Border Background="{StaticResource PanelBackgroundBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="16">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                <TextBlock Text="Dateiname und Metadaten"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                    <CheckBox x:Name="KeepAlbumLinkedToTitleCheckBox"
+                              Content="Titel und Album automatisch gekoppelt halten"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Standardmäßig werden Änderungen in Titel und Album sofort gegenseitig übernommen."
+                              Checked="KeepAlbumLinkedToTitleCheckBox_Changed"
+                              Unchecked="KeepAlbumLinkedToTitleCheckBox_Changed"/>
+
+                    <CheckBox x:Name="UseLeadingZerosInChapterSuggestionsCheckBox"
+                              Content="Führende Nullen in Kapitelvorschlägen verwenden"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Kapitelnummern werden bei Bedarf mit führenden Nullen vorgeschlagen, damit die Kapitel sauber sortiert bleiben."
+                              Margin="34,0,0,0"
+                              Checked="UseLeadingZerosInChapterSuggestionsCheckBox_Changed"
+                              Unchecked="UseLeadingZerosInChapterSuggestionsCheckBox_Changed"/>
+                </StackPanel>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="230"/>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Unterordner im Ausgabeordner" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="OutputFolderLayoutComboBox"
+                                  Height="32"
+                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  SelectionChanged="OutputFolderLayoutComboBox_Changed">
+                            <ComboBoxItem Content="Keinen Ordner erstellen" Tag="None"/>
+                            <ComboBoxItem Content="Nur Autor" Tag="Author"/>
+                            <ComboBoxItem Content="Nur Titel" Tag="Title"/>
+                            <ComboBoxItem Content="Autor / Titel" Tag="AuthorTitleNested"/>
+                            <ComboBoxItem Content="Autor / Album / Titel" Tag="AuthorAlbumTitleNested"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                        <TextBlock Text="Dateinamenschema" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="FileNameTemplateComboBox"
+                                  Height="32"
+                                  IsEditable="True"
+                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  SelectionChanged="FileNameTemplateComboBox_Changed"
+                                  LostFocus="FileNameTemplateComboBox_LostFocus">
+                            <ComboBoxItem Content="{}{Autor} - {Titel}"/>
+                            <ComboBoxItem Content="{}{Titel} - {Autor}"/>
+                            <ComboBoxItem Content="{}{Titel}"/>
+                            <ComboBoxItem Content="{}{Autor} - {Sprecher} - {Titel}"/>
+                            <ComboBoxItem Content="{}{Autor} - {Album} - {Titel}"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Margin="16,0,0,0">
+                        <TextBlock Text="Standard-Endung" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="OutputExtensionComboBox"
+                                  Height="32"
+                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  SelectionChanged="OutputExtensionComboBox_Changed">
+                            <ComboBoxItem Content=".m4a"/>
+                            <ComboBoxItem Content=".m4b"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="OutputFolderPreviewTextBlock"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,0,0,18"/>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <TextBlock Text="Export • Unattended/Unbeaufsichtigt"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,22">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox x:Name="MergeAutomaticallyCheckBox"
+                              Grid.Column="0"
+                              Content="Auto-Zusammenfügen"
+                              IsChecked="True"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Das Hörbuch wird nach dem Konvertieren ohne zusätzliche Prüfung zusammengefügt. Schaltest du das aus, stoppt BookStitch vor dem finalen Merge, damit du die Trackliste noch prüfen kannst."
+                              Checked="MergeAutomaticallyCheckBox_Changed"
+                              Unchecked="MergeAutomaticallyCheckBox_Changed"/>
+
+                    <CheckBox x:Name="OverwriteWithoutAskingCheckBox"
+                              Grid.Column="2"
+                              Content="Zieldatei gegebenenfalls ohne Nachfrage überschreiben"
+                              IsChecked="True"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Wenn die fertige Ausgabedatei bereits existiert, ersetzt BookStitch sie ohne weitere Nachfrage. Schaltest du das aus, fragt BookStitch vor dem Ersetzen nach."
+                              Checked="OverwriteWithoutAskingCheckBox_Changed"
+                              Unchecked="OverwriteWithoutAskingCheckBox_Changed"/>
+
+                    <CheckBox x:Name="KeepComputerAwakeCheckBox"
+                              Grid.Column="4"
+                              Content="Computer wachhalten"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Verhindert während Quellenübernahme, Konvertierung und Zusammenfügen, dass Windows automatisch in den Energiesparmodus wechselt. Der Bildschirm darf weiterhin ausgehen."
+                              Checked="KeepComputerAwakeCheckBox_Changed"
+                              Unchecked="KeepComputerAwakeCheckBox_Changed"/>
+                </Grid>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <TextBlock Text="Sounds und Fenster"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,22">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="184"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="184"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="196"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Row="0" Grid.Column="0">
+                        <TextBlock Text="Soundprofil" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="SoundProfileComboBox" Height="32" Style="{StaticResource DarkComboBoxStyle}" SelectionChanged="SoundProfileComboBox_Changed">
+                            <ComboBoxItem Content="Keine Sounds" Tag="Off"/>
+                            <ComboBoxItem Content="Nur CD-Wechsel" Tag="DiscOnly"/>
+                            <ComboBoxItem Content="Wichtige Ereignisse" Tag="Important"/>
+                            <ComboBoxItem Content="Alle Hinweise" Tag="All"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="2">
+                        <TextBlock Text="Soundbibliothek" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="SoundLibraryComboBox" Height="32" Style="{StaticResource DarkComboBoxStyle}" SelectionChanged="SoundLibraryComboBox_Changed">
+                            <ComboBoxItem Content="Sanft" Tag="Gentle"/>
+                            <ComboBoxItem Content="Bass" Tag="Bass"/>
+                            <ComboBoxItem Content="Hammondorgel" Tag="HammondOrgan"/>
+                            <ComboBoxItem Content="Warm" Tag="Warm"/>
+                            <ComboBoxItem Content="Retro" Tag="Retro"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="4">
+                        <TextBlock Text="Fensterfokus" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="FocusProfileComboBox"
+                                  Height="32"
+                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  SelectionChanged="FocusProfileComboBox_Changed">
+                            <ComboBoxItem Content="Kein Fokus" Tag="Off"/>
+                            <ComboBoxItem Content="Standard" Tag="Standard"/>
+                            <ComboBoxItem Content="In den Vordergrund" Tag="Foreground"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="6" Margin="0,18,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Lautstärke" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="SoundVolumeTextBlock"
+                                       Text="65 %"
+                                       Foreground="{StaticResource AccentSoftBrush}"
+                                       FontWeight="SemiBold"
+                                       Margin="12,0,0,0"/>
+                        </StackPanel>
+                        <Grid HorizontalAlignment="Left">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="370"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="SoundVolumeSlider" Grid.Column="0" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" Style="{StaticResource BookStitchSliderStyle}" ValueChanged="SoundVolumeSlider_ValueChanged"/>
+                            <Button Grid.Column="2" Content="Testton" MinWidth="100" Height="32" Style="{StaticResource PrimaryButtonStyle}" Click="PlayTestSound_Click"/>
+                            <Button Grid.Column="4"
+                                    Content="Fokus-Test"
+                                    MinWidth="100"
+                                    Height="32"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    ToolTip="Testet das aktuell gewählte Fensterfokus-Profil. Bei „Kein Fokus“ passiert nichts."
+                                    Click="RunFocusTest_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <TextBlock Text="Projektverwaltung"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,22">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                        <TextBlock Text="Projekte aufbewahren für"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,6"/>
+                        <DockPanel LastChildFill="True">
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="Tage"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="8,0,0,0"/>
+                            <ComboBox x:Name="ProjectRetentionDaysComboBox"
+                                      Height="32"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="False"
+                                      Style="{StaticResource DarkComboBoxStyle}"
+                                      SelectionChanged="ProjectRetentionDaysComboBox_Changed"
+                                      LostFocus="ProjectRetentionDaysComboBox_LostFocus">
+                                <ComboBoxItem Content="0"/>
+                                <ComboBoxItem Content="1"/>
+                                <ComboBoxItem Content="5"/>
+                                <ComboBoxItem Content="15"/>
+                                <ComboBoxItem Content="30"/>
+                                <ComboBoxItem Content="60"/>
+                                <ComboBoxItem Content="90"/>
+                                <ComboBoxItem Content="120"/>
+                                <ComboBoxItem Content="150"/>
+                                <ComboBoxItem Content="180"/>
+                            </ComboBox>
+                        </DockPanel>
+                    </StackPanel>
+
+                    <TextBlock x:Name="ProjectRetentionHintTextBlock"
+                               Grid.Row="1"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="5"
+                               Text="Projekte älter als 120 Tage werden beim Schließen automatisch gelöscht."
+                               TextWrapping="NoWrap"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Margin="0,7,0,0"/>
+
+                    <Button Grid.Column="1"
+                            Content="Ältere Projekte löschen"
+                            MinWidth="170"
+                            Height="32"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Click="DeleteOldProjectsNow_Click"
+                            VerticalAlignment="Top"
+                            Margin="0,24,0,0"/>
+
+                    <Button Grid.Column="3"
+                            Content="Alle Projekte löschen"
+                            MinWidth="150"
+                            Height="32"
+                            Style="{StaticResource QuietDangerButtonStyle}"
+                            Click="DeleteAllProjects_Click"
+                            VerticalAlignment="Top"
+                            Margin="0,24,0,0"/>
+                </Grid>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14">
+                    <Run Text="Laufwerksrunde – "/>
+                    <Run Text="experimentelles Feature" Foreground="{StaticResource AccentSoftBrush}"/>
+                    <Run Text=" (ungetestet)"/>
+                </TextBlock>
+
+                <StackPanel Margin="0,0,0,22">
+                    <CheckBox x:Name="ExperimentalDriveRoundEnabledCheckBox"
+                              Content="Laufwerksrunde für CD-Projekte aktivieren"
+                              Foreground="{StaticResource MainTextBrush}"
+                              FontWeight="SemiBold"
+                              ToolTip="Experimentell: BookStitch sucht nach einer fertigen CD automatisch im nächsten aktiven Laufwerk nach einer passenden neuen CD."
+                              Checked="ExperimentalDriveRoundEnabledCheckBox_Changed"
+                              Unchecked="ExperimentalDriveRoundEnabledCheckBox_Changed"/>
+
+                    <TextBlock TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               LineHeight="21"
+                               Margin="0,7,0,12">
+                        <Run Text="BookStitch kann bei MP3-CD- und Audio-CD-Projekten mehrere Laufwerke nacheinander prüfen."/>
+                        <LineBreak/>
+                        <Run Text="Lege mehrere CDs vorbereitet ein: Nach jeder fertigen CD sucht BookStitch beim nächsten aktiven Laufwerk in der Reihenfolge weiter."/>
+                    </TextBlock>
+
+                    <StackPanel>
+                        <TextBlock Text="Reihenfolge:"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,7"/>
+
+                        <UniformGrid x:Name="DiscDriveSlotPanel"
+                                     Columns="5"
+                                     HorizontalAlignment="Left"
+                                     Margin="0,0,0,8"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="DriveRoundLeftButton"
+                                    Content="←"
+                                    Width="46"
+                                    Height="32"
+                                    FontSize="22"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    ToolTip="Ausgewähltes Laufwerk nach links verschieben"
+                                    Click="DriveRoundMoveLeft_Click"/>
+                            <Button x:Name="DriveRoundRightButton"
+                                    Content="→"
+                                    Width="46"
+                                    Height="32"
+                                    FontSize="22"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    ToolTip="Ausgewähltes Laufwerk nach rechts verschieben"
+                                    Click="DriveRoundMoveRight_Click"/>
+                            <Button x:Name="DriveRoundRefreshButton"
+                                    Content="Aktualisieren"
+                                    MinWidth="118"
+                                    Height="32"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="DriveRoundRefresh_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock x:Name="DiscDriveRoundHintTextBlock"
+                               Text="Keine CD-/DVD-Laufwerke erkannt."
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Margin="0,7,0,0"/>
+                </StackPanel>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <TextBlock Text="Audio-CD"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,22">
+                    <StackPanel>
+                        <TextBlock Text="Arbeitsformat beim Rippen"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,6"/>
+                        <ComboBox x:Name="AudioDiscWorkingFormatComboBox"
+                                  Width="320"
+                                  Height="32"
+                                  HorizontalAlignment="Left"
+                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  SelectionChanged="AudioDiscWorkingFormatComboBox_Changed">
+                            <ComboBoxItem Content="FLAC – verlustfrei, empfohlen" Tag="Flac"/>
+                            <ComboBoxItem Content="WMA – geplant" Tag="Wma" IsEnabled="False" ToolTip="Geplantes Arbeitsformat; aktuell noch nicht verfügbar."/>
+                            <ComboBoxItem Content="AAC 256 kbps – geplant" Tag="Aac256" IsEnabled="False" ToolTip="Geplantes Arbeitsformat; aktuell noch nicht verfügbar."/>
+                        </ComboBox>
+                        <TextBlock Text="BookStitch verwendet aktuell FLAC als verlustfreies Standardformat zum Rippen von Audio-CDs."
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   LineHeight="21"
+                                   Margin="0,7,0,0"/>
+                    </StackPanel>
+                </Grid>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <TabItem x:Name="DeveloperTabItem" Header="Entwickler" Style="{StaticResource SettingsTabItemStyle}">
+                <Border Background="{StaticResource PanelBackgroundBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="18">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Entwickleroptionen"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentSoftBrush}"
+                                   Margin="0,0,0,18"/>
+
+                        <TextBlock Text="Dialoge"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="18"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Fachdialoge" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <UniformGrid Columns="2" HorizontalAlignment="Left">
+                                    <Button Content="CD-Laufwerk auswählen" Width="205" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="DiscSourcePreview_Click"/>
+                                    <Button Content="Weitere CDs hinzufügen" Width="205" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="AddDiscsPreview_Click"/>
+                                    <Button Content="Projekt öffnen" Width="205" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="ResumeProjectPreview_Click"/>
+                                    <Button Content="Lokales Projekt vorbereiten" Width="205" Height="32" Tag="Folder" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="ProjectSetupPreview_Click"/>
+                                    <Button Content="MP3-CD-Projekt vorbereiten" Width="205" Height="32" Tag="Mp3Disc" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="ProjectSetupPreview_Click"/>
+                                    <Button Content="Audio-CD-Projekt vorbereiten" Width="205" Height="32" Tag="AudioDisc" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="ProjectSetupPreview_Click"/>
+                                </UniformGrid>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Standardmeldungen" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <UniformGrid Columns="3" HorizontalAlignment="Left">
+                                    <Button Content="Information" Width="138" Height="32" Tag="Information" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="MessagePreview_Click"/>
+                                    <Button Content="Warnung" Width="138" Height="32" Tag="Warning" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="MessagePreview_Click"/>
+                                    <Button Content="Fehler" Width="138" Height="32" Tag="Error" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="MessagePreview_Click"/>
+                                    <Button Content="Frage" Width="138" Height="32" Tag="Question" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="MessagePreview_Click"/>
+                                    <Button Content="Zahleneingabe" Width="138" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="InputPreview_Click"/>
+                                </UniformGrid>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Hybride Hardwaretests" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <UniformGrid Columns="2" HorizontalAlignment="Left" Margin="0,0,0,10">
+                                    <Button Content="MP3-CD erkennen" Width="180" Height="32" Tag="Mp3New" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="HybridDiscTestPreview_Click"
+                                            ToolTip="Verwendet ein echtes optisches Laufwerk, echten Auswurf, echtes Polling und die produktive Disc-Erkennung. Nach der Erkennung werden weder Import noch Ripping, Konvertierung oder Merge gestartet. Für einen Duplikattest muss die betreffende Disc zu Beginn bereits eingelegt sein."/>
+                                    <Button Content="MP3-CD Duplikat" Width="180" Height="32" Tag="Mp3Duplicate" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="HybridDiscTestPreview_Click"
+                                            ToolTip="Verwendet ein echtes optisches Laufwerk, echten Auswurf, echtes Polling und die produktive Disc-Erkennung. Nach der Erkennung werden weder Import noch Ripping, Konvertierung oder Merge gestartet. Für einen Duplikattest muss die betreffende Disc zu Beginn bereits eingelegt sein."/>
+                                    <Button Content="Audio-CD erkennen" Width="180" Height="32" Tag="AudioNew" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="HybridDiscTestPreview_Click"
+                                            ToolTip="Verwendet ein echtes optisches Laufwerk, echten Auswurf, echtes Polling und die produktive Disc-Erkennung. Nach der Erkennung werden weder Import noch Ripping, Konvertierung oder Merge gestartet. Für einen Duplikattest muss die betreffende Disc zu Beginn bereits eingelegt sein."/>
+                                    <Button Content="Audio-CD Duplikat" Width="180" Height="32" Tag="AudioDuplicate" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="HybridDiscTestPreview_Click"
+                                            ToolTip="Verwendet ein echtes optisches Laufwerk, echten Auswurf, echtes Polling und die produktive Disc-Erkennung. Nach der Erkennung werden weder Import noch Ripping, Konvertierung oder Merge gestartet. Für einen Duplikattest muss die betreffende Disc zu Beginn bereits eingelegt sein."/>
+                                </UniformGrid>
+                                <TextBlock x:Name="DiscTestStatusTextBlock"
+                                           Text="CD-Test bereit"
+                                           Foreground="{StaticResource AccentSoftBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,3"/>
+                                <TextBlock x:Name="DiscTestProgressTextBlock"
+                                           Text=""
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,14"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="CD-Simulation" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <UniformGrid Columns="3" HorizontalAlignment="Left" Margin="0,0,0,4">
+                                    <Button Content="Laufwerk leer" Width="138" Height="32" Tag="EmptyDrive" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                    <Button Content="Falsche Disc" Width="138" Height="32" Tag="UnsupportedDisc" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                    <Button Content="Duplikat ausgeworfen" Width="138" Height="32" Tag="DuplicateEjected" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                    <Button Content="Duplikat manuell" Width="138" Height="32" Tag="DuplicateManualEject" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                    <Button Content="Langsam, dann erkannt" Width="138" Height="32" Tag="SlowThenReady" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                    <Button Content="Richtige Disc erkannt" Width="138" Height="32" Tag="Ready" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="SimulatedDiscWaitPreview_Click"/>
+                                </UniformGrid>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Disc-Analyse testen"
+                                            Width="215"
+                                            Height="32"
+                                            HorizontalAlignment="Left"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Click="PreviewDiscSourceAnalysis_Click"/>
+                                    <ComboBox x:Name="DiscWaitDialogVariantComboBox"
+                                              Width="215"
+                                              Height="32"
+                                              Margin="8,0,0,0"
+                                              HorizontalAlignment="Left"
+                                              Style="{StaticResource DarkComboBoxStyle}"
+                                              SelectionChanged="DiscWaitDialogVariantComboBox_Changed">
+                                        <ComboBoxItem Content="Klassischer Dialog" Tag="Legacy"/>
+                                        <ComboBoxItem Content="Neuer Boxdialog" Tag="Boxed"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <Separator Margin="0,4,0,18" Opacity="0.35"/>
+
+                        <TextBlock Text="Soundereignisse"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,12"/>
+                        <WrapPanel Margin="0,0,0,10">
+                            <Button Content="CD-Wechsel" Tag="DiscChangeRequired" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                            <Button Content="Nutzeraktion nötig" Tag="UserActionRequired" Width="150" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                            <Button Content="Abschluss" Tag="ProjectCompleted" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                            <Button Content="Warnung" Tag="Warning" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                            <Button Content="Information" Tag="Information" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                            <Button Content="Fehler" Tag="Error" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="NotificationPreview_Click"/>
+                        </WrapPanel>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Soundprofil" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <ComboBox x:Name="DevSoundProfileComboBox"
+                                          Height="32"
+                                          Style="{StaticResource DarkComboBoxStyle}"
+                                          SelectionChanged="SoundProfileComboBox_Changed">
+                                    <ComboBoxItem Content="Keine Sounds" Tag="Off"/>
+                                    <ComboBoxItem Content="Nur CD-Wechsel" Tag="DiscOnly"/>
+                                    <ComboBoxItem Content="Wichtige Ereignisse" Tag="Important"/>
+                                    <ComboBoxItem Content="Alle Hinweise" Tag="All"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Soundbibliothek" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <ComboBox x:Name="DevSoundLibraryComboBox"
+                                          Height="32"
+                                          Style="{StaticResource DarkComboBoxStyle}"
+                                          SelectionChanged="SoundLibraryComboBox_Changed">
+                                    <ComboBoxItem Content="Sanft" Tag="Gentle"/>
+                                    <ComboBoxItem Content="Bass" Tag="Bass"/>
+                                    <ComboBoxItem Content="Hammondorgel" Tag="HammondOrgan"/>
+                                    <ComboBoxItem Content="Warm" Tag="Warm"/>
+                                    <ComboBoxItem Content="Retro" Tag="Retro"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="Fensterfokus" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <ComboBox x:Name="DevFocusProfileComboBox"
+                                          Height="32"
+                                          Style="{StaticResource DarkComboBoxStyle}"
+                                          SelectionChanged="FocusProfileComboBox_Changed">
+                                    <ComboBoxItem Content="Kein Fokus" Tag="Off"/>
+                                    <ComboBoxItem Content="Standard" Tag="Standard"/>
+                                    <ComboBoxItem Content="In den Vordergrund" Tag="Foreground"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Margin="0,0,0,4">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Lautstärke" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="DevSoundVolumeTextBlock"
+                                           Text="100 %"
+                                           Foreground="{StaticResource AccentSoftBrush}"
+                                           FontWeight="SemiBold"
+                                           Margin="10,0,0,0"/>
+                            </StackPanel>
+                            <Slider x:Name="DevSoundVolumeSlider"
+                                    Width="520"
+                                    HorizontalAlignment="Left"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    Style="{StaticResource BookStitchSliderStyle}"
+                                    ValueChanged="SoundVolumeSlider_ValueChanged"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                            <Button Content="Nutzeraktion in 4 s" Tag="UserActionRequired" Width="150" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="DelayedFocusPreview_Click"/>
+                            <Button Content="CD-Wechsel in 4 s" Tag="DiscChangeRequired" Width="150" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,8" Padding="10,0" Click="DelayedFocusPreview_Click"/>
+                            <Button Content="Fehler in 4 s" Tag="Error" Width="128" Height="32" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,12,8" Padding="10,0" Click="DelayedFocusPreview_Click"/>
+                            <TextBlock x:Name="DelayedFocusStatusTextBlock"
+                                       Text="Verzögerter Fokus-Test"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,0,8"/>
+                        </StackPanel>
+
+                        <Separator Margin="0,10,0,18" Opacity="0.35"/>
+
+                        <TextBlock Text="Audio-CD-Kurztest"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,10"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Audio-CD-Kurztest starten"
+                                    Width="220"
+                                    Height="34"
+                                    HorizontalAlignment="Left"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="StartDeveloperAudioDiscTest_Click"/>
+                        </StackPanel>
+
+                        <Separator Margin="0,22,0,18" Opacity="0.35"/>
+
+                        <TextBlock Text="Anzeige im Hauptfenster"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MainTextBrush}"
+                                   Margin="0,0,0,12"/>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="290"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Dauer der Tag-Balken-Animation" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <DockPanel LastChildFill="True">
+                                    <TextBlock DockPanel.Dock="Right" Text="ms" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBox x:Name="MetadataAnimationMillisecondsTextBox"
+                                             Height="32"
+                                             Text="220"
+                                             LostFocus="MetadataAnimationMillisecondsTextBox_LostFocus"
+                                             KeyDown="MetadataAnimationMillisecondsTextBox_KeyDown"/>
+                                </DockPanel>
+                            </StackPanel>
+
+                            <Button x:Name="ToggleMetadataPanelPreviewButton"
+                                    Grid.Column="2"
+                                    Content="Tagbalken-Test"
+                                    MinWidth="160"
+                                    Height="32"
+                                    VerticalAlignment="Bottom"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Click="ToggleMetadataPanelPreview_Click"/>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                            <CheckBox x:Name="ShowPipelineStateDebugCheckBox"
+                                      Content="Projektzustand im Hauptfenster anzeigen"
+                                      Foreground="{StaticResource MainTextBrush}"
+                                      FontWeight="SemiBold"
+                                      Checked="ShowPipelineStateDebugCheckBox_Changed"
+                                      Unchecked="ShowPipelineStateDebugCheckBox_Changed"/>
+
+                            <CheckBox x:Name="ForceShowFfmpegSetupButtonCheckBox"
+                                      Content="FFmpeg-Einrichtungsbutton im Hauptfenster immer anzeigen"
+                                      Foreground="{StaticResource MainTextBrush}"
+                                      FontWeight="SemiBold"
+                                      Margin="36,0,0,0"
+                                      Checked="ForceShowFfmpegSetupButtonCheckBox_Changed"
+                                      Unchecked="ForceShowFfmpegSetupButtonCheckBox_Changed"/>
+                        </StackPanel>
+                    </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+    </Border>
+</Window>
