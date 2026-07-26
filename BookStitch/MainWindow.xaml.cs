@@ -7430,6 +7430,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _isPipelineFailed = false;
         projectType = ResolveCurrentProjectType(projectType);
 
+        var preparedLocalProjectForReview = false;
         if (string.Equals(projectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase))
         {
             if (!IsCurrentLocalProjectSourceInternal())
@@ -7437,6 +7438,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var localPreparationCompleted = await PrepareCurrentLocalProjectSourcesAsync();
                 if (!localPreparationCompleted)
                     return;
+
+                preparedLocalProjectForReview = true;
             }
 
             projectWorkFolderOverride = _currentProjectWorkFolder;
@@ -7449,6 +7452,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_activeAudioDiscManifest is not null)
             TrySaveCurrentAudioDiscProjectSnapshot(_activeAudioDiscManifest, force: true);
 
+        if (preparedLocalProjectForReview)
+            EnterPreparedProjectReviewStateAfterPreparation();
+
         // Vor jedem Export den Plan neu berechnen, damit Preset, Bitrate und Mono/Stereo wirklich berücksichtigt werden.
         RecalculateProcessingActionsForCurrentPreset();
 
@@ -7457,11 +7463,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (exportCheck.Errors.Count > 0)
         {
             ShowExportBlockingErrors(exportCheck.Errors);
+            RestoreReviewStateAfterPreExportValidationStopped();
             return;
         }
 
         if (exportCheck.Warnings.Count > 0 && !ShowExportWarnings(exportCheck.Warnings))
+        {
+            RestoreReviewStateAfterPreExportValidationStopped();
             return;
+        }
 
         await ExportToAacWithWorkFolderAsync(
             exportCheck.TrackSnapshot,
@@ -7483,6 +7493,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             LocalProjectImportService.OriginalsFolderName);
 
         return TrackPathService.PathEquals(_currentFolderPath, originalsFolder);
+    }
+
+    private void EnterPreparedProjectReviewStateAfterPreparation()
+    {
+        _isWaitingForManualMergeReview = true;
+        _manualMergeReviewPreparedPreset = SelectedExportPreset;
+        _manualMergeReviewNeedsReconversion = false;
+        _isCurrentProjectCompleted = false;
+        SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
+        SetTrackActionDisplayOverride("Zusammenfügen");
+        NotifyExportUiStateChanged();
+    }
+
+    private void RestoreReviewStateAfterPreExportValidationStopped()
+    {
+        if (IsBusy ||
+            _pipelineState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed or ProjectPipelineState.Merging ||
+            Tracks.Count == 0 ||
+            string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+        {
+            return;
+        }
+
+        EnterPreparedProjectReviewStateAfterPreparation();
     }
 
     private async Task<bool> PrepareCurrentLocalProjectSourcesAsync()
@@ -7830,6 +7864,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             CloseCurrentProject();
             return;
+        }
+
+        if (!IsBusy &&
+            _pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting &&
+            !IsDiscImporting &&
+            !IsExporting)
+        {
+            RestoreReviewStateAfterPreExportValidationStopped();
+            if (_pipelineState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
+                return;
         }
 
         if (_pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)

@@ -169,19 +169,6 @@ public sealed class ExportValidationService
         foreach (var track in emptyChapterTitles)
             warnings.Add($"• #{track.Index}  Kapitelvorschlag ist leer.");
 
-        var duplicateChapterTitles = trackSnapshot
-            .Where(track => !string.IsNullOrWhiteSpace(track.ChapterTitle))
-            .Where(track => !HasLeadingChapterNumber(track.ChapterTitle))
-            .GroupBy(track => track.ChapterTitle.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Take(8)
-            .ToList();
-
-        foreach (var group in duplicateChapterTitles)
-        {
-            var indexes = FormatTrackIndexes(group.Select(track => track.Index).Take(8));
-            warnings.Add($"• {indexes}  „{group.Key}“ · Doppelter Kapitelvorschlag");
-        }
     }
 
 
@@ -221,22 +208,6 @@ public sealed class ExportValidationService
         var action = string.IsNullOrWhiteSpace(track.ProcessingAction) ? "Aktion offen" : track.ProcessingAction;
 
         return $"{extension}, {codec}, {action}";
-    }
-
-    private static bool HasLeadingChapterNumber(string? chapterTitle)
-    {
-        if (string.IsNullOrWhiteSpace(chapterTitle))
-            return false;
-
-        var trimmed = chapterTitle.TrimStart();
-        var digitCount = 0;
-
-        while (digitCount < trimmed.Length && char.IsDigit(trimmed[digitCount]))
-            digitCount++;
-
-        return digitCount > 0 &&
-               digitCount <= 5 &&
-               (digitCount == trimmed.Length || !char.IsLetterOrDigit(trimmed[digitCount]));
     }
 
     private static string FormatTrackIndexes(IEnumerable<int> indexes)

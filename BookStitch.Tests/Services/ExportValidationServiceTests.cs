@@ -319,7 +319,7 @@ public class ExportValidationServiceTests
     }
 
     [Fact]
-    public void Validate_WithDuplicateChapterTitles_ReturnsWarning()
+    public void Validate_WithDuplicateChapterTitles_DoesNotReturnInvisibleChapterWarning()
     {
         using var sourceFolder = new TemporaryFolder();
         using var outputFolder = new TemporaryFolder();
@@ -344,7 +344,7 @@ public class ExportValidationServiceTests
             workFolder.Path);
 
         Assert.Empty(result.Errors);
-        Assert.Contains(result.Warnings, warning => warning.Contains("Doppelter Kapitelvorschlag"));
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("Doppelter Kapitelvorschlag"));
     }
 
     [Fact]
