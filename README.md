@@ -6,7 +6,7 @@ The project is intended as a stable, transparent and data-integrity-focused succ
 
 ## Current status
 
-BookStitch is currently in a release-candidate phase. Public releases should be treated as pre-1.0 software until the first final V1 release is published.
+the first final V1 release is published.
 
 ## Main features
 
