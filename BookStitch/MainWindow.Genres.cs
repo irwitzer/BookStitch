@@ -11,10 +11,10 @@ public partial class MainWindow
 {
     public IReadOnlyList<string> GenreOptions => GenreListService.GetGenres(_settings.UsePrivateGenreList);
 
-    public void RefreshGenreOptions()
+    public void RefreshGenreOptions(bool resetToDefault = false)
     {
         OnPropertyChanged(nameof(GenreOptions));
-        ApplyGenreOptionsToComboBox();
+        ApplyGenreOptionsToComboBox(resetToDefault);
     }
 
     protected override void OnContentRendered(EventArgs e)
@@ -24,7 +24,7 @@ public partial class MainWindow
         PolishAutoMergeCheckBoxSpacing();
     }
 
-    private void ApplyGenreOptionsToComboBox()
+    private void ApplyGenreOptionsToComboBox(bool resetToDefault = false)
     {
         if (GenreComboBox is null)
             return;
@@ -34,10 +34,31 @@ public partial class MainWindow
         GenreComboBox.Items.Clear();
         GenreComboBox.ItemsSource = GenreOptions;
 
-        if (!string.IsNullOrWhiteSpace(selectedGenre))
-            Genre = selectedGenre;
+        if (resetToDefault || !GenreListService.IsSelectableGenre(selectedGenre))
+            Genre = GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
         else
-            Genre = GenreOptions.FirstOrDefault() ?? string.Empty;
+            Genre = selectedGenre;
+    }
+
+
+    private void GenreComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox comboBox)
+            return;
+
+        var selectedGenre = comboBox.SelectedItem switch
+        {
+            ComboBoxItem item => item.Content?.ToString(),
+            string text => text,
+            _ => null
+        };
+
+        if (!GenreListService.IsSeparator(selectedGenre))
+            return;
+
+        comboBox.SelectedItem = null;
+        comboBox.Text = Genre;
+        e.Handled = true;
     }
 
     private void PolishAutoMergeCheckBoxSpacing()
@@ -48,7 +69,7 @@ public partial class MainWindow
             if (!string.Equals(binding?.ParentBinding.Path?.Path, nameof(MergeAutomaticallyAfterConversion), StringComparison.Ordinal))
                 continue;
 
-            checkBox.Margin = new Thickness(-3, 0, 0, 0);
+            checkBox.Margin = new Thickness(0, 0, 0, 0);
             break;
         }
     }

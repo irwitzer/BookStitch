@@ -28,6 +28,7 @@ public sealed record ExportUiStateSnapshot(
     bool CanStartExport,
     string ExportButtonText,
     string SecondaryButtonText,
+    Visibility SecondaryButtonVisibility,
     bool CanCancelExport,
     bool CanAddProjectSources,
     Visibility AddProjectSourcesVisibility,
@@ -50,6 +51,7 @@ public sealed class ExportUiStateService
         var isReviewing = phase == ProjectPipelineState.ReviewBeforeMerge;
         var isCompleted = phase == ProjectPipelineState.Completed;
         var isPausablePhase = phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting;
+        var isRunningPausablePhase = input.IsBusy && isPausablePhase;
         var isActivelyProcessing = isPausablePhase || phase == ProjectPipelineState.Merging;
         var isFailed = input.IsRunFailed && !input.IsBusy;
         var isPaused = input.IsRunPaused && isPausablePhase && !input.IsBusy && !isFailed;
@@ -72,9 +74,12 @@ public sealed class ExportUiStateService
 
         var exportButtonText = phase switch
         {
+            _ when isRunningPausablePhase => "Pause",
+            _ when isPaused => "Weiter",
             _ when isPausablePhase => "Weiter",
             ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed =>
                 input.ManualMergeReviewNeedsReconversion ? "Neu konvertieren" : "Zusammenfügen",
+            ProjectPipelineState.Merging => "Zusammenfügen",
             _ when input.LoadedResumeProjectNeedsDiscImport => "Import fortsetzen",
             _ => "Projekt starten"
         };
@@ -84,18 +89,17 @@ public sealed class ExportUiStateService
             CanSelectFolder: !input.IsBusy && (isPreparing || isCompleted),
             CanConfigureFfmpeg: !input.IsBusy && (isPreparing || isCompleted),
             CanEditTrackOrder: canInteract && input.TrackCount > 0,
-            CanStartExport: !isFailed && (canInteract || isPaused) && input.FfmpegAvailable && hasExportableContent,
+            CanStartExport: !isFailed && (isRunningPausablePhase || ((canInteract || isPaused) && input.FfmpegAvailable && hasExportableContent)),
             ExportButtonText: exportButtonText,
             SecondaryButtonText: isFailed
                 ? "Projekt abbrechen"
                 : isPaused
                     ? input.IsProjectExtensionRun ? "Stoppen" : "Projekt abbrechen"
-                    : isPausablePhase
-                        ? "Pause"
-                        : isReviewing || isCompleted
-                            ? "Projekt schließen"
-                            : "Abbrechen",
-            CanCancelExport: isFailed || isActivelyProcessing || isPaused || isReviewing || isCompleted,
+                    : isReviewing || isCompleted
+                        ? "Projekt schließen"
+                        : "Abbrechen",
+            SecondaryButtonVisibility: input.IsBusy && phase != ProjectPipelineState.Merging ? Visibility.Collapsed : Visibility.Visible,
+            CanCancelExport: isFailed || (isActivelyProcessing && !isRunningPausablePhase) || isPaused || isReviewing || isCompleted,
             CanAddProjectSources: canAddProjectSources,
             AddProjectSourcesVisibility: canAddProjectSources ? Visibility.Visible : Visibility.Collapsed,
             AddProjectSourcesButtonText: addProjectSourcesButtonText,

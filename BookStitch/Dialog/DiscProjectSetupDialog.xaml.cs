@@ -51,7 +51,7 @@ public partial class DiscProjectSetupDialog : Window
     private string _processedCoverPath = "";
 
     public DiscProjectSetupResult Result { get; private set; } = new(
-        1, "", "Auto", ".m4a", "", "", "", "", "", "iBook Hörbuch", "{Autor} - {Titel}", "", "", false);
+        1, "", "Auto", ".m4a", "", "", "", "", "", "Audiobook", "{Autor} - {Titel}", "", "", false);
 
     public DiscProjectSetupDialog(
         ProjectSetupDialogRequest request,
@@ -80,6 +80,8 @@ public partial class DiscProjectSetupDialog : Window
         _maxSourceBitrateKbps = request.MaxSourceBitrateKbps;
         _coverWorkFolder = request.CoverWorkFolder;
         _keepAlbumLinkedToTitle = request.KeepAlbumLinkedToTitle;
+        GenreTextBox.Items.Clear();
+        GenreTextBox.ItemsSource = GenreListService.GetGenres(request.UsePrivateGenreList);
 
         Title = request.WindowTitle;
         TitleText.Text = request.WindowTitle;
@@ -118,7 +120,9 @@ public partial class DiscProjectSetupDialog : Window
         AlbumTextBox.Text = request.Album ?? "";
         AuthorTextBox.Text = request.Author ?? "";
         NarratorTextBox.Text = request.Narrator ?? "";
-        GenreTextBox.Text = string.IsNullOrWhiteSpace(request.Genre) ? "iBook Hörbuch" : request.Genre;
+        GenreTextBox.Text = GenreListService.IsSelectableGenre(request.Genre)
+            ? request.Genre
+            : GenreListService.GetDefaultGenre(request.UsePrivateGenreList);
         FileNameTemplateTextBox.Text = string.IsNullOrWhiteSpace(request.FileNameTemplate) ? "{Autor} - {Titel}" : request.FileNameTemplate;
         AutoMergeCheckBox.IsChecked = request.AutoMergeAfterConversion;
         AlbumTextBox.IsTabStop = !_keepAlbumLinkedToTitle;
@@ -274,7 +278,7 @@ public partial class DiscProjectSetupDialog : Window
             AlbumTextBox.Text.Trim(),
             AuthorTextBox.Text.Trim(),
             NarratorTextBox.Text.Trim(),
-            GetComboBoxText(GenreTextBox).Trim(),
+            GetGenreText(),
             GetComboBoxText(FileNameTemplateTextBox).Trim(),
             _selectedCoverSourcePath,
             _processedCoverPath,
@@ -707,6 +711,14 @@ public partial class DiscProjectSetupDialog : Window
 
     private void MetadataComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (ReferenceEquals(sender, GenreTextBox) &&
+            GenreListService.IsSeparator(GetComboBoxText(GenreTextBox)))
+        {
+            GenreTextBox.SelectedItem = null;
+            GenreTextBox.Text = GenreListService.GetDefaultGenre(_request.UsePrivateGenreList);
+            e.Handled = true;
+        }
+
         SyncFileNameTemplateIfNeeded(sender);
         UpdatePreview();
     }
@@ -827,10 +839,21 @@ public partial class DiscProjectSetupDialog : Window
             GetSelectedOutputExtension());
     }
 
+    private string GetGenreText()
+    {
+        var genre = GetComboBoxText(GenreTextBox).Trim();
+        return GenreListService.IsSeparator(genre)
+            ? GenreListService.GetDefaultGenre(_request.UsePrivateGenreList)
+            : genre;
+    }
+
     private static string GetComboBoxText(ComboBox comboBox)
     {
         if (comboBox.SelectedItem is ComboBoxItem item)
             return item.Content?.ToString() ?? "";
+
+        if (comboBox.SelectedItem is string selectedText)
+            return selectedText;
 
         return comboBox.Text ?? "";
     }

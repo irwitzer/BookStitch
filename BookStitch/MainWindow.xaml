@@ -1,4 +1,4 @@
-﻿<Window x:Class="BookStitch.MainWindow"
+<Window x:Class="BookStitch.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="BookStitch"
@@ -220,6 +220,33 @@
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center">
+                    <Border Margin="0,0,10,0"
+                            Padding="10,5"
+                            VerticalAlignment="Center"
+                            Background="#111A20"
+                            BorderBrush="{StaticResource InputBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Visibility="{Binding PipelineStateDebugVisibility}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Debug · "
+                                       Foreground="{StaticResource MutedTextBrush}"/>
+                            <TextBlock Text="{Binding PipelineStateDebugText}"
+                                       Foreground="{StaticResource AccentSoftBrush}"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Content="Ausgabeordner öffnen"
+                            MinWidth="150"
+                            Height="34"
+                            Padding="12,0"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{Binding CanOpenOutputFolder}"
+                            ToolTip="Ausgabeordner im Explorer öffnen"
+                            Click="OpenOutputFolder_Click"
+                            Margin="0,0,8,0"/>
+
                     <Button Content="Projekte"
                             MinWidth="92"
                             Height="34"
@@ -349,18 +376,53 @@
                                       Grid.Row="1" Grid.Column="3"
                                       Style="{StaticResource DarkComboBoxStyle}"
                                       PreviewKeyDown="GenreComboBox_PreviewKeyDown"
+                                      SelectionChanged="GenreComboBox_SelectionChanged"
                                       Text="{Binding Genre, UpdateSourceTrigger=PropertyChanged}"
                                       IsEditable="True"
                                       IsEnabled="{Binding CanChangeBookMetadata}"
                                       Margin="0,0,16,0">
-                                <ComboBoxItem Content="iBook Hörbuch"/>
-                                <ComboBoxItem Content="iBook Kleinkunst"/>
-                                <ComboBoxItem Content="iBook Wissen"/>
-                                <ComboBoxItem Content="Podcast"/>
-                                <ComboBoxItem Content="iBook Kinderbücher DE"/>
-                                <ComboBoxItem Content="iBook Kinderbücher CH"/>
+                                <ComboBoxItem Content="──── Bibliothek-Tags ────"/>
                                 <ComboBoxItem Content="Audiobook"/>
                                 <ComboBoxItem Content="Hörbuch"/>
+                                <ComboBoxItem Content="Spoken Word"/>
+                                <ComboBoxItem Content="iBook"/>
+                                <ComboBoxItem Content="Hörspiel"/>
+                                <ComboBoxItem Content="Lesung"/>
+                                <ComboBoxItem Content="Vortrag"/>
+                                <ComboBoxItem Content="Podcast"/>
+                                <ComboBoxItem Content="──── Genres ────"/>
+                                <ComboBoxItem Content="Thriller"/>
+                                <ComboBoxItem Content="Krimi"/>
+                                <ComboBoxItem Content="Fantasy"/>
+                                <ComboBoxItem Content="Science-Fiction"/>
+                                <ComboBoxItem Content="Historischer Roman"/>
+                                <ComboBoxItem Content="Liebesroman"/>
+                                <ComboBoxItem Content="Belletristik"/>
+                                <ComboBoxItem Content="Biografie &amp; Memoiren"/>
+                                <ComboBoxItem Content="Kinderhörbuch"/>
+                                <ComboBoxItem Content="Jugendbuch"/>
+                                <ComboBoxItem Content="Sachbuch"/>
+                                <ComboBoxItem Content="Ratgeber"/>
+                                <ComboBoxItem Content="Geschichte"/>
+                                <ComboBoxItem Content="Humor"/>
+                                <ComboBoxItem Content="Horror"/>
+                                <ComboBoxItem Content="True Crime"/>
+                                <ComboBoxItem Content="Klassiker"/>
+                                <ComboBoxItem Content="Abenteuer"/>
+                                <ComboBoxItem Content="Wirtschaft &amp; Karriere"/>
+                                <ComboBoxItem Content="Religion &amp; Spiritualität"/>
+                                <ComboBoxItem Content="Philosophie"/>
+                                <ComboBoxItem Content="Psychologie"/>
+                                <ComboBoxItem Content="Politik &amp; Gesellschaft"/>
+                                <ComboBoxItem Content="Wissenschaft"/>
+                                <ComboBoxItem Content="Medizin &amp; Gesundheit"/>
+                                <ComboBoxItem Content="Persönlichkeitsentwicklung"/>
+                                <ComboBoxItem Content="Familie &amp; Beziehungen"/>
+                                <ComboBoxItem Content="Reise &amp; Abenteuer"/>
+                                <ComboBoxItem Content="Märchen &amp; Sagen"/>
+                                <ComboBoxItem Content="Lyrik"/>
+                                <ComboBoxItem Content="Drama"/>
+                                <ComboBoxItem Content="Erotik"/>
                             </ComboBox>
 
                         </Grid>
@@ -397,12 +459,12 @@
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="104"/>
-                        <ColumnDefinition Width="20"/>
+                        <ColumnDefinition Width="18"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="360"/>
-                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="18"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="5"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
@@ -516,13 +578,19 @@
                         </TextBlock>
                     </Border>
 
-                    <Button Grid.Column="9"
-                            Content="Öffnen"
-                            MinWidth="78"
-                            Height="30"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            IsEnabled="{Binding CanOpenOutputFolder}"
-                            Click="OpenOutputFolder_Click"/>
+                    <TextBlock Grid.Column="9"
+                               Text="Auto-Zusammenfügen:"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource ExportOptionLabelStyle}"
+                               Margin="0,0,2,0"
+                               Cursor="Hand"
+                               ToolTip="Das Hörbuch wird nach dem Konvertieren ohne zusätzliche Prüfung zusammengefügt."
+                               MouseLeftButtonUp="AutoMergeLabel_MouseLeftButtonUp"/>
+
+                    <CheckBox Grid.Column="11"
+                              IsChecked="{Binding MergeAutomaticallyAfterConversion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              VerticalAlignment="Center"
+                              ToolTip="Das Hörbuch wird nach dem Konvertieren ohne zusätzliche Prüfung zusammengefügt."/>
                 </Grid>
 
                 <StackPanel Grid.Row="0" Grid.Column="0"
@@ -737,23 +805,6 @@
                         </Button>
                     </Grid>
 
-
-                    <Border Margin="26,0,0,0"
-                            Padding="10,5"
-                            VerticalAlignment="Center"
-                            Background="#111A20"
-                            BorderBrush="{StaticResource InputBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="5"
-                            Visibility="{Binding PipelineStateDebugVisibility}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Debug · "
-                                       Foreground="{StaticResource MutedTextBrush}"/>
-                            <TextBlock Text="{Binding PipelineStateDebugText}"
-                                       Foreground="{StaticResource AccentSoftBrush}"
-                                       FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
 
                 <Border Grid.Row="0"

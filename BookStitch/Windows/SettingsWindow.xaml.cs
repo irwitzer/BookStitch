@@ -1,9 +1,11 @@
 ﻿using BookStitch.Dialog;
 using BookStitch.Models;
 using BookStitch.Services;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text;
 using System.Windows;
 using System.Windows.Documents;
@@ -17,11 +19,15 @@ namespace BookStitch;
 
 public partial class SettingsWindow : Window
 {
+    private const string GitHubProjectUrl = "https://github.com/irwitzer/BookStitch";
+    private const string ThirdPartyNoticesUrl = "https://github.com/irwitzer/BookStitch/blob/main/THIRD_PARTY_NOTICES.md";
+
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
     private readonly Func<int, ProjectCleanupResult> _deleteOldProjects;
     private readonly Action<bool> _setMetadataPanelExpanded;
+    private readonly Action<bool> _setMergeAutomaticallyAfterConversion;
     private readonly Action<bool> _setPipelineStateDebugVisible;
     private readonly Func<Task> _previewDiscSourceAnalysis;
     private readonly Func<Task> _startDeveloperAudioDiscTest;
@@ -46,6 +52,7 @@ public partial class SettingsWindow : Window
         Func<int, ProjectCleanupResult> deleteOldProjects,
         bool metadataPanelExpanded,
         Action<bool> setMetadataPanelExpanded,
+        Action<bool> setMergeAutomaticallyAfterConversion,
         Action<bool> setPipelineStateDebugVisible,
         Func<Task> previewDiscSourceAnalysis,
         Func<Task> startDeveloperAudioDiscTest,
@@ -57,6 +64,7 @@ public partial class SettingsWindow : Window
         _deleteOldProjects = deleteOldProjects;
         _metadataPanelExpandedPreview = metadataPanelExpanded;
         _setMetadataPanelExpanded = setMetadataPanelExpanded;
+        _setMergeAutomaticallyAfterConversion = setMergeAutomaticallyAfterConversion;
         _setPipelineStateDebugVisible = setPipelineStateDebugVisible;
         _previewDiscSourceAnalysis = previewDiscSourceAnalysis;
         _startDeveloperAudioDiscTest = startDeveloperAudioDiscTest;
@@ -77,6 +85,9 @@ public partial class SettingsWindow : Window
 
     private void LoadControlsFromSettings()
     {
+        if (FindName("InfoVersionTextBlock") is TextBlock infoVersionTextBlock)
+            infoVersionTextBlock.Text = $"Version: {GetDisplayVersion()}";
+
         if (FindName("MergeAutomaticallyCheckBox") is CheckBox mergeAutomaticallyCheckBox)
             mergeAutomaticallyCheckBox.IsChecked = _settings.MergeAutomaticallyAfterConversion;
 
@@ -172,7 +183,7 @@ public partial class SettingsWindow : Window
         if (sender is not CheckBox mergeAutomaticallyCheckBox)
             return;
 
-        _settings.MergeAutomaticallyAfterConversion = mergeAutomaticallyCheckBox.IsChecked == true;
+        _setMergeAutomaticallyAfterConversion(mergeAutomaticallyCheckBox.IsChecked == true);
         _settingsService.Save(_settings);
     }
 
@@ -1120,6 +1131,48 @@ public partial class SettingsWindow : Window
             [new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true)]);
     }
 
+
+    private void OpenGitHubProject_Click(object sender, RoutedEventArgs e)
+    {
+        OpenUrl(GitHubProjectUrl);
+    }
+
+    private void OpenThirdPartyNotices_Click(object sender, RoutedEventArgs e)
+    {
+        OpenUrl(ThirdPartyNoticesUrl);
+    }
+
+    private void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppDialogService.Show(
+                this,
+                "Link öffnen",
+                "Der Link konnte nicht geöffnet werden",
+                $"BookStitch konnte den Link nicht an Windows übergeben.\n\n{url}\n\n{ex.Message}",
+                AppDialogKind.Error,
+                null,
+                new[] { new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true) });
+        }
+    }
+
+    private static string GetDisplayVersion()
+    {
+        var informationalVersion = typeof(SettingsWindow).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+            return informationalVersion.Split('+')[0];
+
+        return typeof(SettingsWindow).Assembly.GetName().Version?.ToString() ?? "unbekannt";
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => CloseWindow();
     private void ShowDeveloperTabCheckBox_Changed(object sender, RoutedEventArgs e)
     {
@@ -1310,6 +1363,7 @@ public partial class SettingsWindow : Window
             Path.Combine(_settingsService.ProjectRootFolder, "Covers"),
             _settings.MergeAutomaticallyAfterConversion,
             _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: sourceLabel,
             MaxSourceBitrateKbps: 320,
             LastCoverFolder: _settings.LastCoverFolder ?? string.Empty);

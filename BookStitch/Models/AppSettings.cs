@@ -2,7 +2,7 @@ namespace BookStitch.Models;
 
 public class AppSettings
 {
-    public string DefaultGenre { get; set; } = "iBook";
+    public string DefaultGenre { get; set; } = "Audiobook";
 
     public string DefaultOutputExtension { get; set; } = ".m4a";
 

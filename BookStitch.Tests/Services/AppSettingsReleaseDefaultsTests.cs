@@ -16,5 +16,6 @@ public sealed class AppSettingsReleaseDefaultsTests
         Assert.False(settings.ExperimentalDriveRoundEnabled);
         Assert.Empty(settings.DiscDriveOrder);
         Assert.False(settings.UsePrivateGenreList);
+        Assert.Equal("Audiobook", settings.DefaultGenre);
     }
 }

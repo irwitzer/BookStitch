@@ -70,8 +70,7 @@ public class ExportUiStateServiceTests
     [Theory]
     [InlineData(ProjectPipelineState.AcquiringSources)]
     [InlineData(ProjectPipelineState.Converting)]
-    [InlineData(ProjectPipelineState.Merging)]
-    public void Create_WhenPipelineIsActive_LocksEditingAndAllowsCancel(ProjectPipelineState phase)
+    public void Create_WhenPausablePipelineIsActive_UsesPrimaryPauseAndHidesProjectCancel(ProjectPipelineState phase)
     {
         var state = _service.Create(Input(phase, isBusy: true, progress: 35));
 
@@ -79,6 +78,23 @@ public class ExportUiStateServiceTests
         Assert.False(state.CanChangeBookMetadata);
         Assert.False(state.CanEditTrackOrder);
         Assert.False(state.CanChangeExportPreset);
+        Assert.True(state.CanStartExport);
+        Assert.Equal("Pause", state.ExportButtonText);
+        Assert.Equal("Abbrechen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Collapsed, state.SecondaryButtonVisibility);
+        Assert.False(state.CanCancelExport);
+        Assert.Equal(Visibility.Visible, state.ExportProgressVisibility);
+    }
+
+    [Fact]
+    public void Create_WhenMergeIsActive_KeepsExistingSecondaryCancelBehavior()
+    {
+        var state = _service.Create(Input(ProjectPipelineState.Merging, isBusy: true, progress: 35));
+
+        Assert.False(state.CanStartExport);
+        Assert.Equal("Zusammenfügen", state.ExportButtonText);
+        Assert.Equal("Abbrechen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Visible, state.SecondaryButtonVisibility);
         Assert.True(state.CanCancelExport);
         Assert.Equal(Visibility.Visible, state.ExportProgressVisibility);
     }
@@ -201,6 +217,7 @@ public class ExportUiStateServiceTests
         Assert.True(state.CanStartExport);
         Assert.Equal("Weiter", state.ExportButtonText);
         Assert.Equal("Projekt abbrechen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Visible, state.SecondaryButtonVisibility);
         Assert.True(state.CanCancelExport);
         Assert.True(state.CanChangeBookMetadata);
         Assert.True(state.CanChooseOutputFolder);
@@ -225,6 +242,7 @@ public class ExportUiStateServiceTests
         Assert.False(state.CanStartExport);
         Assert.Equal("Weiter", state.ExportButtonText);
         Assert.Equal("Projekt abbrechen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Visible, state.SecondaryButtonVisibility);
         Assert.True(state.CanCancelExport);
         Assert.False(state.CanOpenSettings);
         Assert.False(state.CanAddProjectSources);
@@ -242,6 +260,7 @@ public class ExportUiStateServiceTests
 
         Assert.Equal("Weiter", state.ExportButtonText);
         Assert.Equal("Stoppen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Visible, state.SecondaryButtonVisibility);
         Assert.True(state.CanStartExport);
         Assert.True(state.CanCancelExport);
     }
@@ -249,14 +268,24 @@ public class ExportUiStateServiceTests
     [Theory]
     [InlineData(ProjectPipelineState.AcquiringSources)]
     [InlineData(ProjectPipelineState.Converting)]
-    public void Create_WhenPipelineIsRunning_UsesPauseAction(ProjectPipelineState phase)
+    public void Create_WhenPipelineIsRunning_UsesPrimaryPauseAction(ProjectPipelineState phase)
     {
         var state = _service.Create(Input(phase, isBusy: true));
 
-        Assert.Equal("Weiter", state.ExportButtonText);
-        Assert.False(state.CanStartExport);
-        Assert.Equal("Pause", state.SecondaryButtonText);
-        Assert.True(state.CanCancelExport);
+        Assert.Equal("Pause", state.ExportButtonText);
+        Assert.True(state.CanStartExport);
+        Assert.Equal("Abbrechen", state.SecondaryButtonText);
+        Assert.Equal(Visibility.Collapsed, state.SecondaryButtonVisibility);
+        Assert.False(state.CanCancelExport);
+    }
+
+    [Fact]
+    public void Create_WhenAudioDiscPreparationIsBusy_HidesSecondaryButton()
+    {
+        var state = _service.Create(Input(ProjectPipelineState.Preparing, isBusy: true));
+
+        Assert.Equal(Visibility.Collapsed, state.SecondaryButtonVisibility);
+        Assert.False(state.CanCancelExport);
     }
 
 }

@@ -169,7 +169,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _isSynchronizingTitleAndAlbum;
     private bool _isMetadataPanelExpanded;
     private bool _isMetadataEditingAvailable;
-    private string _genre = "iBook Hörbuch";
+    private string _genre = "Audiobook";
     private string _outputExtension = ".m4a";
     private string _fileNameTemplate = "{Autor} - {Titel}";
     private string _selectedExportPreset = "AAC Stereo 192 kbps";
@@ -270,11 +270,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ? Visibility.Visible
         : Visibility.Collapsed;
     public bool CanEditTrackOrder => ExportUiState.CanEditTrackOrder;
-    public bool CanStartExport => _isAudioDiscProjectAwaitingRip
-        ? !IsBusy && !IsExporting && !IsDiscImporting && _activeAudioDiscManifest is not null && _ffmpegStatus.FfmpegAvailable
-        : ExportUiState.CanStartExport;
+    public bool CanStartExport => ExportUiState.CanStartExport ||
+        (_isAudioDiscProjectAwaitingRip &&
+         !IsBusy &&
+         !IsExporting &&
+         !IsDiscImporting &&
+         _activeAudioDiscManifest is not null &&
+         _ffmpegStatus.FfmpegAvailable);
     public string ExportButtonText => ExportUiState.ExportButtonText;
     public string SecondaryButtonText => ExportUiState.SecondaryButtonText;
+    public Visibility SecondaryButtonVisibility => ExportUiState.SecondaryButtonVisibility;
     public bool CanCancelExport => ExportUiState.CanCancelExport;
     public bool CanAddProjectSources => ExportUiState.CanAddProjectSources;
     public Visibility AddProjectSourcesVisibility => ExportUiState.AddProjectSourcesVisibility;
@@ -518,7 +523,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _genre;
         set
         {
-            _genre = NormalizeComboBoxValue(value);
+            var normalized = NormalizeComboBoxValue(value);
+            if (GenreListService.IsSeparator(normalized))
+                return;
+
+            _genre = normalized;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryDetails));
 
@@ -916,9 +925,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _settings = _settingsService.Load();
 
-        Genre = string.IsNullOrWhiteSpace(_settings.DefaultGenre)
-            ? "iBook Hörbuch"
-            : _settings.DefaultGenre;
+        Genre = GenreListService.IsSelectableGenre(_settings.DefaultGenre)
+            ? _settings.DefaultGenre
+            : GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
 
         OutputExtension = _settings.DefaultOutputExtension is ".m4a" or ".m4b"
             ? _settings.DefaultOutputExtension
@@ -1005,7 +1014,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             IsDiscImporting,
             IsDiscImporting && _activeAudioDiscManifest is not null,
             IsExporting,
-            IsBusy);
+            IsBusy,
+            _isPipelinePaused,
+            _activeAudioDiscManifest is not null,
+            _activeMp3DiscManifest is not null);
 
         if (activity == ApplicationActivity.None)
         {
@@ -1030,7 +1042,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             buttons: new[]
             {
                 new AppDialogButton("Weiterarbeiten", AppDialogResult.Cancel, IsDefault: true, IsCancel: true),
-                new AppDialogButton("Abbrechen und schließen", AppDialogResult.Yes, IsPrimary: true)
+                new AppDialogButton("Abbrechen und schließen", AppDialogResult.Yes, IsDanger: true)
             });
 
         if (result != AppDialogResult.Yes)
@@ -1081,6 +1093,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (_exportCancellation is { IsCancellationRequested: false })
             _exportCancellation.Cancel();
+    }
+
+    private async Task RequestPipelinePauseAsync()
+    {
+        if (_pipelineState is not (ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting))
+            return;
+
+        _pauseRequested = true;
+        StatusText = "Pause wird vorbereitet …";
+        ExportProgressText = "Laufende Vorgänge werden kontrolliert beendet …";
+
+        var discCancellation = IsDiscImporting ? _discImportCancellation : null;
+        var exportCancellation = IsExporting ? _exportCancellation : null;
+
+        if (discCancellation is not null && !discCancellation.IsCancellationRequested)
+            await discCancellation.CancelAsync();
+
+        if (exportCancellation is not null && !exportCancellation.IsCancellationRequested)
+            await exportCancellation.CancelAsync();
     }
 
     private void TrySaveActiveProjectSnapshot()
@@ -2302,6 +2333,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
             KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: dialog.FolderName,
             MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
             LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Folder, dialog.FolderName)));
@@ -2519,6 +2551,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
             KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: sourceFolder,
             MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
             LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Mp3Disc, sourceFolder)));
@@ -2891,6 +2924,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
             KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: sourceFolder,
             LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.AudioDisc, sourceFolder)));
 
@@ -3772,6 +3806,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
             KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: sourceFolder,
             MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
             LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Mp3Disc, sourceFolder)));
@@ -5989,6 +6024,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             days => DeleteOldProjects(days, showUserMessage: false),
             _isMetadataPanelExpanded,
             expanded => SetMetadataPanelExpanded(expanded, animate: true),
+            enabled => MergeAutomaticallyAfterConversion = enabled,
             _ =>
             {
                 OnPropertyChanged(nameof(PipelineStateDebugVisibility));
@@ -6531,7 +6567,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async void Export_Click(object sender, RoutedEventArgs e)
     {
         if (IsBusy)
+        {
+            if (_pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
+                await RequestPipelinePauseAsync();
+
             return;
+        }
 
         if (_isPipelineFailed)
         {
@@ -7793,19 +7834,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (_pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
         {
-            _pauseRequested = true;
-            StatusText = "Pause wird vorbereitet …";
-            ExportProgressText = "Laufende Vorgänge werden kontrolliert beendet …";
-
-            var discCancellation = IsDiscImporting ? _discImportCancellation : null;
-            var exportCancellation = IsExporting ? _exportCancellation : null;
-
-            if (discCancellation is not null && !discCancellation.IsCancellationRequested)
-                await discCancellation.CancelAsync();
-
-            if (exportCancellation is not null && !exportCancellation.IsCancellationRequested)
-                await exportCancellation.CancelAsync();
-
+            await RequestPipelinePauseAsync();
             return;
         }
 
@@ -10080,6 +10109,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanStartExport));
         OnPropertyChanged(nameof(ExportButtonText));
         OnPropertyChanged(nameof(SecondaryButtonText));
+        OnPropertyChanged(nameof(SecondaryButtonVisibility));
         OnPropertyChanged(nameof(CanCancelExport));
         OnPropertyChanged(nameof(CanAddProjectSources));
         OnPropertyChanged(nameof(AddProjectSourcesVisibility));

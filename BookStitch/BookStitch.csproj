@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\Icons\BookStitchAppIcon-Simplified-multisize.ico</ApplicationIcon>
+    <Version>1.0.0-rc2</Version>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,5 +41,22 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Page>
   </ItemGroup>
+
+  <Target Name="CopyTagLibSharpRuntimeAssembly" AfterTargets="Build;Publish">
+    <ItemGroup>
+      <TagLibSharpRuntimeAssembly Include="$(NuGetPackageRoot)taglibsharp\2.3.0\lib\netstandard2.0\TagLibSharp.dll"
+                                  Condition="Exists('$(NuGetPackageRoot)taglibsharp\2.3.0\lib\netstandard2.0\TagLibSharp.dll')" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          Condition="'@(TagLibSharpRuntimeAssembly)' != ''" />
+
+    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="'@(TagLibSharpRuntimeAssembly)' != '' and '$(PublishDir)' != ''" />
+  </Target>
 
 </Project>

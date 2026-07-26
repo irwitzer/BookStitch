@@ -534,6 +534,7 @@ public partial class DialogPreviewWindow : Window
             Path.Combine(_settingsService.ProjectRootFolder, "Covers"),
             _settings.MergeAutomaticallyAfterConversion,
             _settings.KeepAlbumLinkedToTitle,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
             SourceFolder: sourceLabel,
             MaxSourceBitrateKbps: 320,
             LastCoverFolder: _settings.LastCoverFolder ?? string.Empty);

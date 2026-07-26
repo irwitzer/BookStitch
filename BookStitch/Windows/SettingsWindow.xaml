@@ -899,6 +899,97 @@
                     </ScrollViewer>
                 </Border>
             </TabItem>
+
+            <TabItem x:Name="InfoTabItem" Header="Info" Style="{StaticResource SettingsTabItemStyle}">
+                <Border Background="{StaticResource PanelBackgroundBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="22">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Width="150"
+                                    Height="150"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Background="#11161B"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Padding="16">
+                                <Image Source="/Assets/Icons/BookStitchLogo-Round.png"
+                                       Stretch="Uniform"
+                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                       SnapsToDevicePixels="True"/>
+                            </Border>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="BookStitch"
+                                           FontSize="28"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource AccentSoftBrush}"
+                                           Margin="0,0,0,6"/>
+                                <TextBlock Text="Windows-Anwendung zum Erstellen vollständiger Hörbuchdateien aus lokalen Audiodateien, MP3-/Daten-CDs und Audio-CDs."
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource MainTextBrush}"
+                                           LineHeight="22"
+                                           Margin="0,0,0,18"/>
+
+                                <TextBlock x:Name="InfoVersionTextBlock"
+                                           Text="Version:"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource MainTextBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Foreground="{StaticResource MainTextBrush}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8">
+                                    <Run Text="Entwickelt von "/>
+                                    <Run Text="irwitzer" Foreground="{StaticResource AccentSoftBrush}"/>
+                                </TextBlock>
+                                <TextBlock Text="Lizenz: GNU General Public License v3.0 only (GPL-3.0-only)"
+                                           Foreground="{StaticResource MainTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,18"/>
+
+                                <Separator Margin="0,0,0,16" Opacity="0.35"/>
+
+                                <TextBlock Text="Projekt und Veröffentlichungen"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource MainTextBrush}"
+                                           Margin="0,0,0,8"/>
+                                <TextBlock Text="Projektinformationen, Veröffentlichungen und Quellcode werden über GitHub bereitgestellt. Es werden keine aktiven Social-Media-Kanäle für BookStitch gepflegt."
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           LineHeight="22"
+                                           Margin="0,0,0,12"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                    <Button Content="GitHub-Projekt öffnen"
+                                            MinWidth="170"
+                                            Height="34"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Click="OpenGitHubProject_Click"
+                                            Margin="0,0,10,0"/>
+                                    <Button Content="Drittanbieterhinweise öffnen"
+                                            MinWidth="220"
+                                            Height="34"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Click="OpenThirdPartyNotices_Click"/>
+                                </StackPanel>
+
+
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
         </TabControl>
     </DockPanel>
     </Border>

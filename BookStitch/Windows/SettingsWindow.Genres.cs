@@ -1,3 +1,4 @@
+using BookStitch.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -34,7 +35,7 @@ public partial class SettingsWindow
             Foreground = TryFindResource("MainTextBrush") as Brush ?? Foreground,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 0),
-            ToolTip = "Zeigt im Hauptfenster nur die private iBook-Genre-Liste an.",
+            ToolTip = "Ersetzt die Bibliothek-Tags der Genre-Liste durch die private iBook-Liste.",
             IsChecked = _settings.UsePrivateGenreList
         };
         _privateGenreListCheckBox.Checked += PrivateGenreListCheckBox_Changed;
@@ -53,9 +54,10 @@ public partial class SettingsWindow
             return;
 
         _settings.UsePrivateGenreList = checkBox.IsChecked == true;
+        _settings.DefaultGenre = GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
         _settingsService.Save(_settings);
 
         if (Owner is MainWindow mainWindow)
-            mainWindow.RefreshGenreOptions();
+            mainWindow.RefreshGenreOptions(resetToDefault: true);
     }
 }

@@ -31,6 +31,7 @@ public sealed record ProjectSetupDialogRequest(
     string CoverWorkFolder,
     bool AutoMergeAfterConversion,
     bool KeepAlbumLinkedToTitle,
+    bool UsePrivateGenreList = false,
     string SourceFolder = "",
     int? MaxSourceBitrateKbps = null,
     string LastCoverFolder = "");

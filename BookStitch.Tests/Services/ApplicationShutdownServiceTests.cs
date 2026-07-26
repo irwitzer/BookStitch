@@ -30,6 +30,27 @@ public sealed class ApplicationShutdownServiceTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData(true, false, ApplicationActivity.AudioDiscProcessing)]
+    [InlineData(false, true, ApplicationActivity.Mp3DiscImport)]
+    [InlineData(false, false, ApplicationActivity.Export)]
+    public void GetActiveActivity_TreatsPausedPipelineAsActive(
+        bool hasPausedAudioDiscProject,
+        bool hasPausedMp3DiscProject,
+        ApplicationActivity expected)
+    {
+        var result = _service.GetActiveActivity(
+            isDiscImporting: false,
+            isAudioDiscProcessing: false,
+            isExporting: false,
+            isBusy: false,
+            isPipelinePaused: true,
+            hasPausedAudioDiscProject: hasPausedAudioDiscProject,
+            hasPausedMp3DiscProject: hasPausedMp3DiscProject);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CreatePrompt_ForDiscImport_ExplainsPreservedFiles()
     {

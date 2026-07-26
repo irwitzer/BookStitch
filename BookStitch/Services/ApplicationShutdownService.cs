@@ -20,7 +20,10 @@ public sealed class ApplicationShutdownService
         bool isDiscImporting,
         bool isAudioDiscProcessing,
         bool isExporting,
-        bool isBusy)
+        bool isBusy,
+        bool isPipelinePaused = false,
+        bool hasPausedAudioDiscProject = false,
+        bool hasPausedMp3DiscProject = false)
     {
         if (isDiscImporting)
         {
@@ -31,6 +34,17 @@ public sealed class ApplicationShutdownService
 
         if (isExporting)
             return ApplicationActivity.Export;
+
+        if (isPipelinePaused)
+        {
+            if (hasPausedAudioDiscProject)
+                return ApplicationActivity.AudioDiscProcessing;
+
+            if (hasPausedMp3DiscProject)
+                return ApplicationActivity.Mp3DiscImport;
+
+            return ApplicationActivity.Export;
+        }
 
         return isBusy
             ? ApplicationActivity.BackgroundWork

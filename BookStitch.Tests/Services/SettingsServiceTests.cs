@@ -96,7 +96,7 @@ public sealed class SettingsServiceTests
 
         var loaded = service.Load();
 
-        Assert.Equal("iBook", loaded.DefaultGenre);
+        Assert.Equal("Audiobook", loaded.DefaultGenre);
         Assert.Equal(Path.GetFullPath(projectRoot), loaded.WorkingFolder);
         Assert.False(File.Exists(service.SettingsFilePath));
         Assert.Single(Directory.EnumerateFiles(service.SettingsFolder, "global-settings.corrupt-*.json"));
