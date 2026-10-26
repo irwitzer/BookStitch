@@ -18,7 +18,8 @@ public sealed class ExportValidationService
         string outputFileNamePreview,
         string outputExtension,
         string workingRootFolder,
-        string? finalOutputPathOverride = null)
+        string? finalOutputPathOverride = null,
+        string? chapterMode = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -31,49 +32,55 @@ public sealed class ExportValidationService
                 : Path.Combine(outputFolder, outputFileNamePreview);
 
         if (trackSnapshot.Count == 0)
-            errors.Add("• Es sind noch keine Tracks geladen.");
+            errors.Add(LocalizationText.Get("ExportNoTracks"));
 
         if (!ffmpegStatus.FfmpegAvailable || string.IsNullOrWhiteSpace(ffmpegStatus.FfmpegPath))
-            errors.Add("• FFmpeg ist noch nicht bereit. Bitte richte FFmpeg zuerst ein.");
+            errors.Add(LocalizationText.Get("ExportFfmpegMissing"));
+
+        if (!ffmpegStatus.FfprobeAvailable || string.IsNullOrWhiteSpace(ffmpegStatus.FfprobePath))
+            errors.Add(LocalizationText.Get("Export.FfprobeMissing"));
+
+        if (!string.IsNullOrWhiteSpace(outputPath) && !WindowsOutputPathService.IsValid(outputPath))
+            errors.Add(LocalizationText.Format("Export.InvalidOutputPath", outputPath));
 
         if (string.IsNullOrWhiteSpace(currentFolderPath) || !Directory.Exists(currentFolderPath))
-            errors.Add("• Der aktuelle Hörbuchordner wurde nicht gefunden. Bitte wähle den Ordner erneut aus.");
+            errors.Add(LocalizationText.Get("ExportSourceFolderMissing"));
 
         if (string.IsNullOrWhiteSpace(outputFolder))
         {
-            errors.Add("• Es ist kein Ausgabeordner gesetzt.");
+            errors.Add(LocalizationText.Get("ExportOutputFolderUnset"));
         }
         else if (!Directory.Exists(outputFolder))
         {
-            errors.Add("• Der Ausgabeordner wurde nicht gefunden: " + outputFolder);
+            errors.Add(string.Format(LocalizationText.Get("ExportOutputFolderMissing"), outputFolder));
         }
         else if (!CanWriteToFolder(outputFolder, out var outputFolderError))
         {
-            errors.Add("• Der Ausgabeordner ist nicht beschreibbar: " + outputFolderError);
+            errors.Add(string.Format(LocalizationText.Get("ExportOutputFolderNotWritable"), outputFolderError));
         }
 
         if (string.IsNullOrWhiteSpace(outputFileNamePreview))
-            errors.Add("• Der Ausgabedateiname ist leer.");
+            errors.Add(LocalizationText.Get("ExportFileNameEmpty"));
 
         if (!outputExtension.Equals(".m4a", StringComparison.OrdinalIgnoreCase) &&
             !outputExtension.Equals(".m4b", StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add("• Die Ausgabeendung muss .m4a oder .m4b sein.");
+            errors.Add(LocalizationText.Get("ExportExtensionInvalid"));
         }
 
         try
         {
             if (!CanWriteToFolder(workingRootFolder, out var workingFolderError))
-                errors.Add("• Der Arbeitsordner ist nicht beschreibbar: " + workingFolderError);
+                errors.Add(string.Format(LocalizationText.Get("ExportWorkFolderNotWritable"), workingFolderError));
         }
         catch (Exception ex)
         {
-            errors.Add("• Der Arbeitsordner konnte nicht vorbereitet werden: " + ex.Message);
+            errors.Add(string.Format(LocalizationText.Get("ExportWorkFolderPreparationFailed"), ex.Message));
         }
 
         if (!string.IsNullOrWhiteSpace(currentFolderPath) && Directory.Exists(currentFolderPath))
         {
-            ValidateTracksForExport(trackSnapshot, currentFolderPath, outputPath, errors, warnings);
+            ValidateTracksForExport(trackSnapshot, currentFolderPath, outputPath, errors, warnings, chapterMode);
         }
 
         return new ExportCheckResult(trackSnapshot, outputPath, errors, warnings);
@@ -84,17 +91,18 @@ public sealed class ExportValidationService
         string currentFolderPath,
         string outputPath,
         List<string> errors,
-        List<string> warnings)
+        List<string> warnings,
+        string? chapterMode)
     {
         var invalidAudioTracks = trackSnapshot
             .Where(IsInvalidAudioTrack)
             .ToList();
 
         foreach (var track in invalidAudioTracks.Take(20))
-            errors.Add($"• #{track.Index}  Keine gültige Audiodatei: {track.FileName}");
+            errors.Add(string.Format(LocalizationText.Get("ExportInvalidAudioTrack"), track.Index, track.FileName));
 
         if (invalidAudioTracks.Count > 20)
-            errors.Add($"• ... und {invalidAudioTracks.Count - 20} weitere ungültige Datei(en).");
+            errors.Add(string.Format(LocalizationText.Get("ExportMoreInvalidAudio"), invalidAudioTracks.Count - 20));
 
         var unsupportedTracks = trackSnapshot
             .Where(track => !IsInvalidAudioTrack(track))
@@ -103,13 +111,12 @@ public sealed class ExportValidationService
 
         foreach (var track in unsupportedTracks.Take(10))
         {
-            errors.Add(
-                $"• #{track.Index}  Audioformat konnte nicht sicher verarbeitet werden " +
-                $"({FormatTrackTechnicalSummary(track)}).");
+            errors.Add(string.Format(LocalizationText.Get("ExportUnsupportedTrack"),
+                track.Index, FormatTrackTechnicalSummary(track)));
         }
 
         if (unsupportedTracks.Count > 10)
-            errors.Add($"• ... und {unsupportedTracks.Count - 10} weitere Datei(en), die noch nicht exportiert werden können.");
+            errors.Add(string.Format(LocalizationText.Get("ExportMoreUnsupported"), unsupportedTracks.Count - 10));
 
         var sourcePaths = trackSnapshot
             .Select(track => new
@@ -124,20 +131,20 @@ public sealed class ExportValidationService
             .ToList();
 
         foreach (var item in missingFiles.Take(10))
-            errors.Add($"• #{item.Track.Index}  Datei wurde nicht gefunden: {item.Track.FileName}");
+            errors.Add(string.Format(LocalizationText.Get("ExportMissingFile"), item.Track.Index, item.Track.FileName));
 
         if (missingFiles.Count > 10)
-            errors.Add($"• ... und {missingFiles.Count - 10} weitere fehlende Quelldatei(en).");
+            errors.Add(string.Format(LocalizationText.Get("ExportMoreMissingFiles"), missingFiles.Count - 10));
 
         var zeroByteFiles = sourcePaths
             .Where(item => File.Exists(item.Path) && new FileInfo(item.Path).Length == 0)
             .ToList();
 
         foreach (var item in zeroByteFiles.Take(10))
-            errors.Add($"• #{item.Track.Index}  Datei ist leer: {item.Track.FileName}");
+            errors.Add(string.Format(LocalizationText.Get("ExportEmptyFile"), item.Track.Index, item.Track.FileName));
 
         if (zeroByteFiles.Count > 10)
-            errors.Add($"• ... und {zeroByteFiles.Count - 10} weitere 0-Byte-Datei(en).");
+            errors.Add(string.Format(LocalizationText.Get("ExportMoreEmptyFiles"), zeroByteFiles.Count - 10));
 
         if (!string.IsNullOrWhiteSpace(outputPath))
         {
@@ -146,7 +153,7 @@ public sealed class ExportValidationService
                 .ToList();
 
             foreach (var item in sourceEqualsOutput.Take(5))
-                errors.Add($"• #{item.Track.Index}  Quelldatei wäre gleichzeitig die Ausgabedatei.");
+                errors.Add(string.Format(LocalizationText.Get("ExportSourceEqualsOutput"), item.Track.Index));
         }
 
         var duplicateSources = sourcePaths
@@ -158,16 +165,22 @@ public sealed class ExportValidationService
         foreach (var group in duplicateSources)
         {
             var indexes = FormatTrackIndexes(group.Select(item => item.Track.Index));
-            warnings.Add($"• {indexes}  Dieselbe Quelldatei kommt mehrfach vor.");
+            warnings.Add(string.Format(LocalizationText.Get("ExportDuplicateSource"), indexes));
         }
 
-        var emptyChapterTitles = trackSnapshot
+        if (ChapterSettingsService.NormalizeMode(chapterMode) == ChapterSettingsService.ModeNone) return;
+
+        var emptyChapterTitles = new ChapterTimelineService()
+            .BuildTimeline(trackSnapshot)
+            .Where(chapter => chapter.IsSynthetic)
+            .Select(chapter => chapter.SourceTrack)
             .Where(track => string.IsNullOrWhiteSpace(track.ChapterTitle))
+            .Distinct()
             .Take(8)
             .ToList();
 
         foreach (var track in emptyChapterTitles)
-            warnings.Add($"• #{track.Index}  Kapitelvorschlag ist leer.");
+            warnings.Add(string.Format(LocalizationText.Get("ExportEmptyChapterProposal"), track.Index));
 
     }
 
@@ -175,37 +188,27 @@ public sealed class ExportValidationService
     private static bool IsInvalidAudioTrack(TrackInfo track)
     {
         return track.AudioValidationPassed == false ||
+               track.WarningCodes.HasFlag(TrackWarningCodes.InvalidAudio) ||
                string.Equals(
                    AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction),
-                   "Ungültig",
+                   ProcessingActionIds.Invalid,
                    StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsTrackSupportedForExport(TrackInfo track)
     {
         var action = AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction);
-        var codec = (track.Codec ?? "").Trim();
-        var extension = (track.Extension ?? "").Trim().TrimStart('.');
 
-        if (action is "Übernehmen" or "Konvertieren")
-            return true;
-
-        return codec.Equals("MP3", StringComparison.OrdinalIgnoreCase) ||
-               codec.Equals("FLAC", StringComparison.OrdinalIgnoreCase) ||
-               AudioProcessingService.IsPcmCodec(codec) ||
-               extension.Equals("MP3", StringComparison.OrdinalIgnoreCase) ||
-               extension.Equals("M4A", StringComparison.OrdinalIgnoreCase) ||
-               extension.Equals("M4B", StringComparison.OrdinalIgnoreCase) ||
-               extension.Equals("AAC", StringComparison.OrdinalIgnoreCase) ||
-               extension.Equals("WAV", StringComparison.OrdinalIgnoreCase) ||
-               extension.Equals("FLAC", StringComparison.OrdinalIgnoreCase);
+        return action is ProcessingActionIds.Reuse or ProcessingActionIds.Convert;
     }
 
     private static string FormatTrackTechnicalSummary(TrackInfo track)
     {
-        var codec = string.IsNullOrWhiteSpace(track.Codec) ? "Codec unbekannt" : track.Codec;
-        var extension = string.IsNullOrWhiteSpace(track.Extension) ? "Typ unbekannt" : track.Extension;
-        var action = string.IsNullOrWhiteSpace(track.ProcessingAction) ? "Aktion offen" : track.ProcessingAction;
+        var codec = string.IsNullOrWhiteSpace(track.Codec) ? LocalizationText.Get("CodecUnknown") : track.DisplayCodec;
+        var extension = string.IsNullOrWhiteSpace(track.Extension) ? LocalizationText.Get("TypeUnknown") : track.Extension;
+        var action = string.IsNullOrWhiteSpace(track.ProcessingAction)
+            ? LocalizationText.Get("ActionOpen")
+            : ProcessingActionPresentation.Format(track.ProcessingAction);
 
         return $"{extension}, {codec}, {action}";
     }

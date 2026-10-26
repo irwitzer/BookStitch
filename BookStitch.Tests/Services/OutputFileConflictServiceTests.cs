@@ -7,6 +7,37 @@ namespace BookStitch.Tests.Services;
 public sealed class OutputFileConflictServiceTests
 {
     [Fact]
+    public void Long_conflict_alternative_respects_final_path_limits()
+    {
+        var folder = CreateTempFolder();
+        try
+        {
+            var name = new string('a', WindowsOutputPathService.MaximumPathLength - folder.Length - 5);
+            var path = Path.Combine(folder, name + ".m4b");
+            Assert.True(WindowsOutputPathService.IsValid(path));
+            var result = OutputFileConflictService.CreateRenamedOutputPath(path, ExportPreset.Parse("AAC Stereo 128 kbps"));
+            Assert.True(WindowsOutputPathService.IsValid(result));
+            Assert.StartsWith("NEU 128 ", Path.GetFileName(result));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void Renamed_output_skips_existing_directories_as_well_as_files()
+    {
+        var folder = CreateTempFolder();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(folder, "NEU 128 Book.m4b"));
+            Directory.CreateDirectory(Path.Combine(folder, "NEU 128 (2) Book.m4b"));
+            var result = OutputFileConflictService.CreateRenamedOutputPath(Path.Combine(folder, "Book.m4b"),
+                ExportPreset.Parse("AAC Stereo 128 kbps"));
+            Assert.Equal(Path.Combine(folder, "NEU 128 (3) Book.m4b"), result);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
     public void CreateRenamedOutputPath_Stereo_AddsBitratePrefix()
     {
         var folder = CreateTempFolder();

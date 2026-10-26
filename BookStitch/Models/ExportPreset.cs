@@ -4,7 +4,13 @@ namespace BookStitch.Models;
 
 public sealed record ExportPreset(string DisplayName, int BitrateKbps, int Channels)
 {
-    public const string DefaultDisplayName = "AAC Stereo 192 kbps";
+    public static IReadOnlyList<string> AvailableDisplayNames { get; } = Array.AsReadOnly(new[]
+    {
+        "AAC Mono 64 kbps", "AAC Mono 96 kbps", "AAC Stereo 96 kbps",
+        "AAC Stereo 128 kbps", "AAC Stereo 160 kbps", "AAC Stereo 192 kbps", "AAC Stereo 256 kbps"
+    });
+
+    public const string DefaultDisplayName = "AAC Stereo 128 kbps";
 
     public static ExportPreset Parse(string? value)
     {
@@ -17,7 +23,7 @@ public sealed record ExportPreset(string DisplayName, int BitrateKbps, int Chann
         var bitrateMatch = Regex.Match(text, @"(\d+)\s*kbps", RegexOptions.IgnoreCase);
         var bitrate = bitrateMatch.Success && int.TryParse(bitrateMatch.Groups[1].Value, out var parsedBitrate)
             ? parsedBitrate
-            : 192;
+            : 128;
 
         bitrate = Math.Clamp(bitrate, 32, 320);
 

@@ -12,10 +12,19 @@ public class AudioProcessingServiceTests
     [Theory]
     [InlineData("MP3", ".mp3")]
     [InlineData("FLAC", ".flac")]
+    [InlineData("WMA", ".wma")]
     [InlineData("PCM_S16LE", ".wav")]
+    [InlineData("Vorbis", ".ogg")]
+    [InlineData("Vorbis", ".oga")]
+    [InlineData("Opus", ".opus")]
+    [InlineData("Opus", ".ogg")]
     [InlineData("", ".mp3")]
     [InlineData("", ".wav")]
     [InlineData("", ".flac")]
+    [InlineData("", ".wma")]
+    [InlineData("", ".ogg")]
+    [InlineData("", ".oga")]
+    [InlineData("", ".opus")]
     public void DetermineProcessingAction_AlwaysConvertInputs_ReturnsConvert(string codec, string extension)
     {
         var track = new TrackInfo
@@ -26,7 +35,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Konvertieren", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
     }
 
     [Theory]
@@ -45,7 +54,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Konvertieren", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
     }
 
     [Theory]
@@ -65,7 +74,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Übernehmen", action);
+        Assert.Equal(ProcessingActionIds.Reuse, action);
     }
 
     [Theory]
@@ -85,7 +94,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Konvertieren", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
     }
 
     [Theory]
@@ -104,7 +113,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Übernehmen", action);
+        Assert.Equal(ProcessingActionIds.Reuse, action);
     }
 
     [Theory]
@@ -122,7 +131,21 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Konvertieren", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
+    }
+
+    [Theory]
+    [InlineData(44100, ProcessingActionIds.Reuse)]
+    [InlineData(48000, ProcessingActionIds.Convert)]
+    [InlineData(22050, ProcessingActionIds.Convert)]
+    public void Matching_AAC_requires_merge_compatible_sample_rate(int rate, string expected)
+    {
+        var probe = new AudioProbeInfo { Success = true, FilePath = "source.m4a", CodecName = "aac",
+            BitrateKbps = 192, Channels = 2, SampleRateHz = rate };
+        Assert.Equal(expected, AudioProcessingService.DetermineProcessingAction(probe, Stereo192));
+        var track = new TrackInfo { FileName = "source.m4a", Extension = "m4a", Codec = "AAC",
+            BitrateKbps = 192, Channels = 2, SampleRateHz = rate };
+        Assert.Equal(expected, AudioProcessingService.DetermineProcessingAction(track, Stereo192));
     }
 
     [Fact]
@@ -138,7 +161,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Prüfen", action);
+        Assert.Equal(ProcessingActionIds.Inspect, action);
     }
 
     [Fact]
@@ -152,11 +175,11 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Prüfen", action);
+        Assert.Equal(ProcessingActionIds.Inspect, action);
     }
 
     [Fact]
-    public void DetermineProcessingAction_UnknownCodecAndExtension_ReturnsCheck()
+    public void DetermineProcessingAction_NonAacM4ContainerWithKnownCodec_ReturnsConvert()
     {
         var track = new TrackInfo
         {
@@ -168,7 +191,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Stereo192);
 
-        Assert.Equal("Prüfen", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
     }
 
     [Fact]
@@ -184,7 +207,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(track, Mono64);
 
-        Assert.Equal("Übernehmen", action);
+        Assert.Equal(ProcessingActionIds.Reuse, action);
     }
 
     [Fact]
@@ -201,7 +224,7 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
 
-        Assert.Equal("Prüfen", action);
+        Assert.Equal(ProcessingActionIds.Inspect, action);
     }
 
     [Fact]
@@ -213,12 +236,13 @@ public class AudioProcessingServiceTests
             FilePath = @"C:\Audio\track.m4a",
             CodecName = "aac",
             BitrateKbps = 192,
-            Channels = 2
+            Channels = 2,
+            SampleRateHz = 44100
         };
 
         var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
 
-        Assert.Equal("Übernehmen", action);
+        Assert.Equal(ProcessingActionIds.Reuse, action);
     }
 
     [Fact]
@@ -235,7 +259,77 @@ public class AudioProcessingServiceTests
 
         var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
 
-        Assert.Equal("Konvertieren", action);
+        Assert.Equal(ProcessingActionIds.Convert, action);
+    }
+
+    [Fact]
+    public void DetermineProcessingAction_ProbeWma_ReturnsConvert()
+    {
+        var probe = new AudioProbeInfo
+        {
+            Success = true,
+            FilePath = @"C:\Audio\track.wma",
+            CodecName = "wmav2",
+            BitrateKbps = 128,
+            Channels = 2
+        };
+
+        var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
+
+        Assert.Equal(ProcessingActionIds.Convert, action);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Audio\track.ogg", "vorbis")]
+    [InlineData(@"C:\Audio\track.oga", "vorbis")]
+    [InlineData(@"C:\Audio\track.opus", "opus")]
+    [InlineData(@"C:\Audio\opus-in-ogg.ogg", "opus")]
+    public void DetermineProcessingAction_ProbeVorbisAndOpusInputs_ReturnsConvert(string filePath, string codecName)
+    {
+        var probe = new AudioProbeInfo
+        {
+            Success = true,
+            FilePath = filePath,
+            CodecName = codecName,
+            BitrateKbps = 96,
+            Channels = 2
+        };
+
+        var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
+
+        Assert.Equal(ProcessingActionIds.Convert, action);
+    }
+
+    [Fact]
+    public void DetermineProcessingAction_ProbeNonAacM4ContainerWithKnownCodec_ReturnsConvert()
+    {
+        var probe = new AudioProbeInfo
+        {
+            Success = true,
+            FilePath = @"C:\Audio\track.m4b",
+            CodecName = "alac",
+            BitrateKbps = 800,
+            Channels = 2
+        };
+
+        var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
+
+        Assert.Equal(ProcessingActionIds.Convert, action);
+    }
+
+    [Fact]
+    public void DetermineProcessingAction_FailedWmaProbe_ReturnsCheck()
+    {
+        var probe = new AudioProbeInfo
+        {
+            Success = false,
+            FilePath = @"C:\Audio\track.wma",
+            CodecName = "wmav2"
+        };
+
+        var action = AudioProcessingService.DetermineProcessingAction(probe, Stereo192);
+
+        Assert.Equal(ProcessingActionIds.Inspect, action);
     }
 
     [Theory]
@@ -251,7 +345,7 @@ public class AudioProcessingServiceTests
     {
         var result = AudioProcessingService.NormalizeProcessingAction(input);
 
-        Assert.Equal(expected, result);
+        Assert.Equal(ProcessingActionIds.Normalize(expected), result);
     }
 
     [Theory]

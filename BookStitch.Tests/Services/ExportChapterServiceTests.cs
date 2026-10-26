@@ -4,64 +4,9 @@ using Xunit;
 
 namespace BookStitch.Tests.Services;
 
-public class ExportChapterServiceTests
+public sealed class ExportChapterServiceTests
 {
     private readonly ExportChapterService _service = new();
-
-    [Fact]
-    public void BuildFinalChapterTitle_UsesChapterTitleFirst()
-    {
-        var track = new TrackInfo
-        {
-            ChapterTitle = " Kapitel A ",
-            TagTitle = "Tag Titel",
-            FileName = "Track 01.mp3"
-        };
-
-        var result = _service.BuildFinalChapterTitle(track, 1);
-
-        Assert.Equal("Kapitel A", result);
-    }
-
-    [Fact]
-    public void BuildFinalChapterTitle_UsesTagTitleWhenChapterTitleIsEmpty()
-    {
-        var track = new TrackInfo
-        {
-            ChapterTitle = "",
-            TagTitle = " Tag Titel ",
-            FileName = "Track 01.mp3"
-        };
-
-        var result = _service.BuildFinalChapterTitle(track, 1);
-
-        Assert.Equal("Tag Titel", result);
-    }
-
-    [Fact]
-    public void BuildFinalChapterTitle_UsesFileNameWithoutExtensionWhenTitlesAreEmpty()
-    {
-        var track = new TrackInfo
-        {
-            ChapterTitle = "",
-            TagTitle = "",
-            FileName = "Track 01.mp3"
-        };
-
-        var result = _service.BuildFinalChapterTitle(track, 1);
-
-        Assert.Equal("Track 01", result);
-    }
-
-    [Fact]
-    public void BuildFinalChapterTitle_UsesFallbackWhenEverythingIsEmpty()
-    {
-        var track = new TrackInfo();
-
-        var result = _service.BuildFinalChapterTitle(track, 7);
-
-        Assert.Equal("Kapitel 7", result);
-    }
 
     [Fact]
     public void EscapeFfmpegMetadataValue_EscapesFfmpegSpecialCharacters()
@@ -80,204 +25,71 @@ public class ExportChapterServiceTests
     }
 
     [Fact]
-    public void BuildFfmpegChapterMetadata_BuildsSequentialChapters()
+    public void BuildFfmpegChapterMetadataFromTimeline_SerializesRenderedTimeline()
     {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "Start",
-                Duration = "00:01"
-            },
-            new TrackInfo
-            {
-                ChapterTitle = "Weiter",
-                Duration = "00:02"
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
+        var track = new TrackInfo();
+        var metadata = _service.BuildFfmpegChapterMetadataFromTimeline(
+        [
+            Chapter(1, track, "Start", 0, 10_000_000),
+            Chapter(2, track, "Weiter", 10_000_000, 30_000_000)
+        ]);
 
         Assert.Contains(";FFMETADATA1", metadata);
-        Assert.Contains("START=0", metadata);
-        Assert.Contains("END=1000", metadata);
-        Assert.Contains("title=Start", metadata);
-        Assert.Contains("START=1000", metadata);
-        Assert.Contains("END=3000", metadata);
-        Assert.Contains("title=Weiter", metadata);
+        Assert.Equal([0, 1000], ExtractChapterStarts(metadata));
+        Assert.Equal([1000, 3000], ExtractChapterEnds(metadata));
+        Assert.Equal(["Start", "Weiter"], ExtractChapterTitles(metadata));
     }
 
     [Fact]
-    public void BuildFfmpegChapterMetadata_ExpandsEmbeddedContainerChapters()
+    public void BuildFfmpegChapterMetadataFromTimeline_EscapesChapterTitles()
     {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "Gesamtdatei",
-                DurationTicks = TimeSpan.FromSeconds(30).Ticks,
-                EmbeddedChapters =
-                [
-                    new TrackEmbeddedChapterInfo { Title = "Eins", StartTicks = 0, EndTicks = TimeSpan.FromSeconds(10).Ticks },
-                    new TrackEmbeddedChapterInfo { Title = "Zwei", StartTicks = TimeSpan.FromSeconds(10).Ticks, EndTicks = TimeSpan.FromSeconds(30).Ticks }
-                ]
-            },
-            new TrackInfo
-            {
-                ChapterTitle = "Nachlauf",
-                DurationTicks = TimeSpan.FromSeconds(5).Ticks
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-
-        Assert.Contains("START=0", metadata);
-        Assert.Contains("END=10000", metadata);
-        Assert.Contains("title=Eins", metadata);
-        Assert.Contains("START=10000", metadata);
-        Assert.Contains("END=30000", metadata);
-        Assert.Contains("title=Zwei", metadata);
-        Assert.Contains("START=30000", metadata);
-        Assert.Contains("END=35000", metadata);
-        Assert.Contains("title=Nachlauf", metadata);
-    }
-
-    [Fact]
-    public void BuildFfmpegChapterMetadata_ParsesHourMinuteSecondDurations()
-    {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "Lang",
-                Duration = "01:02:03"
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-
-        Assert.Contains("START=0", metadata);
-        Assert.Contains("END=3723000", metadata);
-    }
-
-    [Fact]
-    public void BuildFfmpegChapterMetadata_UsesOneSecondFallbackForMissingDuration()
-    {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "Ohne Dauer",
-                Duration = ""
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-
-        Assert.Contains("START=0", metadata);
-        Assert.Contains("END=1000", metadata);
-    }
-
-    [Fact]
-    public void BuildFfmpegChapterMetadata_EscapesChapterTitles()
-    {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "A=B;C#D",
-                Duration = "00:01"
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
+        var metadata = _service.BuildFfmpegChapterMetadataFromTimeline(
+        [
+            Chapter(1, new TrackInfo(), "A=B;C#D", 0, 10_000_000)
+        ]);
 
         Assert.Contains(@"title=A\=B\;C\#D", metadata);
     }
 
     [Fact]
-    public void BuildFfmpegChapterMetadata_UsesDurationTicksWithoutCumulativeDrift()
+    public void BuildFfmpegChapterMetadataFromTimeline_UsesRoundedMillisecondPositions()
     {
-        var tracks = Enumerable.Range(1, 175)
-            .Select(index => new TrackInfo
-            {
-                ChapterTitle = $"Kapitel {index}",
-                Duration = "00:00",
-                DurationTicks = TimeSpan.FromSeconds(1.539).Ticks
-            })
-            .ToList();
+        var metadata = _service.BuildFfmpegChapterMetadataFromTimeline(
+        [
+            Chapter(1, new TrackInfo(), "Precise", ticksStart: 15_390_000, ticksEnd: 30_780_000)
+        ]);
 
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-        var starts = ExtractChapterStarts(metadata);
-
-        Assert.Equal(0, starts[0]);
-        Assert.Equal(1539, starts[1]);
-        Assert.Equal(1539 * 99, starts[99]);
-        Assert.Equal(1539 * 174, starts[174]);
+        Assert.Equal([1539], ExtractChapterStarts(metadata));
+        Assert.Equal([3078], ExtractChapterEnds(metadata));
     }
 
     [Fact]
-    public void BuildFfmpegChapterMetadata_ParsesFractionalSecondsWithoutCumulativeDrift()
+    public void BuildFfmpegChapterMetadataFromTimeline_PreservesUnicodeChapterTitles()
     {
-        var tracks = Enumerable.Range(1, 120)
-            .Select(index => new TrackInfo
-            {
-                ChapterTitle = $"Kapitel {index}",
-                Duration = "00:01.250"
-            })
-            .ToList();
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-        var starts = ExtractChapterStarts(metadata);
-
-        Assert.Equal(0, starts[0]);
-        Assert.Equal(1250, starts[1]);
-        Assert.Equal(1250 * 60, starts[60]);
-        Assert.Equal(1250 * 119, starts[119]);
-    }
-
-    [Fact]
-    public void BuildFfmpegChapterMetadata_PrefersDurationTicksOverDisplayDuration()
-    {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "A",
-                Duration = "00:01",
-                DurationTicks = TimeSpan.FromMilliseconds(1750).Ticks
-            },
-            new TrackInfo
-            {
-                ChapterTitle = "B",
-                Duration = "00:01",
-                DurationTicks = TimeSpan.FromMilliseconds(2250).Ticks
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
-
-        Assert.Contains("END=1750", metadata);
-        Assert.Contains("START=1750", metadata);
-        Assert.Contains("END=4000", metadata);
-    }
-
-    [Fact]
-    public void BuildFfmpegChapterMetadata_PreservesUnicodeChapterTitles()
-    {
-        var tracks = new[]
-        {
-            new TrackInfo
-            {
-                ChapterTitle = "Überraschung im Märchenwald",
-                Duration = "00:01"
-            }
-        };
-
-        var metadata = _service.BuildFfmpegChapterMetadata(tracks);
+        var metadata = _service.BuildFfmpegChapterMetadataFromTimeline(
+        [
+            Chapter(1, new TrackInfo(), "Überraschung im Märchenwald", 0, 10_000_000)
+        ]);
 
         Assert.Contains("title=Überraschung im Märchenwald", metadata);
     }
+
+    private static EffectiveChapterInfo Chapter(
+        int index,
+        TrackInfo track,
+        string title,
+        long ticksStart,
+        long ticksEnd) =>
+        new(
+            index,
+            track,
+            SourceEmbeddedChapter: null,
+            title,
+            ticksStart,
+            ticksEnd,
+            ticksStart,
+            ticksEnd,
+            IsSynthetic: true);
 
     private static List<long> ExtractChapterStarts(string metadata)
     {
@@ -285,6 +97,24 @@ public class ExportChapterServiceTests
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
             .Where(line => line.StartsWith("START=", StringComparison.Ordinal))
             .Select(line => long.Parse(line["START=".Length..]))
+            .ToList();
+    }
+
+    private static List<long> ExtractChapterEnds(string metadata)
+    {
+        return metadata
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.StartsWith("END=", StringComparison.Ordinal))
+            .Select(line => long.Parse(line["END=".Length..]))
+            .ToList();
+    }
+
+    private static List<string> ExtractChapterTitles(string metadata)
+    {
+        return metadata
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.StartsWith("title=", StringComparison.Ordinal))
+            .Select(line => line["title=".Length..])
             .ToList();
     }
 }

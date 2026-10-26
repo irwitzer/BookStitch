@@ -2,10 +2,6 @@ using BookStitch.Models;
 
 namespace BookStitch.Services;
 
-public sealed record AudioDiscRunPreparation(
-    ExportPreset Preset,
-    int ParallelJobs);
-
 public sealed class AudioDiscRunPreparationService
 {
     private readonly ProjectSnapshotService _projectSnapshotService;

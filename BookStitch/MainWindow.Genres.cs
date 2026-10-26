@@ -9,56 +9,23 @@ namespace BookStitch;
 
 public partial class MainWindow
 {
-    public IReadOnlyList<string> GenreOptions => GenreListService.GetGenres(_settings.UsePrivateGenreList);
+    public IReadOnlyList<string> GenreOptions => GenreListService.GetGenres(_settings);
 
     public void RefreshGenreOptions(bool resetToDefault = false)
     {
         OnPropertyChanged(nameof(GenreOptions));
-        ApplyGenreOptionsToComboBox(resetToDefault);
+        var selectedGenre = Genre;
+        if (resetToDefault || !GenreListService.IsSelectableGenre(selectedGenre))
+            Genre = GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
     }
+
+    private void GlobalSettingsManager_GenreOptionsChanged(object? sender, EventArgs e) =>
+        RefreshGenreOptions();
 
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
-        ApplyGenreOptionsToComboBox();
         PolishAutoMergeCheckBoxSpacing();
-    }
-
-    private void ApplyGenreOptionsToComboBox(bool resetToDefault = false)
-    {
-        if (GenreComboBox is null)
-            return;
-
-        var selectedGenre = Genre;
-        GenreComboBox.ItemsSource = null;
-        GenreComboBox.Items.Clear();
-        GenreComboBox.ItemsSource = GenreOptions;
-
-        if (resetToDefault || !GenreListService.IsSelectableGenre(selectedGenre))
-            Genre = GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
-        else
-            Genre = selectedGenre;
-    }
-
-
-    private void GenreComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (sender is not ComboBox comboBox)
-            return;
-
-        var selectedGenre = comboBox.SelectedItem switch
-        {
-            ComboBoxItem item => item.Content?.ToString(),
-            string text => text,
-            _ => null
-        };
-
-        if (!GenreListService.IsSeparator(selectedGenre))
-            return;
-
-        comboBox.SelectedItem = null;
-        comboBox.Text = Genre;
-        e.Handled = true;
     }
 
     private void PolishAutoMergeCheckBoxSpacing()

@@ -58,7 +58,7 @@ public sealed class AudioDiscRipCompletionWorkflowServiceTests
         Assert.Equal(1, tracks[0].DiscNumber);
         Assert.Equal(1, tracks[0].TrackNumber);
         Assert.Equal("Autor", tracks[0].Artist);
-        Assert.Equal("Kapitel 1", tracks[0].ChapterTitle);
+        Assert.Equal("001 Kapitel", tracks[0].ChapterTitle);
         Assert.Equal(string.Empty, tracks[0].Warning);
     }
 

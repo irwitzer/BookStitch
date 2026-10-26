@@ -10,7 +10,10 @@ public sealed record ConvertedTrackPreparationWorkflowRequest(
     string FfmpegPath,
     int ParallelConversions,
     long TotalTicks,
-    object ManifestSyncRoot);
+    object ManifestSyncRoot,
+    PerformanceExternalProcessContext? PerformanceContext = null,
+    string? FfprobePath = null,
+    PreparedTrackLifecycleSession? LifecycleSession = null);
 
 public sealed record ConvertedTrackPreparationWorkflowCallbacks(
     Action<ConvertedTrackPreparationProgressSnapshot>? ReportProgress = null,
@@ -27,11 +30,11 @@ public sealed record ConvertedTrackPreparationBatch(
 public sealed class ConvertedTrackPreparationWorkflowService
 {
     private readonly WorkManifestService _workManifestService;
-    private readonly AacExportProcessingService _aacExportProcessingService;
+    private readonly IAudioExportProcessingService _aacExportProcessingService;
 
     public ConvertedTrackPreparationWorkflowService(
         WorkManifestService workManifestService,
-        AacExportProcessingService aacExportProcessingService)
+        IAudioExportProcessingService aacExportProcessingService)
     {
         _workManifestService = workManifestService ?? throw new ArgumentNullException(nameof(workManifestService));
         _aacExportProcessingService = aacExportProcessingService ?? throw new ArgumentNullException(nameof(aacExportProcessingService));
@@ -66,6 +69,13 @@ public sealed class ConvertedTrackPreparationWorkflowService
         ArgumentNullException.ThrowIfNull(callbacks);
         ArgumentNullException.ThrowIfNull(request.ManifestSyncRoot);
 
+        await using var ownedLifecycle = request.LifecycleSession is null
+            ? new PreparedTrackLifecycleSession(_workManifestService, _aacExportProcessingService,
+                request.Manifest, request.ManifestPath, request.ManifestSyncRoot, request.FfprobePath ?? "", request.ParallelConversions)
+            : null;
+        var lifecycle = request.LifecycleSession ?? ownedLifecycle!;
+        lifecycle.QueuePreset(request.Preset, token);
+
         var progress = new ConvertedTrackPreparationProgressService(
             batch.ResumeState,
             request.TotalTicks);
@@ -74,8 +84,19 @@ public sealed class ConvertedTrackPreparationWorkflowService
         var preparedTrackCount = 0;
         using var semaphore = new SemaphoreSlim(Math.Max(1, request.ParallelConversions));
 
-        var tasks = batch.Items.Select(async item =>
+        var groups = batch.Items.GroupBy(item => System.IO.Path.GetFullPath(item.ConvertedPath),
+            StringComparer.OrdinalIgnoreCase).ToArray();
+        foreach (var group in groups)
         {
+            if (group.Select(item => AudioProcessingService.NormalizeProcessingAction(item.Track.ProcessingAction))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1 ||
+                group.Select(item => System.IO.Path.GetFullPath(item.SourcePath))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
+                throw new InvalidOperationException(LocalizationText.Get("Export.CacheCollision"));
+        }
+        var tasks = groups.Select(async group =>
+        {
+            var item = group.First();
             await semaphore.WaitAsync(token);
 
             try
@@ -84,7 +105,8 @@ public sealed class ConvertedTrackPreparationWorkflowService
 
                 try
                 {
-                    callbacks.ReportProgress?.Invoke(progress.StartTrack(item.Index));
+                    var startedProgress = progress.StartTrack(item.Index);
+                    callbacks.ReportProgress?.Invoke(startedProgress);
 
                     lock (request.ManifestSyncRoot)
                     {
@@ -95,10 +117,9 @@ public sealed class ConvertedTrackPreparationWorkflowService
                             item.SourcePath,
                             item.ConvertedPath,
                             request.Preset,
-                            AudioProcessingService.NormalizeProcessingAction(item.Track.ProcessingAction) == "Übernehmen"
+                            AudioProcessingService.NormalizeProcessingAction(item.Track.ProcessingAction) == ProcessingActionIds.Reuse
                                 ? ProjectManifestTrackStatuses.Copied
                                 : ProjectManifestTrackStatuses.Converting);
-                        _workManifestService.Save(request.ManifestPath, request.Manifest);
                     }
 
                     await _aacExportProcessingService.PrepareTrackForExportAsync(
@@ -116,10 +137,19 @@ public sealed class ConvertedTrackPreparationWorkflowService
                                 durationTicks);
                             callbacks.ReportProgress?.Invoke(snapshot);
                             callbacks.SaveTimedSnapshot?.Invoke();
-                        });
+                        },
+                        request.PerformanceContext,
+                        request.FfprobePath);
+
                 }
                 catch (OperationCanceledException)
                 {
+                    lock (request.ManifestSyncRoot)
+                    {
+                        _workManifestService.MarkTrackCanceled(request.Manifest, item.Index, item.Track,
+                            item.SourcePath, item.ConvertedPath, request.Preset);
+                        _workManifestService.Save(request.ManifestPath, request.Manifest);
+                    }
                     throw;
                 }
                 catch (Exception ex)
@@ -144,21 +174,16 @@ public sealed class ConvertedTrackPreparationWorkflowService
                         ex);
                 }
 
-                Interlocked.Increment(ref preparedTrackCount);
+                Interlocked.Add(ref preparedTrackCount, group.Count());
 
-                lock (request.ManifestSyncRoot)
+                lifecycle.Complete(item.Index, item.Track, item.SourcePath, item.ConvertedPath, request.Preset, token);
+
+                foreach (var reference in group)
                 {
-                    _workManifestService.UpdateTrack(
-                        request.Manifest,
-                        item.Index,
-                        item.Track,
-                        item.SourcePath,
-                        item.ConvertedPath,
-                        request.Preset);
-                    _workManifestService.Save(request.ManifestPath, request.Manifest);
+                    var completedProgress = progress.CompleteTrack(reference.Index,
+                        TrackDurationService.GetEffectiveDurationTicks(reference.Track));
+                    callbacks.ReportProgress?.Invoke(completedProgress);
                 }
-
-                callbacks.ReportProgress?.Invoke(progress.CompleteTrack(item.Index, durationTicks));
                 callbacks.SaveTimedSnapshot?.Invoke();
             }
             finally
@@ -167,10 +192,13 @@ public sealed class ConvertedTrackPreparationWorkflowService
             }
         }).ToList();
 
-        await Task.WhenAll(tasks);
+        try { await Task.WhenAll(tasks); }
+        finally { await lifecycle.DrainAsync(); }
+        token.ThrowIfCancellationRequested();
 
         return new ConvertedTrackPreparationWorkflowResult(
             preparedTrackCount,
             progress.GetSnapshot());
     }
+
 }

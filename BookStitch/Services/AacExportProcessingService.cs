@@ -1,11 +1,43 @@
-using BookStitch.Models;
+﻿using BookStitch.Models;
 using System.IO;
 using System.Globalization;
 
 namespace BookStitch.Services;
 
-public sealed class AacExportProcessingService
+public interface IAudioExportProcessingService
 {
+    Task<ConvertedAacTiming> AnalyzeConvertedTimingAsync(string path, string ffprobePath,
+        ConvertedAacTiming? cached, CancellationToken token);
+    Task PrepareTrackForExportAsync(
+        TrackInfo track,
+        string sourcePath,
+        string convertedPath,
+        ExportPreset preset,
+        string ffmpegPath,
+        CancellationToken token,
+        Action<TimeSpan> onProgress,
+        PerformanceExternalProcessContext? performanceContext = null,
+        string? ffprobePath = null);
+
+    Task ValidateMergeInputsAsync(IReadOnlyList<string> paths, int targetRate, string ffprobePath,
+        CancellationToken token, ExportPreset? preset = null) => Task.CompletedTask;
+
+    Task MergeConvertedTracksAsync(
+        string concatListPath,
+        string chapterMetadataPath,
+        string finalPartPath,
+        long totalTicks,
+        string ffmpegPath,
+        CancellationToken token,
+        Action<TimeSpan> onProgress,
+        PerformanceExternalProcessContext? performanceContext = null);
+}
+
+public sealed class AacExportProcessingService : IAudioExportProcessingService
+{
+    public Task<ConvertedAacTiming> AnalyzeConvertedTimingAsync(string path, string ffprobePath,
+        ConvertedAacTiming? cached, CancellationToken token) =>
+        ConvertedAacTimelineService.AnalyzeAsync(path, ffprobePath, cached, token);
     private readonly FfmpegRunnerService _ffmpegRunnerService;
 
     public AacExportProcessingService()
@@ -25,18 +57,60 @@ public sealed class AacExportProcessingService
         ExportPreset preset,
         string ffmpegPath,
         CancellationToken token,
-        Action<TimeSpan> onProgress)
+        Action<TimeSpan> onProgress,
+        PerformanceExternalProcessContext? performanceContext = null,
+        string? ffprobePath = null)
     {
         var action = AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction);
 
-        if (action == "Übernehmen")
+        var sampleRate = track.SampleRateHz;
+        if (action == ProcessingActionIds.Reuse && File.Exists(ffmpegPath))
+        {
+            // Restored tracks may predate the persisted sample-rate field.
+            var probePath = ffprobePath ?? Path.Combine(Path.GetDirectoryName(ffmpegPath)!, Path.GetExtension(ffmpegPath).Equals(".exe", StringComparison.OrdinalIgnoreCase) ? "ffprobe.exe" : "ffprobe");
+            var probe = await new AudioInfoService().ProbeAsync(sourcePath, probePath, token: token);
+            token.ThrowIfCancellationRequested();
+            sampleRate = probe.Success ? probe.SampleRateHz : null;
+            if (sampleRate is not null && sampleRate == track.TargetSampleRateHz &&
+                (!probe.SupportsAacStreamCopy || !AudioProcessingService.AacMatchesPreset(probe.BitrateKbps, probe.Channels, preset)))
+                throw new InvalidDataException(LocalizationText.Format("Audio.PreparedSampleRateMismatch", Path.GetFileName(sourcePath), track.TargetSampleRateHz));
+        }
+        if (action == ProcessingActionIds.Reuse && track.AllowAacReuse && FolderSampleRateService.CanVote(sampleRate) && sampleRate == track.TargetSampleRateHz)
         {
             await CopyTrackForExportAsync(track, sourcePath, convertedPath, token, onProgress);
             onProgress(TimeSpan.MaxValue);
             return;
         }
 
-        await ConvertTrackToAacAsync(sourcePath, convertedPath, preset, ffmpegPath, token, onProgress);
+        await ConvertTrackToAacAsync(
+            sourcePath,
+            convertedPath,
+            preset,
+            track.TargetSampleRateHz,
+            ffmpegPath,
+            token,
+            onProgress,
+            performanceContext);
+    }
+
+    public async Task ValidateMergeInputsAsync(IReadOnlyList<string> paths, int targetRate, string ffprobePath,
+        CancellationToken token, ExportPreset? preset = null)
+    {
+        FolderSampleRateService.RequireSupported(targetRate);
+        var configurations = new System.Collections.Concurrent.ConcurrentBag<string>();
+        await Parallel.ForEachAsync(paths.Distinct(StringComparer.OrdinalIgnoreCase),
+            new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token }, async (path, ct) =>
+            {
+                var probe = await new AudioInfoService().ProbeAsync(path, ffprobePath, token: ct);
+                ct.ThrowIfCancellationRequested();
+                if (!probe.SupportsAacStreamCopy || probe.SampleRateHz != targetRate ||
+                    (preset is not null && probe.Channels != preset.Channels))
+                    throw new InvalidDataException(LocalizationText.Format("Audio.PreparedSampleRateMismatch",
+                        Path.GetFileName(path), targetRate));
+                configurations.Add($"{probe.Channels}|{probe.AudioChannelLayout}|{probe.AacConfigurationId}");
+            });
+        if (configurations.Distinct(StringComparer.Ordinal).Skip(1).Any())
+            throw new InvalidDataException(LocalizationText.Get("AacTimeline.Invalid"));
     }
 
     public async Task MergeConvertedTracksAsync(
@@ -46,7 +120,8 @@ public sealed class AacExportProcessingService
         long totalTicks,
         string ffmpegPath,
         CancellationToken token,
-        Action<TimeSpan> onProgress)
+        Action<TimeSpan> onProgress,
+        PerformanceExternalProcessContext? performanceContext = null)
     {
         TryDeleteFile(finalPartPath);
 
@@ -64,12 +139,17 @@ public sealed class AacExportProcessingService
             "-map_chapters", "1",
             "-vn",
             "-c", "copy",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+disable_chpl",
             "-f", "ipod",
             finalPartPath
         };
 
-        var result = await _ffmpegRunnerService.RunAsync(ffmpegPath, args, token, onProgress);
+        var result = await _ffmpegRunnerService.RunAsync(
+            ffmpegPath,
+            args,
+            token,
+            onProgress,
+            performanceContext);
 
         if (result.ExitCode != 0 || !File.Exists(finalPartPath))
             throw new InvalidOperationException("FFmpeg konnte die finale Ausgabedatei nicht zusammenfügen.\n\n" + result.GetShortError());
@@ -117,6 +197,7 @@ public sealed class AacExportProcessingService
             }
         }
 
+        ProjectExtensionRollbackService.PreserveActiveConvertedFile(convertedPath);
         TryDeleteFile(convertedPath);
         File.Move(partPath, convertedPath);
     }
@@ -125,9 +206,11 @@ public sealed class AacExportProcessingService
         string sourcePath,
         string convertedPath,
         ExportPreset preset,
+        int targetSampleRateHz,
         string ffmpegPath,
         CancellationToken token,
-        Action<TimeSpan> onProgress)
+        Action<TimeSpan> onProgress,
+        PerformanceExternalProcessContext? performanceContext)
     {
         var partPath = convertedPath + ".part";
 
@@ -146,16 +229,23 @@ public sealed class AacExportProcessingService
             "-c:a", "aac",
             "-b:a", $"{preset.BitrateKbps}k",
             "-ac", preset.Channels.ToString(CultureInfo.InvariantCulture),
+            "-ar", FolderSampleRateService.RequireSupported(targetSampleRateHz).ToString(CultureInfo.InvariantCulture),
             "-movflags", "+faststart",
             "-f", "ipod",
             partPath
         };
 
-        var result = await _ffmpegRunnerService.RunAsync(ffmpegPath, args, token, onProgress);
+        var result = await _ffmpegRunnerService.RunAsync(
+            ffmpegPath,
+            args,
+            token,
+            onProgress,
+            performanceContext);
 
         if (result.ExitCode != 0 || !File.Exists(partPath))
             throw new InvalidOperationException("FFmpeg konnte eine Zwischendatei nicht erzeugen.\n\n" + result.GetShortError());
 
+        ProjectExtensionRollbackService.PreserveActiveConvertedFile(convertedPath);
         TryDeleteFile(convertedPath);
         File.Move(partPath, convertedPath);
     }

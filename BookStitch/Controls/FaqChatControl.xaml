@@ -1,0 +1,71 @@
+<UserControl x:Class="BookStitch.Controls.FaqChatControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:BookStitch.Models"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="ChatVisibility"/>
+        <DataTemplate DataType="{x:Type models:FaqChatText}">
+            <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" LineHeight="22">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+                        <Setter Property="Margin" Value="0,0,36,20"/>
+                        <Setter Property="AutomationProperties.HelpText" Value="{x:Static controls:FaqChatLabels.Assistant}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsHuman}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+                                <Setter Property="Margin" Value="36,0,0,20"/>
+                                <Setter Property="TextAlignment" Value="Left"/>
+                                <Setter Property="AutomationProperties.HelpText" Value="{x:Static controls:FaqChatLabels.Human}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type models:FaqChatImage}">
+            <Grid HorizontalAlignment="Center" MaxWidth="{x:Static controls:FaqChatPresentation.IconWidth}" Margin="0,0,0,22">
+                <Image Source="{Binding Source}" Stretch="Uniform" StretchDirection="DownOnly"
+                       MaxWidth="{x:Static controls:FaqChatPresentation.IconWidth}"  AutomationProperties.Name="{Binding Description}"
+                       Loaded="FadeIn_Loaded" Unloaded="Animation_Unloaded"/>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type models:FaqChatGenerating}">
+            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,22"
+                        Loaded="Pulse_Loaded" Unloaded="Animation_Unloaded">
+                <Path Data="M 0,0 L 16,0 16,14 0,14 Z M 1,12 L 6,6 10,10 13,7 16,11"
+                      Stroke="{DynamicResource MutedTextBrush}" StrokeThickness="1.2"
+                      Width="{x:Static controls:FaqChatPresentation.IconWidth}"
+                      Height="{x:Static controls:FaqChatPresentation.IconWidth}" Stretch="Uniform" Margin="0,0,0,8"/>
+                <TextBlock Text="{x:Static controls:FaqChatLabels.Generating}" Foreground="{DynamicResource MainTextBrush}"
+                           HorizontalAlignment="Center" TextAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+    <StackPanel>
+        <ItemsControl x:Name="HistoryItems" ItemsSource="{Binding History}"/>
+        <StackPanel x:Name="PendingPanel" Margin="36,0,0,20"
+                    Visibility="{Binding HasPendingHuman, Converter={StaticResource ChatVisibility}}">
+            <TextBlock Text="{Binding PendingHuman}" Foreground="{DynamicResource AccentForegroundBrush}"
+                       TextWrapping="Wrap" TextAlignment="Left" LineHeight="22" Margin="0,0,0,8"
+                       AutomationProperties.HelpText="{x:Static controls:FaqChatLabels.PreparedHuman}"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        Visibility="{Binding CanSend, Converter={StaticResource ChatVisibility}}">
+                <TextBlock x:Name="FirstSendHint" Text="{x:Static controls:FaqChatLabels.ClickHere}" Margin="0,0,8,0"
+                           Foreground="{DynamicResource MainTextBrush}" VerticalAlignment="Center"
+                           Visibility="{Binding IsFirstPrompt, Converter={StaticResource ChatVisibility}}"/>
+            <Button x:Name="SendButton" Width="34" HorizontalAlignment="Right"
+                    Style="{StaticResource UtilityIconButtonStyle}" Click="Send_Click"
+                    IsEnabled="{Binding CanSend}" AutomationProperties.Name="{x:Static controls:FaqChatLabels.Send}"
+                    IsVisibleChanged="SendButton_StateChanged" IsEnabledChanged="SendButton_StateChanged" Loaded="Pulse_Loaded" Unloaded="Animation_Unloaded">
+                <Path Data="M 1,1 L 17,8 1,15 4,8 Z M 4,8 L 12,8" Width="18" Height="16"
+                      Stroke="{DynamicResource MainTextBrush}" StrokeThickness="1.5"/>
+            </Button>
+            </StackPanel>
+        </StackPanel>
+        <Button x:Name="RestartButton" Content="{x:Static controls:FaqChatLabels.Restart}" HorizontalAlignment="Left"
+                Style="{StaticResource SettingsSecondaryButtonStyle}" Click="Restart_Click"
+                Visibility="{Binding IsComplete, Converter={StaticResource ChatVisibility}}"/>
+    </StackPanel>
+</UserControl>

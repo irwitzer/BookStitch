@@ -1,0 +1,16 @@
+<UserControl x:Class="BookStitch.Dialog.DiscCountConfirmationContent"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:controls="clr-namespace:BookStitch.Controls" xmlns:services="clr-namespace:BookStitch.Services">
+ <StackPanel>
+  <TextBlock Text="{services:LocalizedText Key=UiAnzahlCDs}" Margin="0,0,0,6"/>
+  <WrapPanel VerticalAlignment="Center">
+   <controls:DiscCountInputControl x:Name="DiscCountInput" Margin="0,0,20,8"/>
+   <CheckBox x:Name="AlwaysWarnToggle" Content="{services:LocalizedText Key=Warnings.AlwaysWarn}"
+             AutomationProperties.Name="{services:LocalizedText Key=Warnings.AlwaysWarn}"
+             Style="{StaticResource WarningToggleStyle}" IsChecked="True" VerticalAlignment="Center" Margin="0,0,0,8"/>
+  </WrapPanel>
+  <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Visibility="Collapsed"
+             Foreground="{DynamicResource ErrorTextBrush}" AutomationProperties.LiveSetting="Assertive"/>
+ </StackPanel>
+</UserControl>

@@ -1,14 +1,16 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Packaging;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -22,43 +24,76 @@ namespace BookStitch.Dialog;
 public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 {
     private readonly string _workingRootFolder;
+    private readonly GlobalSettingsManager? _settingsManager;
+    private readonly Func<Window,string,bool,Task<ProjectOperationOutcome>>? _rebuild;
     private readonly ProjectIndexService _projectIndexService;
+    private readonly ProjectCatalog _catalog;
     private readonly ProjectResumePlanService _projectResumePlanService;
+    private readonly ProjectBrowserPresentationService _projectBrowserPresentationService;
     private readonly int _projectRetentionDays;
+    private readonly string _projectRetentionMode;
+    private readonly AppearanceMode _appearanceMode;
     private ProjectIndexItem? _selectedProject;
     private ProjectResumePlan? _selectedResumePlan;
     private readonly HashSet<string> _reportedDamagedProjectFolders = new(StringComparer.OrdinalIgnoreCase);
     private bool _isShowingDamagedProjectWarning;
     private int _damagedProjectScanVersion;
     private int _projectLoadVersion;
-    private string _projectDetails = "Noch kein Projekt ausgewählt.";
-    private static readonly Uri DefaultProjectCoverUri = new("pack://application:,,,/Assets/Icons/BookStitchLogo-Round.png", UriKind.Absolute);
-
-    private ImageSource _projectCoverSource = LoadProjectCoverImage();
+    private long _displayedCatalogGeneration = -1;
+    private int _projectDetailsVersion;
+    private Task _projectDetailsTask = Task.CompletedTask;
+    private readonly SemaphoreSlim _projectDetailsGate = new(1, 1);
+    private volatile bool _closed;
+    private bool _isLoadingProjects;
+    private bool _isOpeningProject;
+    private bool _previewCanLoad;
+    private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private bool _initialProjectLoadMeasured;
+    private bool _initialSelectionPreviewMeasured;
+    private string _projectDetails = LocalizationText.Get("Resume.Project.NoneDetails");
+    private string _projectLocationDetails = string.Empty;
+    private bool _coverIsPlaceholder = true;
+    private ImageSource _projectCoverSource = null!;
     private Visibility _projectCoverVisibility = Visibility.Visible;
-    private string _projectHeaderTitle = "Kein Projekt ausgewählt";
+    private string _projectHeaderTitle = LocalizationText.Get("Project.Browser.NoProjectSelected");
 
     public ResumeProjectDialog(
         string workingRootFolder,
         ProjectIndexService projectIndexService,
         ProjectResumePlanService projectResumePlanService,
         int projectRetentionDays,
-        ProjectIndexItem? selectedProject = null)
+        AppearanceMode appearanceMode,
+        ProjectIndexItem? selectedProject = null,
+        string? projectRetentionMode = null,
+        GlobalSettingsManager? settingsManager = null,
+        Func<Window,string,bool,Task<ProjectOperationOutcome>>? rebuildProject = null)
     {
         InitializeComponent();
+        WeakEventManager<DeveloperAppearancePreview, EventArgs>.AddHandler(DeveloperToolsCommands.AppearancePreview,
+            nameof(DeveloperAppearancePreview.Changed), PreviewAppearanceChanged);
+        Loaded += (_, _) => PreviewAppearanceChanged(this, EventArgs.Empty);
+        _settingsManager=settingsManager;_rebuild=rebuildProject;
 
         _workingRootFolder = workingRootFolder;
         _projectIndexService = projectIndexService;
+        _catalog = projectIndexService.Catalog;
+        _catalog.SnapshotChanged += Catalog_SnapshotChanged;
         _projectResumePlanService = projectResumePlanService;
+        _projectBrowserPresentationService = new ProjectBrowserPresentationService(projectIndexService);
         _projectRetentionDays = ProjectIndexService.NormalizeRetentionDays(projectRetentionDays);
+        _projectRetentionMode = ProjectRetentionPolicyService.NormalizeMode(projectRetentionMode);
+        _appearanceMode = appearanceMode;
+        _projectCoverSource = LoadProjectCoverImage();
 
         DataContext = this;
-        ProjectHeaderTitle = "Projekte werden geladen";
-        ProjectDetails = "Projektliste wird geladen …";
+        ProjectHeaderTitle = LocalizationText.Get("Resume.Project.LoadingTitle");
+        ProjectDetails = LocalizationText.Get("Resume.Project.LoadingDetails");
+        ProjectLocationDetails = string.Empty;
 
         var preferredProjectFolder = selectedProject?.ProjectFolder;
         Loaded += (_, _) =>
         {
+            if (_closed) return;
             LoadProjectButton.Focus();
             Dispatcher.BeginInvoke(
                 new Action(() => _ = LoadProjectsAsync(preferredProjectFolder)),
@@ -68,7 +103,31 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 
     public ObservableCollection<ProjectIndexItem> Projects { get; } = [];
 
+    public TimeSpan InitialProjectLoadElapsed { get; private set; }
+
+    public TimeSpan InitialProjectScanElapsed { get; private set; }
+
+    public TimeSpan InitialSelectionPreviewElapsed { get; private set; }
+
+    public int InitialProjectCount { get; private set; }
+
     public bool HasProjects => Projects.Count > 0;
+    public bool CanRefreshProjects => !_closed && !_isLoadingProjects && !_isOpeningProject;
+    public bool CanSelectProjects => !_closed && HasProjects && !_isOpeningProject;
+
+    protected override void OnClosed(EventArgs e)
+    {
+        WeakEventManager<DeveloperAppearancePreview, EventArgs>.RemoveHandler(DeveloperToolsCommands.AppearancePreview,
+            nameof(DeveloperAppearancePreview.Changed), PreviewAppearanceChanged);
+        _closed = true;
+        _catalog.SnapshotChanged -= Catalog_SnapshotChanged;
+        ++_projectLoadVersion;
+        ++_projectDetailsVersion;
+        ++_damagedProjectScanVersion;
+        _lifetimeCancellation.Cancel();
+        _lifetimeCancellation.Dispose();
+        base.OnClosed(e);
+    }
 
     public ProjectIndexItem? SelectedProject
     {
@@ -82,7 +141,7 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasSelectedProject));
             OnPropertyChanged(nameof(ProjectHeaderTitle));
-            UpdateProjectDetails();
+            _projectDetailsTask = UpdateProjectDetailsAsync();
         }
     }
 
@@ -100,9 +159,9 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         }
     }
 
-    public bool HasSelectedProject => SelectedProject is not null;
+    public bool HasSelectedProject => SelectedProject is not null && !_isOpeningProject;
 
-    public bool CanLoadSelectedProject => SelectedResumePlan is not null && (SelectedResumePlan.Tracks.Count > 0 || SelectedResumePlan.CanContinueDiscImport);
+    public bool CanLoadSelectedProject => !_closed && !_isOpeningProject && _previewCanLoad;
 
     public ImageSource ProjectCoverSource
     {
@@ -157,6 +216,19 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         }
     }
 
+    public string ProjectLocationDetails
+    {
+        get => _projectLocationDetails;
+        private set
+        {
+            if (_projectLocationDetails == value)
+                return;
+
+            _projectLocationDetails = value;
+            OnPropertyChanged();
+        }
+    }
+
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -173,7 +245,7 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 
     private void MoveProjectSelection(int delta)
     {
-        if (Projects.Count == 0)
+        if (!CanSelectProjects)
             return;
 
         var currentIndex = ProjectsComboBox.SelectedIndex;
@@ -213,64 +285,9 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         return null;
     }
 
-
-    private void ProjectActionButton_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is not Button button)
-            return;
-
-        button.FocusVisualStyle = null;
-
-        if (ReferenceEquals(button, LoadProjectButton))
-        {
-            button.Background = (Brush)FindResource("AccentHoverBrush");
-            button.BorderBrush = (Brush)FindResource("AccentHoverBrush");
-            button.Foreground = Brushes.White;
-            return;
-        }
-
-        if (ReferenceEquals(button, DeleteProjectButton))
-        {
-            button.Background = new SolidColorBrush(Color.FromRgb(0x2C, 0x1A, 0x1D));
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0xA3, 0x54, 0x5D));
-            button.Foreground = new SolidColorBrush(Color.FromRgb(0xE3, 0xA0, 0xA6));
-            return;
-        }
-
-        button.Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x3A, 0x45));
-        button.BorderBrush = (Brush)FindResource("AccentSoftBrush");
-        button.Foreground = Brushes.White;
-    }
-
-    private void ProjectActionButton_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        if (sender is not Button button || button.IsMouseOver)
-            return;
-
-        if (ReferenceEquals(button, LoadProjectButton))
-        {
-            button.Background = (Brush)FindResource("AccentBrush");
-            button.BorderBrush = (Brush)FindResource("AccentBrush");
-            button.Foreground = Brushes.White;
-            return;
-        }
-
-        if (ReferenceEquals(button, DeleteProjectButton))
-        {
-            button.Background = new SolidColorBrush(Color.FromRgb(0x21, 0x17, 0x19));
-            button.BorderBrush = new SolidColorBrush(Color.FromRgb(0x7B, 0x3D, 0x45));
-            button.Foreground = new SolidColorBrush(Color.FromRgb(0xD5, 0x8B, 0x91));
-            return;
-        }
-
-        button.Background = (Brush)FindResource("DisabledButtonBackgroundBrush");
-        button.BorderBrush = (Brush)FindResource("InputBorderBrush");
-        button.Foreground = (Brush)FindResource("MainTextBrush");
-    }
-
     private void Refresh_Click(object sender, RoutedEventArgs e)
     {
-        _ = LoadProjectsAsync(SelectedProject?.ProjectFolder);
+        _ = LoadProjectsAsync(SelectedProject?.ProjectFolder, forceRefresh: true);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
@@ -279,13 +296,57 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         Close();
     }
 
-    private void LoadProject_Click(object sender, RoutedEventArgs e)
-    {
-        if (SelectedResumePlan is null)
-            return;
+    private async void LoadProject_Click(object sender, RoutedEventArgs e) => await LoadSelectedProjectAsync();
 
-        DialogResult = true;
-        Close();
+    private async Task LoadSelectedProjectAsync()
+    {
+        if (!CanLoadSelectedProject || SelectedProject is not { } project)
+            return;
+        if(project.HealthStatus is ProjectHealthStatus.RebuildRequired or ProjectHealthStatus.Damaged)
+        {
+            var result=AppDialogService.Show(this,LocalizationText.Get("Integrity.Title"),project.HealthMessage,
+                LocalizationText.Get(project.HealthStatus==ProjectHealthStatus.Damaged?"Integrity.LoadDamagedWarning":"Integrity.LoadRebuildWarning"),AppDialogKind.Warning,
+                buttons:[new AppDialogButton(LocalizationText.Get("Integrity.LoadAnyway"),AppDialogResult.Yes,IsPrimary:true),
+                    new AppDialogButton(LocalizationText.Get("Common.Cancel"),AppDialogResult.Cancel)]);
+            if(result!=AppDialogResult.Yes)return;
+        }
+        var version = _projectDetailsVersion;
+        var token = _lifetimeCancellation.Token;
+        _isOpeningProject = true;
+        NotifyProjectActions();
+        try
+        {
+            var plan = await Task.Run(() => _projectResumePlanService.BuildFromProjectFolder(project.ProjectFolder), token);
+            if (_closed || token.IsCancellationRequested || version != _projectDetailsVersion)
+                return;
+            if (plan is null || (plan.Tracks.Count == 0 && !plan.CanContinueDiscImport))
+                throw new InvalidDataException(LocalizationText.Get("Project.Browser.ProjectUnreadable"));
+            SelectedResumePlan = plan;
+            DialogResult = true;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            if (!_closed && !token.IsCancellationRequested && version == _projectDetailsVersion)
+            {
+                ProjectHeaderTitle = LocalizationText.Get("Settings.Projects.LoadFailed.Title");
+                ProjectDetails = LocalizationText.Get("Project.Browser.ProjectUnreadable");
+            (Application.Current as App)?.DiagnosticLogService?.WriteError("PROJECT PREVIEW",ex);
+            }
+        }
+        finally
+        {
+            _isOpeningProject = false;
+            if (!_closed) NotifyProjectActions();
+        }
+    }
+
+    private void NotifyProjectActions()
+    {
+        OnPropertyChanged(nameof(CanLoadSelectedProject));
+        OnPropertyChanged(nameof(CanRefreshProjects));
+        OnPropertyChanged(nameof(CanSelectProjects));
+        OnPropertyChanged(nameof(HasSelectedProject));
     }
 
     private void DeleteProject_Click(object sender, RoutedEventArgs e)
@@ -296,13 +357,13 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 
         var confirmed = AppDialogService.Confirm(
             this,
-            "Projekt endgültig löschen?",
-            $"Das Projekt „{project.DisplayName}“ wird einschließlich aller Originaldateien, Konvertierungen und Ausgaben im Projektordner gelöscht.",
+            LocalizationText.Get("Resume.Project.DeleteHeading"),
+            LocalizationText.Format("Resume.Project.DeleteMessage", project.DisplayName),
             [
-                "Dieser Vorgang kann nicht rückgängig gemacht werden.",
-                "Projektordner: " + project.ProjectFolder
+                LocalizationText.Get("Settings.Projects.Delete.Irreversible"),
+                LocalizationText.Format("Resume.Project.Folder", project.ProjectFolder)
             ],
-            "Projekt löschen");
+            LocalizationText.Get("Settings.Projects.DeleteOne.Title"));
 
         if (!confirmed)
             return;
@@ -312,111 +373,153 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         {
             AppDialogService.Error(
                 this,
-                "Projekt konnte nicht gelöscht werden",
-                result.ErrorMessage ?? "Der Projektordner konnte nicht gelöscht werden.",
+                LocalizationText.Get("Settings.Projects.DeleteOne.FailedTitle"),
+                result.ErrorMessage ?? LocalizationText.Get("Settings.Projects.DeleteOne.FailedMessage"),
                 [project.ProjectFolder],
-                "Projekt löschen");
+                LocalizationText.Get("Settings.Projects.DeleteOne.Title"));
             return;
         }
 
         _ = LoadProjectsAsync(preferredProjectFolder: null);
     }
 
-    private async Task LoadProjectsAsync(string? preferredProjectFolder)
+    private void Catalog_SnapshotChanged(object? sender, EventArgs e)
     {
-        var loadVersion = ++_projectLoadVersion;
-        SelectedProject = null;
-        SelectedResumePlan = null;
-        Projects.Clear();
-        OnPropertyChanged(nameof(HasProjects));
-        ProjectHeaderTitle = "Projekte werden geladen";
-        ProjectDetails = "Projektliste wird geladen …";
+        if (_closed || Dispatcher.HasShutdownStarted) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var snapshot = _catalog?.Snapshot;
+            if (_closed || _isLoadingProjects || _isOpeningProject || snapshot is null || snapshot.IsDirty ||
+                snapshot.Generation == _displayedCatalogGeneration ||
+                !string.Equals(snapshot.WorkingRoot, System.IO.Path.GetFullPath(_workingRootFolder), StringComparison.OrdinalIgnoreCase)) return;
+            _ = LoadProjectsAsync(SelectedProject?.ProjectFolder);
+        }));
+    }
 
-        IReadOnlyList<ProjectIndexItem> projects;
+    private async Task LoadProjectsAsync(string? preferredProjectFolder, bool forceRefresh = false)
+    {
+        if (_closed || _isLoadingProjects || _isOpeningProject)
+            return;
+        _isLoadingProjects = true;
+        OnPropertyChanged(nameof(CanRefreshProjects));
+        var token = _lifetimeCancellation.Token;
         try
         {
-            projects = await Task.Run(() => _projectIndexService.ScanSelectableProjects(
-                _workingRootFolder,
-                _projectRetentionDays));
+            var measureInitialLoad = !_initialProjectLoadMeasured;
+            var initialLoadTimer = measureInitialLoad ? Stopwatch.StartNew() : null;
+            var scanTimer = Stopwatch.StartNew();
+            var loadVersion = ++_projectLoadVersion;
+            ++_damagedProjectScanVersion;
+            ProjectCatalogSnapshot? catalogSnapshot = null;
+            SelectedProject = null;
+            SelectedResumePlan = null;
+            Projects.Clear();
+            OnPropertyChanged(nameof(HasProjects));
+            OnPropertyChanged(nameof(CanSelectProjects));
+            ProjectHeaderTitle = LocalizationText.Get("Resume.Project.LoadingTitle");
+            ProjectDetails = LocalizationText.Get("Resume.Project.LoadingDetails");
+            ProjectLocationDetails = string.Empty;
+
+            IReadOnlyList<ProjectIndexItem> projects;
+            try
+            {
+                catalogSnapshot = await _catalog.RefreshAsync(_workingRootFolder, _projectRetentionDays, forceRefresh).WaitAsync(token);
+                while (!token.IsCancellationRequested &&
+                    (_catalog.Snapshot?.Generation != catalogSnapshot.Generation || _catalog.Snapshot.IsDirty))
+                    catalogSnapshot = await _catalog.RefreshAsync(_workingRootFolder, _projectRetentionDays).WaitAsync(token);
+                projects = catalogSnapshot.ProjectIndexItems.Where(project => project.IsVisibleInProjectBrowser).ToArray();
+                scanTimer.Stop();
+
+                if (measureInitialLoad)
+                    InitialProjectScanElapsed = scanTimer.Elapsed;
+            }
+            catch (Exception ex)
+            {
+                if (_closed || token.IsCancellationRequested || loadVersion != _projectLoadVersion)
+                    return;
+
+                ProjectHeaderTitle = LocalizationText.Get("Settings.Projects.LoadFailed.Title");
+                ProjectDetails = LocalizationText.Format("Settings.Projects.LoadFailed.Message", ex.Message);
+                ProjectLocationDetails = string.Empty;
+                return;
+            }
+
+            if (_closed || token.IsCancellationRequested || loadVersion != _projectLoadVersion)
+                return;
+
+            _displayedCatalogGeneration = catalogSnapshot!.Generation;
+            foreach (var project in projects)
+                Projects.Add(project);
+
+            OnPropertyChanged(nameof(HasProjects));
+            OnPropertyChanged(nameof(CanSelectProjects));
+
+            SelectedProject = Projects.FirstOrDefault(project =>
+                !string.IsNullOrWhiteSpace(preferredProjectFolder) &&
+                string.Equals(project.ProjectFolder, preferredProjectFolder, StringComparison.OrdinalIgnoreCase))
+                ?? Projects.FirstOrDefault();
+
+            await _projectDetailsTask;
+            if (_closed || token.IsCancellationRequested || loadVersion != _projectLoadVersion)
+                return;
+
+            if (SelectedProject is null)
+            {
+                ProjectHeaderTitle = LocalizationText.Get("Project.Browser.NoProjectSelected");
+                ProjectDetails = LocalizationText.Get("Project.Browser.NoCompleteProjects");
+                ProjectLocationDetails = string.Empty;
+            }
+
+            if (measureInitialLoad && initialLoadTimer is not null)
+            {
+                initialLoadTimer.Stop();
+                InitialProjectLoadElapsed = initialLoadTimer.Elapsed;
+                InitialProjectCount = Projects.Count;
+                _initialProjectLoadMeasured = true;
+            }
+
+            QueueDamagedProjectScan(catalogSnapshot!.Generation);
         }
         catch (Exception ex)
         {
-            if (loadVersion != _projectLoadVersion)
-                return;
-
-            ProjectHeaderTitle = "Projektliste nicht geladen";
-            ProjectDetails = "Die Projektliste konnte nicht geladen werden: " + ex.Message;
-            return;
+            if (!_closed)
+            {
+                SelectedResumePlan = null;
+                ProjectHeaderTitle = LocalizationText.Get("Settings.Projects.LoadFailed.Title");
+                ProjectDetails = LocalizationText.Format("Settings.Projects.LoadFailed.Message", ex.Message);
+            }
         }
-
-        if (loadVersion != _projectLoadVersion)
-            return;
-
-        foreach (var project in projects)
-            Projects.Add(project);
-
-        OnPropertyChanged(nameof(HasProjects));
-
-        SelectedProject = Projects.FirstOrDefault(project =>
-            !string.IsNullOrWhiteSpace(preferredProjectFolder) &&
-            string.Equals(project.ProjectFolder, preferredProjectFolder, StringComparison.OrdinalIgnoreCase))
-            ?? Projects.FirstOrDefault();
-
-        if (SelectedProject is null)
+        finally
         {
-            ProjectHeaderTitle = "Kein Projekt ausgewählt";
-            ProjectDetails = "Keine vollständigen Projekte gefunden.";
+            _isLoadingProjects = false;
+            if (!_closed)
+                OnPropertyChanged(nameof(CanRefreshProjects));
         }
-
-        QueueDamagedProjectScan();
     }
 
-    private void QueueDamagedProjectScan()
+    private async void QueueDamagedProjectScan(long generation)
     {
+        if (_closed) return;
+        var token = _lifetimeCancellation.Token;
         var scanVersion = ++_damagedProjectScanVersion;
-        var alreadyReported = _reportedDamagedProjectFolders
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        Task.Run(() =>
+        try
         {
-            try
-            {
-                return _projectIndexService
-                    .ScanDamagedProjects(_workingRootFolder)
-                    .Where(project => !alreadyReported.Contains(project.ProjectFolder))
-                    .ToList();
-            }
-            catch
-            {
-                return new List<DamagedProjectInfo>();
-            }
-        }).ContinueWith(task =>
-        {
-            if (scanVersion != _damagedProjectScanVersion ||
-                task.Status != TaskStatus.RanToCompletion ||
-                task.Result.Count == 0)
-            {
-                return;
-            }
-
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (scanVersion != _damagedProjectScanVersion)
-                    return;
-
-                var damagedProjects = task.Result
-                    .Where(project => !_reportedDamagedProjectFolders.Contains(project.ProjectFolder))
-                    .ToList();
-
-                if (damagedProjects.Count > 0)
-                    ShowDamagedProjectWarnings(damagedProjects);
-            }));
-        });
+            var snapshot = await _catalog.WaitForDamageAsync(generation, token);
+            if (_closed || token.IsCancellationRequested || !IsVisible ||
+                scanVersion != _damagedProjectScanVersion || snapshot is null ||
+                _catalog.Snapshot?.Generation != generation) return;
+            var damaged = snapshot.DamageInformation
+                .Where(project => !_reportedDamagedProjectFolders.Contains(project.ProjectFolder) &&
+                    !snapshot.ProjectIndexItems.Any(item => item.ProjectFolder == project.ProjectFolder && item.HealthStatus == ProjectHealthStatus.Damaged)).ToArray();
+            if (damaged.Length > 0) ShowDamagedProjectWarnings(damaged);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { System.Diagnostics.Trace.TraceWarning("Catalog damage preview failed: {0}", error.Message); }
     }
 
     private void ShowDamagedProjectWarnings(IReadOnlyList<DamagedProjectInfo> damagedProjects)
     {
-        if (_isShowingDamagedProjectWarning || damagedProjects.Count == 0)
+        if (_closed || !IsVisible || _isShowingDamagedProjectWarning || damagedProjects.Count == 0)
             return;
 
         _isShowingDamagedProjectWarning = true;
@@ -424,6 +527,7 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         {
             foreach (var damagedProject in damagedProjects)
             {
+                if (_closed) break;
                 if (!Directory.Exists(damagedProject.ProjectFolder))
                     continue;
 
@@ -431,19 +535,19 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 
                 var result = AppDialogService.Show(
                     this,
-                    "Beschädigtes Projekt",
-                    "Unvollständiges BookStitch-Projekt erkannt",
-                    "Eine erforderliche Projektdatei fehlt oder ist nicht lesbar. BookStitch verändert die vorhandenen Audiodateien nicht und versucht keine automatische Reparatur.",
+                    LocalizationText.Get("Resume.Project.DamagedTitle"),
+                    LocalizationText.Get("Resume.Project.DamagedHeading"),
+                    LocalizationText.Get("Resume.Project.DamagedMessage"),
                     AppDialogKind.Warning,
                     [
-                        "Projekt: " + damagedProject.DisplayName,
+                        LocalizationText.Format("Resume.Project.Name", damagedProject.DisplayName),
                         damagedProject.Reason,
-                        "Projektordner: " + damagedProject.ProjectFolder
+                        LocalizationText.Format("Resume.Project.Folder", damagedProject.ProjectFolder)
                     ],
                     [
-                        new AppDialogButton("Projektordner öffnen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                        new AppDialogButton("Projekt löschen", AppDialogResult.No, IsDanger: true),
-                        new AppDialogButton("Schließen", AppDialogResult.Cancel, IsCancel: true)
+                        new AppDialogButton(LocalizationText.Get("Resume.Project.OpenFolder"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                        new AppDialogButton(LocalizationText.Get("Settings.Projects.DeleteOne.Title"), AppDialogResult.No, IsDanger: true),
+                        new AppDialogButton(LocalizationText.Get("Common.Close"), AppDialogResult.Cancel, IsCancel: true)
                     ],
                     width: 660);
 
@@ -458,13 +562,13 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
 
                 var confirmed = AppDialogService.Confirm(
                     this,
-                    "Beschädigtes Projekt endgültig löschen?",
-                    $"Das Projekt „{damagedProject.DisplayName}“ wird einschließlich aller noch vorhandenen Dateien gelöscht.",
+                    LocalizationText.Get("Resume.Project.DeleteDamagedHeading"),
+                    LocalizationText.Format("Resume.Project.DeleteDamagedMessage", damagedProject.DisplayName),
                     [
-                        "Dieser Vorgang kann nicht rückgängig gemacht werden.",
-                        "Projektordner: " + damagedProject.ProjectFolder
+                        LocalizationText.Get("Settings.Projects.Delete.Irreversible"),
+                        LocalizationText.Format("Resume.Project.Folder", damagedProject.ProjectFolder)
                     ],
-                    "Projekt löschen");
+                    LocalizationText.Get("Settings.Projects.DeleteOne.Title"));
 
                 if (!confirmed)
                     continue;
@@ -474,10 +578,10 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
                 {
                     AppDialogService.Error(
                         this,
-                        "Projekt konnte nicht gelöscht werden",
-                        deletionResult.ErrorMessage ?? "Der Projektordner konnte nicht gelöscht werden.",
+                        LocalizationText.Get("Settings.Projects.DeleteOne.FailedTitle"),
+                        deletionResult.ErrorMessage ?? LocalizationText.Get("Settings.Projects.DeleteOne.FailedMessage"),
                         [damagedProject.ProjectFolder],
-                        "Projekt löschen");
+                        LocalizationText.Get("Settings.Projects.DeleteOne.Title"));
                 }
             }
         }
@@ -487,319 +591,106 @@ public partial class ResumeProjectDialog : Window, INotifyPropertyChanged
         }
     }
 
-    private void OpenProjectFolder(string projectFolder)
+    private void OpenSelectedProjectFolder_Click(object sender, RoutedEventArgs e)
+    { if (SelectedProject is { } project) OpenProjectFolder(project.ProjectFolder); }
+
+    private void OpenProjectFolder(string projectFolder) => ProjectFolderOpenService.Open(this,projectFolder,_settingsManager);
+
+    private async void RebuildProject_Click(object sender,RoutedEventArgs e)
     {
+        if(SelectedProject?.CanRebuild!=true || _rebuild is null)return;
+        var folder=SelectedProject.ProjectFolder;
+        if(await _rebuild(this,folder,false)!=ProjectOperationOutcome.Completed || _closed)return;
+        _catalog.MarkDirty();
+        await LoadProjectsAsync(folder);
+    }
+
+    private async Task UpdateProjectDetailsAsync()
+    {
+        if (_closed) return;
+        var project = SelectedProject;
+        var version = ++_projectDetailsVersion;
+        var token = _lifetimeCancellation.Token;
+        SelectedResumePlan = null;
+        _previewCanLoad = false;
+        OnPropertyChanged(nameof(CanLoadSelectedProject));
+        ProjectHeaderTitle = LocalizationText.Get("Resume.Project.LoadingTitle");
+        ProjectDetails = LocalizationText.Get("Resume.Project.LoadingDetails");
+        ProjectLocationDetails = string.Empty;
+        ProjectCoverVisibility = Visibility.Hidden;
         try
         {
-            Process.Start(new ProcessStartInfo
+            var measureInitialPreview = project is not null && !_initialSelectionPreviewMeasured && !_initialProjectLoadMeasured;
+            var previewTimer = measureInitialPreview ? Stopwatch.StartNew() : null;
+            var presentation = await Task.Run<(ProjectBrowserPresentation Presentation, ImageSource Cover)?>(async () =>
             {
-                FileName = projectFolder,
-                UseShellExecute = true
-            });
+                await _projectDetailsGate.WaitAsync(token).ConfigureAwait(false);
+                try
+                {
+                    if (_closed || version != Volatile.Read(ref _projectDetailsVersion))
+                        return null;
+                    var presentation = _projectBrowserPresentationService.Create(project, _projectRetentionMode, _appearanceMode);
+                    return (Presentation: presentation, Cover: LoadProjectCoverImage(presentation.CoverUri));
+                }
+                finally { _projectDetailsGate.Release(); }
+            }, token);
+            if (_closed || token.IsCancellationRequested || version != _projectDetailsVersion || presentation is null)
+                return;
+            if (measureInitialPreview && previewTimer is not null)
+            {
+                previewTimer.Stop();
+                InitialSelectionPreviewElapsed = previewTimer.Elapsed;
+                _initialSelectionPreviewMeasured = true;
+            }
+
+            ProjectHeaderTitle = presentation.Value.Presentation.HeaderTitle;
+            ProjectDetails = presentation.Value.Presentation.Details;
+            ProjectLocationDetails = presentation.Value.Presentation.LocationDetails;
+            _coverIsPlaceholder = !presentation.Value.Presentation.CoverUri.IsFile;
+            ProjectCoverSource = presentation.Value.Cover;
+            PreviewAppearanceChanged(this, EventArgs.Empty);
+            ProjectCoverVisibility = Visibility.Visible;
+            _previewCanLoad = presentation.Value.Presentation.CanLoad;
+            OnPropertyChanged(nameof(CanLoadSelectedProject));
         }
         catch (Exception ex)
         {
-            AppDialogService.Error(
-                this,
-                "Projektordner konnte nicht geöffnet werden",
-                ex.Message,
-                [projectFolder],
-                "Projektordner öffnen");
-        }
-    }
-
-    private void UpdateProjectDetails()
-    {
-        if (SelectedProject is null)
-        {
+            if (_closed || token.IsCancellationRequested || version != _projectDetailsVersion)
+                return;
             SelectedResumePlan = null;
-            ProjectCoverSource = LoadProjectCoverImage();
-            ProjectCoverVisibility = Visibility.Visible;
-            ProjectHeaderTitle = "Kein Projekt ausgewählt";
-            ProjectDetails = "Keine vollständigen Projekte gefunden.";
-            return;
-        }
-
-        ProjectHeaderTitle = BuildProjectHeaderTitle(SelectedProject);
-
-        var plan = _projectResumePlanService.BuildFromProjectFolder(SelectedProject.ProjectFolder);
-        SelectedResumePlan = plan;
-        UpdateProjectCover(plan);
-        var builder = new StringBuilder();
-
-        builder.AppendLine("Auswahl");
-        builder.AppendLine("• Name: " + ValueOrPlaceholder(SelectedProject.DisplayName, "Unbenannt"));
-        builder.AppendLine("• Erstellt: " + FormatDate(SelectedProject.CreatedUtc));
-        builder.AppendLine("• Zuletzt geändert: " + FormatDate(SelectedProject.UpdatedUtc));
-        builder.AppendLine("• Status: " + FormatStatus(SelectedProject.Status));
-        builder.AppendLine("• Kategorie: Vollständig");
-        builder.AppendLine("• Typ: " + FormatProjectType(SelectedProject.ProjectType));
-        builder.AppendLine("• Ablauf: " + FormatExpiration(SelectedProject.ExpiresUtc));
-        builder.AppendLine();
-
-        builder.AppendLine("Metadaten");
-        var displayedTitle = plan?.BookTitle ?? SelectedProject.Title;
-        var displayedAlbum = plan?.Album ?? SelectedProject.Album;
-        builder.AppendLine("• Autor: " + ValueOrPlaceholder(plan?.Author ?? SelectedProject.Author, "Unbenannt"));
-        builder.AppendLine("• Titel: " + ValueOrPlaceholder(displayedTitle, "Unbenannt"));
-        if (!string.IsNullOrWhiteSpace(displayedAlbum) &&
-            !string.Equals(displayedAlbum.Trim(), displayedTitle?.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            builder.AppendLine("• Album: " + displayedAlbum.Trim());
-        }
-        builder.AppendLine("• Sprecher: " + ValueOrPlaceholder(plan?.Narrator ?? SelectedProject.Narrator, "nicht gesetzt"));
-        builder.AppendLine("• Genre: " + ValueOrPlaceholder(plan?.Genre ?? SelectedProject.Genre, "nicht gesetzt"));
-        builder.AppendLine();
-
-        if (SelectedProject.TotalDiscs > 0)
-        {
-            builder.AppendLine("Discs");
-            builder.AppendLine($"• Importiert: {SelectedProject.ImportedDiscCount}/{SelectedProject.TotalDiscs}");
-
-            builder.AppendLine();
-        }
-
-        if (plan is not null)
-        {
-            builder.AppendLine("Projektinhalt");
-            if (plan.Tracks.Count > 0)
-            {
-                builder.AppendLine("• Trackliste vorhanden: Ja");
-                builder.AppendLine("• Tracks im Plan: " + plan.Tracks.Count.ToString(CultureInfo.InvariantCulture));
-            }
-            else if (plan.ImportedDiscCount > 0 && plan.ProjectType == ProjectManifestTypes.Mp3DiscProject)
-            {
-                builder.AppendLine("• Trackliste: noch nicht rekonstruiert");
-                builder.AppendLine("• Tracks im Plan: 0");
-            }
-            else
-            {
-                builder.AppendLine("• Trackliste vorhanden: Nein");
-                builder.AppendLine("• Tracks im Plan: 0");
-            }
-
-            if (!string.IsNullOrWhiteSpace(plan.SelectedPreset))
-            {
-                builder.AppendLine("• Aktuelles Preset:");
-                builder.AppendLine("  ◦ " + FormatPresetWithAvailability(plan.ProjectFolder, plan.SelectedPreset, plan.Tracks.Count));
-            }
-
-            var preparedPresetLines = BuildPreparedPresetLines(plan.ProjectFolder, plan.SelectedPreset, plan.Tracks.Count).ToList();
-            if (preparedPresetLines.Count > 0)
-            {
-                builder.AppendLine("• Weitere Presets:");
-                foreach (var preparedPreset in preparedPresetLines)
-                    builder.AppendLine("  ◦ " + preparedPreset);
-            }
-
-            builder.AppendLine();
-        }
-        else
-        {
-            builder.AppendLine("Projektinhalt");
-            builder.AppendLine("• Dieses Projekt konnte gerade nicht vollständig gelesen werden.");
-            builder.AppendLine();
-        }
-
-        if (!string.IsNullOrWhiteSpace(SelectedProject.SourceFolder))
-            builder.AppendLine("Quelle: " + SelectedProject.SourceFolder);
-
-        if (!string.IsNullOrWhiteSpace(SelectedProject.OutputFolder))
-            builder.AppendLine("Ausgabe: " + SelectedProject.OutputFolder);
-
-        builder.AppendLine("Projektordner: " + SelectedProject.ProjectFolder);
-
-        ProjectDetails = builder.ToString().TrimEnd();
-    }
-
-    private void UpdateProjectCover(ProjectResumePlan? plan)
-    {
-        var coverPath = FirstExistingFile(
-            plan?.ProcessedCoverPath,
-            plan?.CoverSourcePath);
-
-        ProjectCoverSource = LoadProjectCoverImage(coverPath);
-        ProjectCoverVisibility = Visibility.Visible;
-    }
-
-
-    private static ImageSource LoadProjectCoverImage(string? filePath = null)
-    {
-        var image = new BitmapImage();
-        image.BeginInit();
-        image.CacheOption = BitmapCacheOption.OnLoad;
-        image.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-        image.UriSource = !string.IsNullOrWhiteSpace(filePath) && File.Exists(filePath)
-            ? new Uri(filePath, UriKind.Absolute)
-            : DefaultProjectCoverUri;
-        image.EndInit();
-        image.Freeze();
-        return image;
-    }
-
-    private static string BuildProjectHeaderTitle(ProjectIndexItem project)
-    {
-        var title = ValueOrPlaceholder(project.Title, project.DisplayName);
-        var author = ValueOrPlaceholder(project.Author, "Autor unbekannt");
-        return title + " - " + author;
-    }
-
-    private static string FirstExistingFile(params string?[] candidates)
-    {
-        foreach (var candidate in candidates)
-        {
-            if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate))
-                return candidate;
-        }
-
-        return string.Empty;
-    }
-
-    private static string FormatDate(DateTime value)
-    {
-        if (value == default)
-            return "unbekannt";
-
-        var local = value.Kind == DateTimeKind.Local ? value : value.ToLocalTime();
-        return local.ToString("dd.MM.yyyy HH:mm", CultureInfo.CurrentCulture);
-    }
-
-    private static string FormatExpiration(DateTime expiresUtc)
-    {
-        if (expiresUtc == default)
-            return "unbekannt";
-
-        var localExpiration = expiresUtc.Kind == DateTimeKind.Local ? expiresUtc : expiresUtc.ToLocalTime();
-        var today = DateTime.Now.Date;
-        var expirationDate = localExpiration.Date;
-        var remainingDays = (expirationDate - today).Days;
-
-        if (remainingDays < 0)
-            return "abgelaufen";
-
-        if (remainingDays == 0)
-            return "heute";
-
-        if (remainingDays == 1)
-            return "in 1 Tag";
-
-        return "in " + remainingDays.ToString(CultureInfo.CurrentCulture) + " Tagen";
-    }
-
-    private static string ValueOrPlaceholder(string? value, string placeholder)
-    {
-        return string.IsNullOrWhiteSpace(value) ? placeholder : value.Trim();
-    }
-
-    private static string FormatProjectType(string? projectType)
-    {
-        return projectType switch
-        {
-            ProjectManifestTypes.Mp3DiscProject => "MP3-CD-Projekt",
-            ProjectManifestTypes.AudioCdProject => "Audio-CD-Projekt",
-            ProjectManifestTypes.FolderProject => "Lokales Ordnerprojekt",
-            "Mp3Disc" => "MP3-CD-Import",
-            _ => string.IsNullOrWhiteSpace(projectType) ? "Unbekannt" : projectType
-        };
-    }
-
-    private static string FormatStatus(string? status)
-    {
-        return status switch
-        {
-            ProjectPipelineStateNames.Preparing => "Vorbereitung",
-            ProjectPipelineStateNames.AcquiringSources => "Quellen werden übernommen",
-            ProjectPipelineStateNames.Converting => "Konvertierung",
-            ProjectPipelineStateNames.ReviewBeforeMerge => "Prüfung vor dem Zusammenfügen",
-            ProjectPipelineStateNames.Merging => "Zusammenfügen",
-            ProjectPipelineStateNames.Completed => "Export abgeschlossen",
-            ProjectManifestStatuses.LegacyCreated => "Vorbereitung",
-            ProjectManifestStatuses.LegacyImporting => "Quellen werden übernommen",
-            ProjectManifestStatuses.LegacyReady => "Prüfung vor dem Zusammenfügen",
-            ProjectManifestStatuses.LegacyExporting => "Konvertierung wurde unterbrochen",
-            ProjectManifestStatuses.LegacyCanceled => "Abgebrochen",
-            ProjectManifestStatuses.LegacyFailed => "Fehlgeschlagen",
-            AudioDiscProjectStatus.AwaitingRip => "Vorbereitung",
-            AudioDiscProjectStatus.Ripping => "Quellen werden übernommen",
-            AudioDiscProjectStatus.WaitingForDisc => "Wartet auf nächste Audio-CD",
-            AudioDiscProjectStatus.RippingCompleted => "Prüfung vor dem Zusammenfügen",
-            AudioDiscExportStatus.PausedBeforeMerge => "Prüfung vor dem Zusammenfügen",
-            _ => string.IsNullOrWhiteSpace(status) ? "Unbekannt" : status
-        };
-    }
-
-    private static string FormatPresetWithAvailability(string projectFolder, string presetDisplayName, int expectedTrackCount)
-    {
-        var folderName = ExportPreset.Parse(presetDisplayName).GetFolderName();
-        var convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectFolder, folderName);
-        var availability = GetConvertedPresetAvailability(convertedFolder, expectedTrackCount);
-
-        return string.IsNullOrWhiteSpace(availability)
-            ? presetDisplayName
-            : presetDisplayName + ": " + availability;
-    }
-
-    private static IEnumerable<string> BuildPreparedPresetLines(string projectFolder, string selectedPreset, int expectedTrackCount)
-    {
-        var convertedRoot = ProjectFolderLayout.GetConvertedFolder(projectFolder);
-        if (!Directory.Exists(convertedRoot))
-            yield break;
-
-        var selectedFolderName = string.IsNullOrWhiteSpace(selectedPreset)
-            ? ""
-            : ExportPreset.Parse(selectedPreset).GetFolderName();
-
-        foreach (var folder in Directory.EnumerateDirectories(convertedRoot).OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase))
-        {
-            var folderName = Path.GetFileName(folder);
-            if (string.Equals(folderName, selectedFolderName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var availability = GetConvertedPresetAvailability(folder, expectedTrackCount);
-            if (string.IsNullOrWhiteSpace(availability))
-                continue;
-
-            yield return FormatPresetFolderName(folderName) + ": " + availability;
+            ProjectHeaderTitle = LocalizationText.Get("Settings.Projects.LoadFailed.Title");
+            ProjectDetails = LocalizationText.Get("Project.Browser.ProjectUnreadable");
+            (Application.Current as App)?.DiagnosticLogService?.WriteError("PROJECT PREVIEW",ex);
+            ProjectLocationDetails = SelectedProject?.ProjectFolder ?? string.Empty;
         }
     }
 
-    private static string GetConvertedPresetAvailability(string convertedFolder, int expectedTrackCount)
+    private void PreviewAppearanceChanged(object? sender, EventArgs e)
     {
-        if (!Directory.Exists(convertedFolder))
-            return "";
-
-        var convertedFiles = Directory
-            .EnumerateFiles(convertedFolder, "*.m4a", SearchOption.TopDirectoryOnly)
-            .Where(file =>
-                !file.EndsWith(".part", StringComparison.OrdinalIgnoreCase) &&
-                !file.Contains(".part.", StringComparison.OrdinalIgnoreCase) &&
-                !file.EndsWith(".copying", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (convertedFiles.Count == 0)
-            return "";
-
-        if (expectedTrackCount > 0 && convertedFiles.Count >= expectedTrackCount)
-            return "vollständig vorhanden";
-
-        if (expectedTrackCount > 0)
-            return $"teilweise vorhanden ({convertedFiles.Count}/{expectedTrackCount})";
-
-        return "teilweise vorhanden";
+        if (!Dispatcher.CheckAccess() || _closed || !_coverIsPlaceholder) return;
+        if (TryFindResource(AppearanceSettingsService.CoverPlaceholderImageSourceKey) is ImageSource placeholder)
+            ProjectCoverSource = placeholder;
     }
 
-    private static string FormatPresetFolderName(string folderName)
+    private ImageSource LoadProjectCoverImage(string? filePath = null) =>
+        LoadProjectCoverImage(ResolveProjectCoverImageUri(_appearanceMode, filePath));
+
+    private ImageSource LoadProjectCoverImage(Uri uri)
     {
-        var match = Regex.Match(folderName ?? "", @"^aac_(mono|stereo)_(\d+)k$", RegexOptions.IgnoreCase);
-        if (!match.Success)
-            return string.IsNullOrWhiteSpace(folderName) ? "Unbekanntes Preset" : folderName;
-
-        var channel = match.Groups[1].Value.Equals("mono", StringComparison.OrdinalIgnoreCase)
-            ? "Mono"
-            : "Stereo";
-
-        return "AAC " + channel + " " + match.Groups[2].Value + " kbps";
+        try { return LoadProjectCoverImageCore(uri); }
+        catch (Exception) when (uri.IsFile)
+        {
+            return LoadProjectCoverImageCore(ResolveProjectCoverImageUri(_appearanceMode));
+        }
     }
+
+    private static ImageSource LoadProjectCoverImageCore(Uri uri) =>
+        ProjectCoverThumbnailCache.Shared.Load(uri);
+
+    internal static Uri ResolveProjectCoverImageUri(
+        AppearanceMode appearanceMode,
+        string? filePath = null) =>
+        ProjectBrowserPresentationService.ResolveProjectCoverImageUri(appearanceMode, filePath);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

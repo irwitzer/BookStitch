@@ -4,16 +4,18 @@ namespace BookStitch.Services;
 
 public sealed class LiveConversionWorkflowService
 {
-    private readonly AacExportProcessingService _aacExportProcessingService;
+    private readonly IAudioExportProcessingService _aacExportProcessingService;
     private readonly Func<string> _ffmpegPathProvider;
 
     public LiveConversionWorkflowService(
-        AacExportProcessingService aacExportProcessingService,
+        IAudioExportProcessingService aacExportProcessingService,
         Func<string> ffmpegPathProvider)
     {
         _aacExportProcessingService = aacExportProcessingService;
         _ffmpegPathProvider = ffmpegPathProvider;
     }
+
+    internal IAudioExportProcessingService AudioProcessing => _aacExportProcessingService;
 
     public async Task RunAsync(
         TrackInfo track,
@@ -24,7 +26,9 @@ public sealed class LiveConversionWorkflowService
         Action onStarted,
         Action onCompleted,
         Action onFailed,
-        CancellationToken token)
+        CancellationToken token,
+        Func<PerformanceExternalProcessContext?>? performanceContextFactory = null,
+        Action? persistPreparedTrack = null)
     {
         var semaphoreEntered = false;
 
@@ -34,6 +38,16 @@ public sealed class LiveConversionWorkflowService
             semaphoreEntered = true;
             onStarted();
 
+            PerformanceExternalProcessContext? performanceContext = null;
+            try
+            {
+                performanceContext = performanceContextFactory?.Invoke();
+            }
+            catch
+            {
+                // Diagnostic context creation must never alter conversion behavior.
+            }
+
             await _aacExportProcessingService.PrepareTrackForExportAsync(
                 track,
                 item.SourcePath,
@@ -41,10 +55,17 @@ public sealed class LiveConversionWorkflowService
                 preset,
                 _ffmpegPathProvider(),
                 token,
-                _ => { });
+                _ => { },
+                performanceContext);
 
+            // Register only a successfully finalized artifact.
+            persistPreparedTrack?.Invoke();
             liveConversionQueue.MarkCompleted();
             onCompleted();
+        }
+        catch (PreparedTrackCheckpointException)
+        {
+            throw; // Let the owner stop/settle the workflow; do not report a failed AAC conversion.
         }
         catch (OperationCanceledException)
         {

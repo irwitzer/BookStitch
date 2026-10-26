@@ -1,5 +1,6 @@
 ﻿using BookStitch.Models;
 using BookStitch.Services;
+using System.Globalization;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
@@ -7,6 +8,68 @@ namespace BookStitch.Tests.Services;
 public sealed class WorkflowStatusFormatterTests
 {
     private readonly WorkflowStatusFormatter _formatter = new();
+
+    [Theory]
+    [InlineData(WorkflowProjectKind.Mp3Disc, SourceAcquisitionKind.Copying, "wird kopiert")]
+    [InlineData(WorkflowProjectKind.AudioDisc, SourceAcquisitionKind.Ripping, "wird gerippt")]
+    public void Format_ActiveDisc_ShowsItsDriveBeforeTrackProgress(
+        WorkflowProjectKind kind, SourceAcquisitionKind acquisitionKind, string verb)
+    {
+        var previous = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
+            var result = _formatter.Format(new WorkflowStatusSnapshot
+            {
+                ProjectKind = kind,
+                SourceProgress = new SourceAcquisitionProgress(acquisitionKind, 28, 176, 28, 176,
+                    CurrentDisc: 1, TotalDiscs: 1, DriveDisplayName: "H: 1 - Asus"),
+                ConversionProgress = new ConversionActivityProgress(24, 176, 13)
+            });
+
+            Assert.Contains($"{verb} | H: 1 - Asus • 28 / 176 |", result.TeletextText);
+            Assert.Contains("Live-Konvertierung", result.TeletextText);
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previous;
+        }
+    }
+
+    [Fact]
+    public void Format_AudioDiscRipping_UsesSpanishUiTextAndGermanSizeFormatting()
+    {
+        var previousUiCulture = CultureInfo.CurrentUICulture;
+        var previousCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-ES");
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+            var result = _formatter.Format(new WorkflowStatusSnapshot
+            {
+                ProjectKind = WorkflowProjectKind.AudioDisc,
+                SourceProgress = new SourceAcquisitionProgress(
+                    SourceAcquisitionKind.Ripping,
+                    CompletedCurrentSource: 8,
+                    TotalCurrentSource: 16,
+                    CompletedProject: 8,
+                    TotalProject: 16,
+                    CurrentDisc: 2,
+                    TotalDiscs: 4,
+                    Percent: 50,
+                    WorkingFormat: "WAV")
+            });
+
+            Assert.Contains("2 de 4 se está extrayendo", result.TeletextText);
+            Assert.DoesNotContain("wird gerippt", result.TeletextText);
+            Assert.Equal("1,2 GB", WorkflowStatusFormatter.FormatFileSize(1288490189L));
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previousUiCulture;
+            CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
 
     [Fact]
     public void Format_AudioDiscRippingAndLiveConversion_CombinesCurrentDiscAndProjectProgress()
@@ -507,9 +570,9 @@ public sealed class WorkflowStatusFormatterTests
             TotalSourceItems = 65,
             TotalChapters = 65,
             ConversionProgress = new ConversionActivityProgress(
-                0,
+                39,
                 65,
-                0,
+                60,
                 Array.Empty<int>(),
                 96,
                 false,
@@ -517,10 +580,10 @@ public sealed class WorkflowStatusFormatterTests
         });
 
         Assert.Equal(
-            "65 Dateien / 65 Kapitel | Neu konvertieren • 0 / 65 AAC 96 kbps",
+            "65 Dateien / 65 Kapitel | Neu konvertieren • 26 / 65 AAC 96 kbps",
             result.TeletextText);
-        Assert.Equal("0 % | bereit", result.ProgressText);
-        Assert.Equal(0, result.ProgressPercent);
+        Assert.Equal("60 % | 39 / 65 vorbereitet", result.ProgressText);
+        Assert.Equal(60, result.ProgressPercent);
     }
 
     [Fact]

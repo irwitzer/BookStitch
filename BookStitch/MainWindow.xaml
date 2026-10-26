@@ -1,139 +1,114 @@
 <Window x:Class="BookStitch.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BookStitch"
-        Icon="/Assets/Icons/BookStitchAppIcon-Simplified-multisize.ico"
+        xmlns:local="clr-namespace:BookStitch"
+        xmlns:controls="clr-namespace:BookStitch.Controls"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:services="clr-namespace:BookStitch.Services"
+        Title="{services:LocalizedText Key=UiBookStitch}"
+        Style="{StaticResource MainWindowStyle}"
+        Icon="/BookStitch;component/Assets/Icons/icon/BookStitch-Icon-OpenBook.ico"
         Height="860"
         Width="1250"
         MinHeight="760"
-        MinWidth="1050"
-        Background="#101418"
-        Foreground="#E8EDF2"
+        MinWidth="1170"
+        Background="{DynamicResource AppBackgroundBrush}"
+        Foreground="{DynamicResource MainTextBrush}"
         FontFamily="Segoe UI"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
         PreviewMouseWheel="MainWindow_PreviewMouseWheel"
-        PreviewMouseDown="MainWindow_PreviewMouseDown">
+        PreviewMouseDown="MainWindow_PreviewMouseDown"
+        PreviewMouseUp="MainWindow_PreviewMouseUp"
+        MouseMove="MainWindow_MouseMove">
 
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
+<BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
+            <Geometry x:Key="TrackFileWarningCircleGeometry">M8,1.5 A6.5,6.5 0 1 1 7.99,1.5</Geometry>
+            <Geometry x:Key="TrackWarningTriangleGeometry">M8,1.4 L15,14.2 H1 Z</Geometry>
+            <Geometry x:Key="TrackWarningBangGeometry">M8,5.2 L8,9.2 M8,11.6 L8,11.7</Geometry>
+            <SolidColorBrush x:Key="TrackChapterWarningIconBrush" Color="#E4B84A"/>
 
-            <Style x:Key="ExportOptionLabelStyle" TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{StaticResource AccentSoftBrush}"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-            </Style>
-
-
-            <Style x:Key="PrimaryRepeatButtonStyle" TargetType="RepeatButton">
-                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Padding" Value="11,4"/>
+            <Style x:Key="ChapterChildCollapseButtonStyle" TargetType="Button" BasedOn="{StaticResource StandardButtonGeometryStyle}">
+                <Setter Property="FocusVisualStyle" Value="{StaticResource BookStitchKeyboardFocusVisualStyle}"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
                 <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FontSize" Value="12"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="SnapsToDevicePixels" Value="True"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinWidth" Value="18"/>
                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Template">
                     <Setter.Value>
-                        <ControlTemplate TargetType="RepeatButton">
-                            <Border x:Name="ButtonBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="9"
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0"
                                     Padding="{TemplateBinding Padding}">
-                                <ContentPresenter x:Name="ContentPresenter"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#0F5F63"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#0F5F63"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource DisabledButtonTextBrush}"/>
-                                    <Setter Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
-                                    <Setter Property="Cursor" Value="Arrow"/>
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
-                                    <Setter TargetName="ContentPresenter" Property="Opacity" Value="0.82"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-
-            <Style x:Key="SpecialTrackColumnHeaderStyle" TargetType="DataGridColumnHeader">
-                <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Cursor" Value="Arrow"/>
-                <Setter Property="HorizontalContentAlignment" Value="Left"/>
-                <Setter Property="VerticalContentAlignment" Value="Center"/>
-                <Setter Property="Padding" Value="6,0,6,0"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="DataGridColumnHeader">
-                            <Border Background="{StaticResource AccentBrush}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}">
-                                <ContentPresenter Margin="{TemplateBinding Padding}"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                                   RecognizesAccessKey="True"/>
                             </Border>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
-            </Style>
-
-            <Style x:Key="TrackIndexColumnHeaderStyle"
-                   TargetType="DataGridColumnHeader"
-                   BasedOn="{StaticResource SpecialTrackColumnHeaderStyle}">
-                <Setter Property="ToolTip" Value="Index: Zeigt die aktuelle Zusammenfüge-Reihenfolge. In dieser Reihenfolge werden die Tracks am Ende gemerged."/>
-            </Style>
-
-            <Style x:Key="ChapterPreviewColumnHeaderStyle"
-                   TargetType="DataGridColumnHeader"
-                   BasedOn="{StaticResource SpecialTrackColumnHeaderStyle}">
-                <Setter Property="ToolTip" Value="Generiert fortlaufende Kapitelvorschläge aus der aktuellen Liste. Sortierung, Reihenfolge und Vollständigkeit bitte über die anderen Spalten prüfen."/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+                    </Trigger>
+                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                        <Setter Property="Foreground" Value="{DynamicResource OnAccentTextBrush}"/>
+                    </DataTrigger>
+                </Style.Triggers>
             </Style>
 
             <Style x:Key="ExportProgressBarStyle" TargetType="ProgressBar">
                 <Setter Property="Height" Value="14"/>
-                <Setter Property="Background" Value="#11161B"/>
-                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource InputBorderBrush}"/>
+                <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
             </Style>
 
             <Style x:Key="DiscAnalysisProgressBarStyle"
                    TargetType="ProgressBar"
                    BasedOn="{StaticResource ExportProgressBarStyle}">
-                <Setter Property="Height" Value="14"/>
-                <Setter Property="Background" Value="#241416"/>
-                <Setter Property="Foreground" Value="#D35B62"/>
-                <Setter Property="BorderBrush" Value="#A5444A"/>
+                <Setter Property="Height" Value="12"/>
+                <Setter Property="Background" Value="{DynamicResource WarningProgressBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource WarningProgressForegroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource WarningProgressBorderBrush}"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
 
+    <Grid>
+    <DockPanel>
+        <Grid DockPanel.Dock="Top">
+            <controls:LargeResizableWindowHeader x:Name="MainWindowCaption"
+                                                Height="{x:Static controls:LargeResizableWindowHeader.SystemCaptionHeight}"
+                                                Padding="10,0,6,0" ShowMinimize="True" BorderThickness="0"
+                                                CloseRequested="MainWindowCaption_CloseRequested"/>
+            <Button Width="28"
+                    FontSize="16"
+                    Style="{StaticResource DeveloperToolsButtonStyle}"
+                    Command="{x:Static services:DeveloperToolsCommands.OpenDeveloperToolsWindow}"
+                    AutomationProperties.Name="{services:LocalizedText Key=AutomationOpenDeveloperTools}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Left" Margin="304,0,0,0"
+                    shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                    IsTabStop="False"/>
+            <Border Height="0.5" Margin="290,0,8,0" VerticalAlignment="Bottom"
+                    UseLayoutRounding="False" SnapsToDevicePixels="False"
+                    Background="{DynamicResource HeaderBrandSeparatorBrush}" IsHitTestVisible="False"/>
+        </Grid>
     <DockPanel Margin="8">
 
-        <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,8">
+        <StackPanel DockPanel.Dock="Top" Orientation="Vertical" Margin="0,0,0,0">
 
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
@@ -145,71 +120,62 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Image Grid.Column="0"
-                       Source="/Assets/Icons/BookStitchLogo-Round.png"
-                       Width="38"
-                       Height="38"
-                       Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       SnapsToDevicePixels="True"
-                       VerticalAlignment="Center"
-                       Margin="0,0,10,0"
-                       ToolTip="BookStitch"
-                       MouseLeftButtonDown="BookStitchLogo_MouseLeftButtonDown"/>
-
-                <TextBlock Grid.Column="1"
-                           Text="BookStitch"
-                           FontSize="26"
-                           FontWeight="Bold"
-                           Foreground="{StaticResource AccentSoftBrush}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,30,0"/>
+                <!-- Reserve space for the artwork overlay spanning caption and main header. -->
+                <Border Grid.Column="0" Width="282" Height="38" IsHitTestVisible="False"/>
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             VerticalAlignment="Center"
                             Margin="0,0,14,0">
-                    <Button Content="{Binding FolderButtonGlyph}"
-                            Width="44"
-                            Height="34"
-                            Padding="0"
-                            FontSize="17"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                    <Button
+                            Padding="12,3"
+                            Style="{StaticResource PrimaryCompactButtonStyle}"
+                            controls:PrimaryButtonVisualStateBehavior.State="{Binding FolderDiscActionVisualState}"
                             IsEnabled="{Binding CanStartNewProject}"
-                            ToolTip="Hörbuch-Ordner auswählen"
                             Click="SelectFolder_Click"
-                            Margin="0,0,8,0"/>
+                            Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{services:LocalizedText Key=UiOrdner}"
+                                       Style="{StaticResource ButtonContentForegroundTextStyle}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
-                    <Button Content="{Binding DiscButtonGlyph}"
-                            Width="44"
-                            Height="34"
-                            Padding="0"
-                            FontSize="17"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                    <Button
+                            Padding="12,3"
+                            Style="{StaticResource PrimaryCompactButtonStyle}"
+                            controls:PrimaryButtonVisualStateBehavior.State="{Binding FolderDiscActionVisualState}"
                             IsEnabled="{Binding CanStartNewProject}"
-                            ToolTip="MP3-CD / Audio-CD auswählen"
-                            Click="SelectDiscSource_Click"/>
+                            Click="SelectDiscSource_Click">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{services:LocalizedText Key=UiDisk}"
+                                       Style="{StaticResource ButtonContentForegroundTextStyle}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
-                <StackPanel Grid.Column="3"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center"
-                            HorizontalAlignment="Left"
-                            Cursor="Hand"
-                            ToolTip="{Binding SelectedSourceOpenPath}"
-                            MouseLeftButtonUp="OpenSelectedFolder_Click"
-                            Margin="0,0,14,0">
+                <Button x:Name="SelectedSourceTextButton"
+                        Grid.Column="3"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource HiddenTextButtonStyle}"
+                        IsEnabled="{Binding CanOpenSelectedFolder}"
+                        Click="OpenSelectedFolder_Click"
+                        Margin="0,0,14,0">
                     <TextBlock Text="{Binding SelectedSourceDisplayText}"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource AccentSoftBrush}"
                                TextTrimming="CharacterEllipsis"
                                MaxWidth="730"/>
-                </StackPanel>
+                </Button>
 
                 <Button Grid.Column="4"
-                        Content="FFmpeg einrichten..."
+                        Content="{services:LocalizedText Key=UiFFmpegEinrichten}"
                         MinWidth="145"
-                        Height="32"
                         Style="{StaticResource PrimaryButtonStyle}"
                         IsEnabled="{Binding CanConfigureFfmpeg}"
                         Visibility="{Binding FfmpegSetupButtonVisibility}"
@@ -220,394 +186,317 @@
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center">
-                    <Border Margin="0,0,10,0"
-                            Padding="10,5"
+                    <Border x:Name="MetadataActionHost"
+                            Margin="0,0,8,0"
                             VerticalAlignment="Center"
-                            Background="#111A20"
-                            BorderBrush="{StaticResource InputBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="5"
-                            Visibility="{Binding PipelineStateDebugVisibility}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Debug · "
-                                       Foreground="{StaticResource MutedTextBrush}"/>
-                            <TextBlock Text="{Binding PipelineStateDebugText}"
-                                       Foreground="{StaticResource AccentSoftBrush}"
-                                       FontWeight="SemiBold"/>
-                        </StackPanel>
+                            Background="Transparent">
+                        <Button Content="{services:LocalizedText Key=UiMetadaten}"
+                                Padding="12,3"
+                                Style="{StaticResource PrimaryCompactButtonStyle}"
+                                controls:PrimaryButtonVisualStateBehavior.State="{Binding MetadataActionVisualState}"
+                                IsEnabled="{Binding CanChangeBookMetadata}"
+                                Click="OpenMetadataDialog_Click"
+                                AutomationProperties.Name="{services:LocalizedText Key=AutomationOpenMetadata}"/>
                     </Border>
-
-                    <Button Content="Ausgabeordner öffnen"
-                            MinWidth="150"
-                            Height="34"
-                            Padding="12,0"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            IsEnabled="{Binding CanOpenOutputFolder}"
-                            ToolTip="Ausgabeordner im Explorer öffnen"
-                            Click="OpenOutputFolder_Click"
-                            Margin="0,0,8,0"/>
-
-                    <Button Content="Projekte"
-                            MinWidth="92"
-                            Height="34"
-                            Padding="12,0"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                    <Button x:Name="ProjectsButton" VerticalAlignment="Center"
+                            Content="{services:LocalizedText Key=UiProjekte}"
+                            Padding="12,3"
+                            Style="{StaticResource PrimaryCompactButtonStyle}"
+                            controls:PrimaryButtonVisualStateBehavior.State="{Binding ProjectsActionVisualState}"
                             IsEnabled="{Binding CanRefreshResumeProjects}"
-                            ToolTip="Vollständige Projekte öffnen"
                             Click="OpenResumeProjects_Click"
                             Margin="0,0,8,0"/>
 
+
+
                     <Button Width="44"
-                            Height="38"
-                            Padding="4"
-                            Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Einstellungen"
+                            FontSize="24"
+                            Style="{StaticResource GlobalSettingsButtonStyle}"
+                            services:DeveloperToolsCommands.QuickMenuEnabled="True"
                             Click="Settings_Click"
                             VerticalAlignment="Center"
                             HorizontalAlignment="Right"
                             Margin="4,0,2,0"
-                            IsEnabled="{Binding CanOpenSettings}">
-                        <TextBlock Text="&#xE713;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="24"
-                                   Foreground="{StaticResource AccentSoftBrush}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                    </Button>
+                            IsEnabled="{Binding CanOpenSettings}"/>
                 </StackPanel>
             </Grid>
 
-            <Border Background="{StaticResource PanelBackgroundBrush}"
-                    BorderBrush="{StaticResource PanelBorderBrush}"
+            <Border Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{DynamicResource PanelBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="7"
                     Margin="0,0,0,10"
                     ClipToBounds="True">
-                <StackPanel>
+                <Grid x:Name="MetadataBannerSurface" ClipToBounds="True">
+                    <!-- Canvas keeps the decorative image out of measurement. Width-only scaling
+                         preserves the same top-anchored crop throughout expansion animations. -->
+                    <Canvas IsHitTestVisible="False" Focusable="False" ClipToBounds="True">
+                        <Image Source="{DynamicResource MetadataBannerImageSource}"
+                               Width="{Binding ActualWidth, ElementName=MetadataBannerSurface}"
+                               Stretch="Uniform" Opacity="0.65"/>
+                    </Canvas>
+                    <StackPanel>
                     <Grid Height="44"
                           Margin="12,0"
                           Background="Transparent"
                           Cursor="Hand"
-                          ToolTip="Metadaten ein- oder ausklappen"
                           MouseLeftButtonUp="MetadataHeader_MouseLeftButtonUp">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>                             <ColumnDefinition Width="*"/>                             <ColumnDefinition Width="Auto"/>                             <ColumnDefinition Width="Auto"/>                         </Grid.ColumnDefinitions>  <StackPanel Grid.Column="0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding MetadataSummaryTitle}"
                                        FontSize="15"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource MainTextBrush}"
+                                       Foreground="{DynamicResource MainTextBrush}"
                                        TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding MetadataSummaryDetails}"
+                            <TextBlock Text="{Binding MetadataSummaryDetails}" FontWeight="SemiBold"
                                        Margin="0,2,0,0"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{DynamicResource MutedTextBrush}"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Column="1"
-                                   Width="34"
-                                   Text="{Binding MetadataToggleGlyph}"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="15"
-                                   Foreground="{StaticResource AccentSoftBrush}"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   IsHitTestVisible="False"/>
+                        <Grid Grid.Column="2" Width="34" Height="15" IsHitTestVisible="False"
+                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Path Width="15" Height="15" Stroke="{DynamicResource MainTextBrush}"
+                                  StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Setter Property="Data" Value="M1,4 L7.5,10.5 L14,4"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding MetadataToggleGlyph}"
+                                                         Value="{x:Static services:UiSymbolResources.MetadataPanelExpanded}">
+                                                <Setter Property="Data" Value="M1,10.5 L7.5,4 L14,10.5"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                        </Grid>
                     </Grid>
 
                     <Border x:Name="MetadataDetailsBorder"
                             Height="0"
                             Opacity="0"
-                            BorderBrush="{StaticResource PanelBorderBrush}"
+                            BorderBrush="{DynamicResource PanelBorderBrush}"
                             BorderThickness="0,1,0,0"
-                            Padding="12,12,12,10">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="240"/>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="240"/>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="240"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                            Padding="12,10,12,12">
+                        <StackPanel x:Name="MetadataDetailsContent" Grid.IsSharedSizeScope="True" IsEnabled="{Binding CanChangeExportOptions}">
+                            <controls:MainOutputSettingsControl x:Name="MainOutputSettingsView"
+                                OutputFolder="{Binding OutputFolder}" OpenFolderRequested="OutputFolderStateChip_Click"
+                                ChangeFolderRequested="ChooseOutputFolderButton_Click"/>
+                            <Border Height="1" Margin="0,9,0,9" Background="{DynamicResource PanelBorderBrush}" Opacity="0.45"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataControlLead"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="0"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataLabelLead"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="MainChapterHeadingTextBlock" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MainTextBrush}" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                                    <TextBlock x:Name="MainChapterModeLabelTextBlock" FontWeight="SemiBold" Grid.Column="1" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"/>
+                                </Grid>
+                                <ComboBox x:Name="MainChapterModeComboBox"
+                                          Grid.Column="1"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                <Grid x:Name="MainChapterNumberingStylePanel"
+                                      Grid.Column="3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="MainChapterSeparatorWidth"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="MainChapterNumberingStyleLabelTextBlock" FontWeight="SemiBold"
+                                               Margin="18,0,0,0"
+                                               Foreground="{DynamicResource MutedTextBrush}"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="MainChapterNumberingStyleComboBox"
+                                              Grid.Column="1" Width="160" Margin="8,0,0,0"
+                                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                              SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                </Grid>
+                            </Grid>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Titel" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                            <TextBox Grid.Row="0" Grid.Column="1"
-                                     Text="{Binding BookTitle, UpdateSourceTrigger=PropertyChanged}"
-                                     IsEnabled="{Binding CanChangeBookMetadata}"
-                                     Margin="0,0,16,8"/>
-
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Autor" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                            <TextBox Grid.Row="0" Grid.Column="3"
-                                     Text="{Binding Author, UpdateSourceTrigger=PropertyChanged}"
-                                     IsEnabled="{Binding CanChangeBookMetadata}"
-                                     Margin="0,0,16,8"/>
-
-                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Sprecher" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                            <TextBox Grid.Row="0" Grid.Column="5"
-                                     Text="{Binding Narrator, UpdateSourceTrigger=PropertyChanged}"
-                                     IsEnabled="{Binding CanChangeBookMetadata}"
-                                     Margin="0,0,0,8"/>
-
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="0"
-                                       Text="Album"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,8,0"
-                                       Cursor="Hand"
-                                       ToolTip="{Binding AlbumLinkToggleToolTip}"
-                                       MouseLeftButtonUp="AlbumLabel_MouseLeftButtonUp"/>
-                            <TextBox x:Name="AlbumTextBox"
-                                     Grid.Row="1" Grid.Column="1"
-                                     Text="{Binding Album, UpdateSourceTrigger=PropertyChanged}"
-                                     IsEnabled="{Binding CanChangeBookMetadata}"
-                                     IsTabStop="{Binding IsAlbumTabStop}"
-                                     Margin="0,0,16,0"/>
-
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Genre" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <ComboBox x:Name="GenreComboBox"
-                                      Grid.Row="1" Grid.Column="3"
-                                      Style="{StaticResource DarkComboBoxStyle}"
-                                      PreviewKeyDown="GenreComboBox_PreviewKeyDown"
-                                      SelectionChanged="GenreComboBox_SelectionChanged"
-                                      Text="{Binding Genre, UpdateSourceTrigger=PropertyChanged}"
-                                      IsEditable="True"
-                                      IsEnabled="{Binding CanChangeBookMetadata}"
-                                      Margin="0,0,16,0">
-                                <ComboBoxItem Content="──── Bibliothek-Tags ────"/>
-                                <ComboBoxItem Content="Audiobook"/>
-                                <ComboBoxItem Content="Hörbuch"/>
-                                <ComboBoxItem Content="Spoken Word"/>
-                                <ComboBoxItem Content="iBook"/>
-                                <ComboBoxItem Content="Hörspiel"/>
-                                <ComboBoxItem Content="Lesung"/>
-                                <ComboBoxItem Content="Vortrag"/>
-                                <ComboBoxItem Content="Podcast"/>
-                                <ComboBoxItem Content="──── Genres ────"/>
-                                <ComboBoxItem Content="Thriller"/>
-                                <ComboBoxItem Content="Krimi"/>
-                                <ComboBoxItem Content="Fantasy"/>
-                                <ComboBoxItem Content="Science-Fiction"/>
-                                <ComboBoxItem Content="Historischer Roman"/>
-                                <ComboBoxItem Content="Liebesroman"/>
-                                <ComboBoxItem Content="Belletristik"/>
-                                <ComboBoxItem Content="Biografie &amp; Memoiren"/>
-                                <ComboBoxItem Content="Kinderhörbuch"/>
-                                <ComboBoxItem Content="Jugendbuch"/>
-                                <ComboBoxItem Content="Sachbuch"/>
-                                <ComboBoxItem Content="Ratgeber"/>
-                                <ComboBoxItem Content="Geschichte"/>
-                                <ComboBoxItem Content="Humor"/>
-                                <ComboBoxItem Content="Horror"/>
-                                <ComboBoxItem Content="True Crime"/>
-                                <ComboBoxItem Content="Klassiker"/>
-                                <ComboBoxItem Content="Abenteuer"/>
-                                <ComboBoxItem Content="Wirtschaft &amp; Karriere"/>
-                                <ComboBoxItem Content="Religion &amp; Spiritualität"/>
-                                <ComboBoxItem Content="Philosophie"/>
-                                <ComboBoxItem Content="Psychologie"/>
-                                <ComboBoxItem Content="Politik &amp; Gesellschaft"/>
-                                <ComboBoxItem Content="Wissenschaft"/>
-                                <ComboBoxItem Content="Medizin &amp; Gesundheit"/>
-                                <ComboBoxItem Content="Persönlichkeitsentwicklung"/>
-                                <ComboBoxItem Content="Familie &amp; Beziehungen"/>
-                                <ComboBoxItem Content="Reise &amp; Abenteuer"/>
-                                <ComboBoxItem Content="Märchen &amp; Sagen"/>
-                                <ComboBoxItem Content="Lyrik"/>
-                                <ComboBoxItem Content="Drama"/>
-                                <ComboBoxItem Content="Erotik"/>
-                            </ComboBox>
-
-                        </Grid>
+                            <Grid x:Name="MainChapterCustomRulePanel" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataControlLead"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="MainChapterSeparatorWidth"/>
+                                    <ColumnDefinition Width="168"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="MainChapterSeparatorWidth"/>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataLabelLead"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="MainChapterCustomHeadingTextBlock" FontWeight="SemiBold" Grid.Column="1"
+                                               Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"/>
+                                </Grid>
+                                <ComboBox x:Name="MainChapterSlot1ComboBox" Grid.Column="1"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                <ComboBox x:Name="MainChapterSeparator1ComboBox" Grid.Column="2" Margin="8,0,0,0"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                <ComboBox x:Name="MainChapterSlot2ComboBox" Grid.Column="3" Margin="8,0,0,0"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                <ComboBox x:Name="MainChapterSeparator2ComboBox" Grid.Column="4" Margin="8,0,0,0"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                                <ComboBox x:Name="MainChapterSlot3ComboBox" Grid.Column="5" Margin="8,0,0,0"
+                                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                          SelectionChanged="MainChapterSettingsComboBox_Changed"/>
+                            </Grid>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
+                </Grid>
             </Border>
 
-            <Grid Margin="0,-4,0,6">
+            <Grid Height="212" Margin="0,2,0,7">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="200"/>
+                    <ColumnDefinition Width="220"/>
                 </Grid.ColumnDefinitions>
 
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="1" Grid.Column="0"
                            Text="{Binding StatusText}"
-                           Margin="8,6,0,4"
+                           Margin="8,10,0,5"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            TextTrimming="CharacterEllipsis"
                            Visibility="{Binding StandardProgressVisibility}"/>
 
                 <Grid Grid.Row="0" Grid.Column="0" Margin="8,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="190"/>
-                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="104"/>
-                        <ColumnDefinition Width="18"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="220"/>
-                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="88"/>
+                        <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="5"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="36"/>
+                        <ColumnDefinition Width="6"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Column="0"
-                               Text="Export-Preset:"
-                               VerticalAlignment="Center"
-                               Style="{StaticResource ExportOptionLabelStyle}"
-                               Margin="0,0,6,0"
-                               Cursor="Hand"
-                               ToolTip="Projektordner öffnen"
-                               MouseLeftButtonUp="OpenWorkFolder_Click"/>
+                    <Button Grid.Column="0"
+                            Content="{services:LocalizedText Key=UiExportPreset2}"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource HiddenTextButtonStyle}"
+                            Margin="0,0,6,0"
+                            ToolTip="{services:LocalizedToolTip Key=MainWindow_ExportPreset_OpenProjectFolder}"
+                            Click="OpenWorkFolder_Click"/>
 
                     <ComboBox x:Name="ExportPresetComboBox"
                               Grid.Column="1"
-                              Style="{StaticResource DarkComboBoxStyle}"
+                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
                               ItemsSource="{Binding ExportPresets}"
                               SelectedItem="{Binding SelectedExportPreset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                               SelectionChanged="ExportPresetComboBox_SelectionChanged"
                               IsEnabled="{Binding CanChangeExportPreset}"
                               IsEditable="False"/>
 
-                    <TextBlock Grid.Column="3"
-                               Text="Parallel:"
-                               VerticalAlignment="Center"
-                               Style="{StaticResource ExportOptionLabelStyle}"
-                               Margin="0,0,6,0"
-                               Cursor="Hand"
-                               ToolTip="Windows-Task-Manager öffnen"
-                               MouseLeftButtonUp="OpenTaskManager_Click"/>
+                    <Button Grid.Column="3"
+                            Content="{services:LocalizedText Key=UiParallel}"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource HiddenTextButtonStyle}"
+                            Margin="0,0,6,0"
+                            ToolTip="{services:LocalizedToolTip Key=MainWindow_Parallel_OpenTaskManager}"
+                            Click="OpenTaskManager_Click"/>
 
                     <Grid Grid.Column="4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="50"/>
                             <ColumnDefinition Width="2"/>
-                            <ColumnDefinition Width="22"/>
+                            <ColumnDefinition Width="17"/>
                             <ColumnDefinition Width="2"/>
-                            <ColumnDefinition Width="22"/>
+                            <ColumnDefinition Width="17"/>
                         </Grid.ColumnDefinitions>
 
                         <TextBox x:Name="ParallelJobsTextBox"
                                  Grid.Column="0"
+                                 Style="{StaticResource AppearanceCompactTextBoxStyle}"
                                  Text="{Binding ParallelJobsInput, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                  IsEnabled="{Binding CanChangeExportOptions}"
                                  HorizontalContentAlignment="Center"
                                  VerticalContentAlignment="Center"
                                  Padding="4,0"
-                                 Background="#11161B"
-                                 ToolTip="Auto = logische Prozessoren + 4, maximal 32. Manuell: Zahl von 1 bis 40"
                                  LostFocus="ParallelJobsInput_LostFocus"
                                  KeyDown="ParallelJobsInput_KeyDown"
                                  PreviewMouseWheel="ParallelJobsInput_PreviewMouseWheel"/>
 
                         <RepeatButton Grid.Column="2"
                                 Content="▲"
-                                Delay="400"
-                                Interval="90"
-                                Height="24"
-                                Padding="0"
-                                Style="{StaticResource PrimaryRepeatButtonStyle}"
+                                Style="{StaticResource StepperRepeatButtonStyle}"
                                 IsEnabled="{Binding CanChangeExportOptions}"
-                                ToolTip="Parallelität erhöhen"
                                 Click="IncreaseParallelJobs_Click"/>
 
                         <RepeatButton Grid.Column="4"
                                 Content="▼"
-                                Delay="400"
-                                Interval="90"
-                                Height="24"
-                                Padding="0"
-                                Style="{StaticResource PrimaryRepeatButtonStyle}"
+                                Style="{StaticResource StepperRepeatButtonStyle}"
                                 IsEnabled="{Binding CanChangeExportOptions}"
-                                ToolTip="Parallelität verringern"
                                 Click="DecreaseParallelJobs_Click"/>
                     </Grid>
 
-                    <TextBlock Grid.Column="6"
-                               Text="Ausgabeordner:"
-                               VerticalAlignment="Center"
-                               Style="{StaticResource ExportOptionLabelStyle}"
-                               Margin="0,0,6,0"
-                               Cursor="Hand"
-                               ToolTip="Ausgabeordner im Explorer öffnen"
-                               MouseLeftButtonUp="OpenOutputFolder_Click"/>
-
-                    <Border Grid.Column="7"
-                            Background="#11161B"
-                            BorderBrush="{StaticResource InputBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="3"
-                            MinHeight="30"
-                            Padding="8,0"
-                            Cursor="Hand"
-                            IsEnabled="{Binding CanChooseOutputFolder}"
-                            ToolTip="Klicken, um Ausgabeordner auszuwählen"
-                            MouseLeftButtonUp="OutputFolderPath_Click">
-                        <TextBlock Text="{Binding OutputFolder, Mode=OneWay}"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{StaticResource MainTextBrush}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding CanChooseOutputFolder}" Value="False">
-                                            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Border>
-
-                    <TextBlock Grid.Column="9"
-                               Text="Auto-Zusammenfügen:"
-                               VerticalAlignment="Center"
-                               Style="{StaticResource ExportOptionLabelStyle}"
-                               Margin="0,0,2,0"
-                               Cursor="Hand"
-                               ToolTip="Das Hörbuch wird nach dem Konvertieren ohne zusätzliche Prüfung zusammengefügt."
-                               MouseLeftButtonUp="AutoMergeLabel_MouseLeftButtonUp"/>
-
-                    <CheckBox Grid.Column="11"
+                    <StackPanel Grid.Column="6" Grid.ColumnSpan="3" Orientation="Horizontal">
+                    <CheckBox
+                              Content="{services:LocalizedText Key=UiAutoMerge}"
+                              Style="{StaticResource SettingsToggleStyle}"
                               IsChecked="{Binding MergeAutomaticallyAfterConversion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              VerticalAlignment="Center"
-                              ToolTip="Das Hörbuch wird nach dem Konvertieren ohne zusätzliche Prüfung zusammengefügt."/>
+                              VerticalAlignment="Center"/>
+                        <CheckBox Content="{services:LocalizedText Key=UiDriveCircle}"
+                                  AutomationProperties.Name="{services:LocalizedText Key=UiDriveCircle}"
+                                  Margin="16,0,0,0" VerticalAlignment="Center"
+                                  Visibility="{Binding DriveCircleVisibility}"
+                                  IsEnabled="{Binding CanOpenSettings}"
+                                  IsChecked="{Binding DriveCircleEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Style="{StaticResource SettingsToggleStyle}"/>
+                    </StackPanel>
+
+
                 </Grid>
 
                 <StackPanel Grid.Row="0" Grid.Column="0"
                             Orientation="Horizontal"
                             Visibility="Collapsed"
                             Margin="8,0,0,0">
-                    <TextBlock Text="{Binding ExportPreviewTrackCount}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
-                    <TextBlock Text="{Binding ExportPreviewTotalDuration}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
-                    <TextBlock Text="{Binding ExportPreviewActionSummary}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
-                    <TextBlock Text="{Binding ExportPreviewChapterSummary}" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,18,0"/>
-                    <TextBlock Text="{Binding ExportPreviewIssueSummary}" Foreground="{StaticResource MutedTextBrush}"/>
+                    <TextBlock Text="{Binding ExportPreviewTrackCount}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewTotalDuration}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewActionSummary}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewChapterSummary}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,18,0"/>
+                    <TextBlock Text="{Binding ExportPreviewIssueSummary}" Foreground="{DynamicResource MutedTextBrush}"/>
                 </StackPanel>
 
                 <Grid Grid.Row="2" Grid.Column="0" Margin="8,0,0,9">
-                    <StackPanel Orientation="Horizontal"
+                    <StackPanel x:Name="StandardProgressPanel" Orientation="Horizontal"
                                 Visibility="{Binding StandardProgressVisibility}">
-                        <ProgressBar Width="220"
+                        <controls:PreviewProgressBar x:Name="MainExportProgress" Width="220"
                                      Style="{StaticResource ExportProgressBarStyle}"
                                      Minimum="0"
                                      Maximum="100"
@@ -618,43 +507,82 @@
                         <TextBlock Text="{Binding ExportProgressText}"
                                    VerticalAlignment="Center"
                                    Margin="12,0,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"/>
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
 
                         <StackPanel Orientation="Horizontal"
                                     Margin="12,0,0,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding TrackWarningSummaryVisibility}">
                             <TextBlock Text="|"
-                                       Foreground="{StaticResource InputBorderBrush}"
+                                       Foreground="{DynamicResource InputBorderBrush}"
                                        Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding TrackFileWarningSummary}"
-                                       Foreground="#E4B84A"
-                                       FontWeight="SemiBold"
-                                       Cursor="Hand"
-                                       ToolTip="Zur nächsten Dateiwarnung springen"
-                                       Visibility="{Binding TrackFileWarningSummaryVisibility}"
-                                       MouseLeftButtonUp="TrackFileWarningSummary_MouseLeftButtonUp"/>
+                            <StackPanel Orientation="Horizontal"
+                                        Cursor="Hand"
+                                        Visibility="{Binding TrackFileWarningSummaryVisibility}"
+                                        MouseLeftButtonUp="TrackFileWarningSummary_MouseLeftButtonUp">
+                                <Viewbox Width="14"
+                                         Height="14"
+                                         Margin="0,0,4,0"
+                                         VerticalAlignment="Center"
+                                         AutomationProperties.Name="{services:LocalizedText Key=AutomationFileWarnings}">
+                                    <Grid Width="16" Height="16">
+                                        <Path Stretch="Uniform"
+                                              Stroke="{DynamicResource QuietDangerTextBrush}"
+                                              StrokeThickness="2"
+                                              Data="{StaticResource TrackFileWarningCircleGeometry}"/>
+                                        <Path Stretch="Uniform"
+                                              Stroke="{DynamicResource QuietDangerTextBrush}"
+                                              StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="{StaticResource TrackWarningBangGeometry}"/>
+                                    </Grid>
+                                </Viewbox>
+                                <TextBlock Text="{Binding TrackFileWarningSummary}"
+                                           Foreground="{DynamicResource QuietDangerTextBrush}"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
                             <TextBlock Text="|"
-                                       Foreground="{StaticResource InputBorderBrush}"
+                                       Foreground="{DynamicResource InputBorderBrush}"
                                        Margin="8,0,8,0"
                                        Visibility="{Binding TrackWarningSummarySeparatorVisibility}"/>
-                            <TextBlock Text="{Binding TrackChapterWarningSummary}"
-                                       Foreground="#E4B84A"
-                                       FontWeight="SemiBold"
-                                       Cursor="Hand"
-                                       ToolTip="Zur nächsten Kapitelwarnung springen"
-                                       Visibility="{Binding TrackChapterWarningSummaryVisibility}"
-                                       MouseLeftButtonUp="TrackChapterWarningSummary_MouseLeftButtonUp"/>
+                            <StackPanel Orientation="Horizontal"
+                                        Cursor="Hand"
+                                        Visibility="{Binding TrackChapterWarningSummaryVisibility}"
+                                        MouseLeftButtonUp="TrackChapterWarningSummary_MouseLeftButtonUp">
+                                <Viewbox Width="14"
+                                         Height="14"
+                                         Margin="0,0,4,0"
+                                         VerticalAlignment="Center"
+                                         AutomationProperties.Name="{services:LocalizedText Key=AutomationChapterWarnings}">
+                                    <Grid Width="16" Height="16">
+                                        <Path Stretch="Uniform"
+                                              Fill="Transparent"
+                                              Stroke="{StaticResource TrackChapterWarningIconBrush}"
+                                              StrokeThickness="1.8"
+                                              Data="{StaticResource TrackWarningTriangleGeometry}"/>
+                                        <Path Stretch="Uniform"
+                                              Stroke="{StaticResource TrackChapterWarningIconBrush}"
+                                              StrokeThickness="1.6"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="{StaticResource TrackWarningBangGeometry}"/>
+                                    </Grid>
+                                </Viewbox>
+                                <TextBlock Text="{Binding TrackChapterWarningSummary}"
+                                           Foreground="{StaticResource TrackChapterWarningIconBrush}"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
 
                     <Border Visibility="{Binding DiscSourceAnalysisVisibility}"
                             HorizontalAlignment="Left"
-                            Background="#1D1416"
-                            BorderBrush="#71383C"
+                            Background="{DynamicResource WarningProgressBackgroundBrush}"
+                            BorderBrush="{DynamicResource WarningProgressBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="6"
-                            Padding="8,4">
+                            Padding="7,3">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -663,18 +591,18 @@
 
                             <TextBlock Grid.Column="0"
                                        Text="💿"
-                                       FontSize="23"
+                                       FontSize="20"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,10,0"/>
+                                       Margin="0,0,8,0"/>
 
                             <StackPanel Grid.Column="1">
-                                <TextBlock Width="470"
+                                <TextBlock Width="430"
                                            Text="{Binding DiscSourceAnalysisText}"
                                            TextAlignment="Center"
                                            FontWeight="SemiBold"
-                                           Foreground="#F1C8CB"
-                                           Margin="0,0,0,3"/>
-                                <ProgressBar Width="470"
+                                           Foreground="{DynamicResource WarningProgressTextBrush}"
+                                           Margin="0,0,0,2"/>
+                                <ProgressBar Width="430"
                                              Style="{StaticResource DiscAnalysisProgressBarStyle}"
                                              Minimum="0"
                                              Maximum="100"
@@ -684,170 +612,137 @@
                     </Border>
                 </Grid>
 
-                <StackPanel Grid.Row="4" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,0">
-                    <Button Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Auswahl nach oben"
-                            IsEnabled="{Binding CanEditTrackOrder}"
-                            Click="MoveSelectedUp_Click"
-                            Margin="0,0,4,0">
-                        <Grid Width="44" Height="44">
-                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
-                            <Path Data="M 22 31 L 22 13 M 14 21 L 22 13 L 30 21"
-                                  Stroke="{StaticResource AccentSoftBrush}"
-                                  StrokeThickness="3.2"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"/>
-                        </Grid>
-                    </Button>
-
-                    <Button Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Auswahl nach unten"
-                            IsEnabled="{Binding CanEditTrackOrder}"
-                            Click="MoveSelectedDown_Click"
-                            Margin="0,0,12,0">
-                        <Grid Width="44" Height="44">
-                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
-                            <Path Data="M 22 13 L 22 31 M 14 23 L 22 31 L 30 23"
-                                  Stroke="{StaticResource AccentSoftBrush}"
-                                  StrokeThickness="3.2"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"/>
-                        </Grid>
-                    </Button>
-
-                    <Button Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Auswahl ganz nach oben"
-                            IsEnabled="{Binding CanEditTrackOrder}"
-                            Click="MoveSelectedToTop_Click"
-                            Margin="0,0,4,0">
-                        <Grid Width="44" Height="44">
-                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
-                            <Path Data="M 14 12 L 30 12 M 22 32 L 22 17 M 14 25 L 22 17 L 30 25"
-                                  Stroke="{StaticResource AccentSoftBrush}"
-                                  StrokeThickness="3.2"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"/>
-                        </Grid>
-                    </Button>
-
-                    <Button Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Auswahl ganz nach unten"
-                            IsEnabled="{Binding CanEditTrackOrder}"
-                            Click="MoveSelectedToBottom_Click"
-                            Margin="0,0,16,0">
-                        <Grid Width="44" Height="44">
-                            <Ellipse Fill="#101418" Stroke="{StaticResource AccentBrush}" StrokeThickness="1.5"/>
-                            <Path Data="M 14 32 L 30 32 M 22 12 L 22 27 M 14 19 L 22 27 L 30 19"
-                                  Stroke="{StaticResource AccentSoftBrush}"
-                                  StrokeThickness="3.2"
-                                  StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round"/>
-                        </Grid>
-                    </Button>
-
+                <Grid x:Name="ProjectActionBar" Grid.Row="4" Grid.Column="0" Margin="8,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="{Binding ActualWidth, ElementName=ProjectActionButtons}"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="ProjectActionButtons" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Bottom">
                     <Button Content="{Binding ExportButtonText}"
+                            AutomationProperties.Name="{Binding ExportButtonText}"
                             MinWidth="120"
-                            Height="32"
                             VerticalAlignment="Center"
                             Style="{StaticResource PrimaryButtonStyle}"
                             IsEnabled="{Binding CanStartExport}"
+                            Visibility="{Binding ExportButtonVisibility}"
                             Click="Export_Click"
                             Margin="0,0,8,0"/>
 
                     <Button Content="{Binding AddProjectSourcesButtonText}"
                             MinWidth="170"
-                            Height="32"
                             VerticalAlignment="Center"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{Binding CanAddProjectSources}"
                             Visibility="{Binding AddProjectSourcesVisibility}"
                             Click="AddProjectSources_Click"
                             Margin="0,0,8,0"/>
 
+                    <Button Content="{Binding StopAndSaveDiscProjectButtonText}"
+                            AutomationProperties.Name="{Binding StopAndSaveDiscProjectButtonText}"
+                            MinWidth="150"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{Binding CanStopAndSaveDiscProject}"
+                            Visibility="{Binding StopAndSaveDiscProjectVisibility}"
+                            Click="StopAndSaveDiscProject_Click"
+                            Margin="0,0,8,0"/>
+
+                    <Button Content="{Binding DeleteNewProjectButtonText}"
+                            AutomationProperties.Name="{Binding DeleteNewProjectButtonText}"
+                            IsEnabled="{Binding CanDeletePausedNewProject}"
+                            Visibility="{Binding DeleteNewProjectVisibility}"
+                            Style="{StaticResource DangerButtonStyle}"
+                            MinWidth="100" Margin="8,0,0,0"
+                            Click="DeleteNewProject_Click"/>
+
                     <Grid>
                         <Button Content="{Binding SecondaryButtonText}"
-                                MinWidth="100"
-                                Height="32"
-                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding SecondaryButtonText}"
+                                MinWidth="100" VerticalAlignment="Center"
                                 IsEnabled="{Binding CanCancelExport}"
-                                Click="CancelExport_Click">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SecondaryButtonText}" Value="Projekt abbrechen">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Visibility="{Binding SecondaryButtonVisibility}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="CancelExport_Click"/>
 
-                        <Button Content="Projekt abbrechen"
-                                MinWidth="100"
-                                Height="32"
-                                VerticalAlignment="Center"
-                                IsEnabled="{Binding CanCancelExport}"
-                                Click="CancelExport_Click">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource DangerButtonStyle}">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SecondaryButtonText}" Value="Projekt abbrechen">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
                     </Grid>
 
-                </StackPanel>
+                    </StackPanel>
+                    <StackPanel x:Name="TrackOrderButtons" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedUp_Click"
+                            Margin="0,0,2,0">
+                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/01_Nach_oben.png"
+                               Width="34.125" Height="34.125" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                    </Button>
+
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedDown_Click"
+                            Margin="0,0,2,0">
+                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/02_Nach_unten.png"
+                               Width="34.125" Height="34.125" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                    </Button>
+
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedToTop_Click"
+                            Margin="0,0,2,0">
+                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/03_Ganz_nach_oben.png"
+                               Width="34.125" Height="34.125" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                    </Button>
+
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                            IsEnabled="{Binding CanEditTrackOrder}"
+                            Click="MoveSelectedToBottom_Click"
+                            Margin="0,0,16,0">
+                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/04_Ganz_nach_unten.png"
+                               Width="34.125" Height="34.125" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                    </Button>
+
+                    </StackPanel>
+                    <Button x:Name="ActionBarOpenOutputFolderButton" Grid.Column="2"
+                            Width="36" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Style="{StaticResource AccentOpenOutputFolderButtonStyle}"
+                            IsEnabled="{Binding CanOpenOutputFolder}"
+                            AutomationProperties.Name="{services:LocalizedText Key=MainWindow.Export.OpenFolder}"
+                            Click="OutputFolderStateChip_Click"/>
+                </Grid>
 
                 <Border Grid.Row="0"
                         Grid.RowSpan="5"
                         Grid.Column="1"
-                        Width="190"
-                        Height="190"
+                        Width="212"
+                        Height="212"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
-                        Margin="0,0,8,0"
-                        Background="#11161B"
-                        BorderBrush="{StaticResource AccentBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
+                        Margin="0"
+                        Style="{StaticResource CoverPickerBorderStyle}"
                         AllowDrop="True"
-                        Cursor="Hand"
-                        ToolTip="Cover auswählen oder Bild hier ablegen"
                         MouseLeftButtonUp="Cover_MouseLeftButtonUp"
-                        ContextMenuOpening="Cover_ContextMenuOpening"
                         DragOver="Cover_DragOver"
                         Drop="Cover_Drop">
                     <Border.ContextMenu>
-                        <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}">
-                            <MenuItem Header="Cover entfernen"
+                        <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}"
+                                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="{services:LocalizedText Key=UiCoverEntfernen}"
                                       Style="{StaticResource BookStitchContextMenuItemStyle}"
+                                      IsEnabled="{Binding CanRemoveCover}"
                                       Click="RemoveCover_Click"/>
                         </ContextMenu>
                     </Border.ContextMenu>
                     <Grid ClipToBounds="True">
                         <Image Source="{Binding CoverPreviewSource}"
-                               Stretch="UniformToFill"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               SnapsToDevicePixels="True"
-                               Opacity="0.95"/>
+                               Style="{StaticResource CoverPickerImageStyle}"/>
 
-                        <Border Background="#99000000"
-                                VerticalAlignment="Bottom"
-                                Padding="4,3"
+                        <Border Style="{StaticResource CoverPickerHintBorderStyle}"
                                 Visibility="{Binding CoverHintVisibility}">
-                            <TextBlock Text="Cover wählen"
-                                       Foreground="{StaticResource AccentSoftBrush}"
-                                       FontSize="11"
-                                       HorizontalAlignment="Center"/>
+                            <ContentControl Style="{StaticResource CoverPickerHintContentStyle}"/>
                         </Border>
                     </Grid>
                 </Border>
@@ -863,19 +758,108 @@
                   CanUserResizeColumns="True"
                   SelectionMode="Extended"
                   SelectionUnit="FullRow"
+                  SelectionChanged="TracksGrid_SelectionChanged"
                   PreviewKeyDown="TracksGrid_PreviewKeyDown"
                   KeyDown="TracksGrid_KeyDown"
+                  LostMouseCapture="TracksGrid_LostMouseCapture"
                   PreviewMouseRightButtonDown="TracksGrid_PreviewMouseRightButtonDown"
                   ContextMenuOpening="TracksGrid_ContextMenuOpening"
                   ColumnReordered="TracksGrid_ColumnReordered"
+                  LayoutUpdated="TracksGrid_LayoutUpdated"
                   HeadersVisibility="Column"
                   AlternationCount="2"
+                  RowHeight="{Binding TrackGridRowHeight}"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.CanContentScroll="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  VirtualizingPanel.ScrollUnit="Pixel"
                   ScrollViewer.VerticalScrollBarVisibility="Auto">
+
 
             <DataGrid.Style>
                 <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
                     <Setter Property="Opacity" Value="1"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type DataGrid}">
+                                <Border Padding="{TemplateBinding Padding}"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer x:Name="DG_ScrollViewer"
+                                                  Focusable="False">
+                                        <ScrollViewer.Template>
+                                            <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <DataGridColumnHeadersPresenter x:Name="PART_ColumnHeadersPresenter"
+                                                                                  Grid.Row="0"
+                                                                                  Grid.Column="1"/>
+
+                                                    <Border x:Name="TracksGridHeaderScrollBarFiller"
+                                                            Grid.Row="0"
+                                                            Grid.Column="2"
+                                                            Background="{DynamicResource PanelBackgroundBrush}"
+                                                            BorderBrush="{DynamicResource GridLineBrush}"
+                                                            BorderThickness="0,0,0,1"/>
+
+                                                    <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                                            Grid.Row="1"
+                                                                            Grid.Column="0"
+                                                                            Grid.ColumnSpan="2"
+                                                                            CanContentScroll="{TemplateBinding CanContentScroll}"/>
+
+                                                    <ScrollBar x:Name="PART_VerticalScrollBar"
+                                                               Grid.Row="1"
+                                                               Grid.Column="2"
+                                                               Maximum="{TemplateBinding ScrollableHeight}"
+                                                               Orientation="Vertical"
+                                                               ViewportSize="{TemplateBinding ViewportHeight}"
+                                                               Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                                               Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+
+                                                    <Grid Grid.Row="2" Grid.Column="1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="{Binding NonFrozenColumnsViewportHorizontalOffset, RelativeSource={RelativeSource AncestorType={x:Type DataGrid}}}"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                                                   Grid.Column="1"
+                                                                   Maximum="{TemplateBinding ScrollableWidth}"
+                                                                   Orientation="Horizontal"
+                                                                   ViewportSize="{TemplateBinding ViewportWidth}"
+                                                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                                                                   Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                                    </Grid>
+
+                                                    <Border x:Name="TracksGridScrollBarCorner"
+                                                            Grid.Row="2"
+                                                            Grid.Column="2"
+                                                            Background="{DynamicResource ScrollBarTrackBrush}"
+                                                            Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </ScrollViewer.Template>
+                                        <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding CanEditTrackOrder}" Value="False">
                             <Setter Property="Opacity" Value="0.62"/>
@@ -884,21 +868,27 @@
                 </Style>
             </DataGrid.Style>
 
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                    <Setter Property="Padding" Value="4,0"/>
+                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                </Style>
+            </DataGrid.CellStyle>
+
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <Setter Property="DetailsVisibility" Value="{Binding IsChapterDetailsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsExcluded}" Value="True">
                             <Setter Property="Opacity" Value="0.45"/>
-                            <Setter Property="Foreground" Value="#8A939B"/>
-                            <Setter Property="ToolTip" Value="Dieser Track ist ausgeschlossen und wird nicht exportiert."/>
+                            <Setter Property="Foreground" Value="{DynamicResource DisabledButtonTextBrush}"/>
                         </DataTrigger>
 
                         <DataTrigger Binding="{Binding HasBlockingFileWarning}" Value="True">
-                            <Setter Property="Background" Value="#3A2024"/>
-                            <Setter Property="Foreground" Value="#F5E8E9"/>
-                            <Setter Property="BorderBrush" Value="#86454B"/>
+                            <Setter Property="Background" Value="{DynamicResource BlockingWarningRowBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource BlockingWarningRowForegroundBrush}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource BlockingWarningRowBorderBrush}"/>
                             <Setter Property="BorderThickness" Value="1,0,1,1"/>
-                            <Setter Property="ToolTip" Value="Diese Datei enthält keine gültige Audiospur und blockiert den Export."/>
                         </DataTrigger>
 
                         <MultiDataTrigger>
@@ -906,7 +896,7 @@
                                 <Condition Binding="{Binding HasBlockingFileWarning}" Value="True"/>
                                 <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
                             </MultiDataTrigger.Conditions>
-                            <Setter Property="Background" Value="#4A272C"/>
+                            <Setter Property="Background" Value="{DynamicResource BlockingWarningRowHoverBackgroundBrush}"/>
                         </MultiDataTrigger>
 
                         <MultiDataTrigger>
@@ -914,52 +904,286 @@
                                 <Condition Binding="{Binding HasBlockingFileWarning}" Value="True"/>
                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True"/>
                             </MultiDataTrigger.Conditions>
-                            <Setter Property="Background" Value="#67343A"/>
-                            <Setter Property="Foreground" Value="White"/>
-                            <Setter Property="BorderBrush" Value="#D35B62"/>
+                            <Setter Property="Background" Value="{DynamicResource BlockingWarningRowSelectedBackgroundBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource BlockingWarningRowSelectedForegroundBrush}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource BlockingWarningRowSelectedBorderBrush}"/>
                         </MultiDataTrigger>
                     </Style.Triggers>
                 </Style>
             </DataGrid.RowStyle>
 
+            <DataGrid.RowDetailsTemplate>
+                <DataTemplate>
+                    <ItemsControl ItemsSource="{Binding EmbeddedChapterRows}"
+                                  Margin="0"
+                                  Focusable="False"
+                                  ContextMenu="{x:Null}"
+                                  ContextMenuOpening="EmbeddedChapterDetails_ContextMenuOpening"
+                                  AutomationProperties.Name="{services:LocalizedText Key=AutomationEmbeddedChapters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid MinHeight="20"
+                                      Tag="{Binding}"
+                                      PreviewMouseLeftButtonDown="EmbeddedChapterRow_PreviewMouseLeftButtonDown"
+                                      MouseLeftButtonUp="EmbeddedChapterRow_MouseLeftButtonUp"
+                                      PreviewKeyDown="EmbeddedChapterRow_PreviewKeyDown"
+                                      Loaded="EmbeddedChapterRow_Loaded"
+                                      Unloaded="EmbeddedChapterRow_Unloaded"
+                                      ClipToBounds="True"
+                                      Focusable="True">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
+                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource TertiaryTextBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource SelectionBrush}"/>
+                                                    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentTextBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <Border local:TrackGridChildColumn.SpansAllColumns="True"
+                                            BorderBrush="{DynamicResource GridLineBrush}"
+                                            BorderThickness="0,0,0,1"/>
+                                    <Button local:TrackGridChildColumn.Key="StatusIndicator"
+                                            Content="↳"
+                                            AutomationProperties.Name="{Binding SourceTrack.DisplayChapterDetailsAutomationName}"
+                                            Tag="{Binding SourceTrack}"
+                                            Click="EmbeddedChapterCollapse_Click"
+                                            Focusable="False"
+                                            Style="{StaticResource ChapterChildCollapseButtonStyle}"/>
+                                    <TextBlock local:TrackGridChildColumn.Key="FileName"
+                                               Style="{StaticResource AccentSelectionTertiaryTextStyle}"
+                                               Text="{Binding Title}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"
+                                               Margin="4,0"/>
+                                    <TextBlock local:TrackGridChildColumn.Key="Start"
+                                               Style="{StaticResource AccentSelectionTertiaryTextStyle}"
+                                               Text="{Binding TimelineStart}"
+                                               VerticalAlignment="Center"
+                                               Margin="4,0"/>
+                                    <TextBlock local:TrackGridChildColumn.Key="ChapterProposal"
+                                               Style="{StaticResource AccentSelectionTertiaryTextStyle}"
+                                               Text="{Binding ChapterProposal}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"
+                                               Margin="4,0"/>
+                                    <TextBlock local:TrackGridChildColumn.Key="Duration"
+                                               Style="{StaticResource AccentSelectionTertiaryTextStyle}"
+                                               Text="{Binding Duration}"
+                                               VerticalAlignment="Center"
+                                               Margin="4,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DataTemplate>
+            </DataGrid.RowDetailsTemplate>
+
             <DataGrid.ContextMenu>
                 <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}">
-                    <MenuItem Header="Ausgewählte Tracks ausschließen"
+                    <MenuItem Header="{services:LocalizedText Key=UiAusgewaehlteTracksAusschliessen}"
                               Style="{StaticResource BookStitchContextMenuItemStyle}"
                               Click="RemoveSelectedTracks_Click"/>
-                    <MenuItem Header="Ausgewählte Tracks wiederherstellen"
+                    <MenuItem Header="{services:LocalizedText Key=UiAusgewaehlteTracksWiederherstellen}"
                               Style="{StaticResource BookStitchContextMenuItemStyle}"
                               Click="RestoreSelectedTracks_Click"/>
                 </ContextMenu>
             </DataGrid.ContextMenu>
 
             <DataGrid.Columns>
-                <DataGridTextColumn Header="#"
-                                    Binding="{Binding DisplayIndex}"
-                                    Width="Auto"
-                                    CanUserSort="False"
-                                    HeaderStyle="{StaticResource TrackIndexColumnHeaderStyle}"/>
-                <DataGridTextColumn Header="Disc" Binding="{Binding DiscNumber}" SortMemberPath="DiscNumber" Width="55"/>
-                <DataGridTextColumn Header="Track" Binding="{Binding TrackNumber}" SortMemberPath="TrackNumber" Width="60"/>
-                <DataGridTextColumn Header="Datei" Binding="{Binding FileName}" SortMemberPath="FileName" Width="200"/>
-                <DataGridTextColumn Header="Ordner" Binding="{Binding RelativeFolder}" SortMemberPath="RelativeFolder" Width="100"/>
-                <DataGridTextColumn Header="Tag-Titel" Binding="{Binding TagTitle}" SortMemberPath="TagTitle" Width="220"/>
-                <DataGridTextColumn Header="Kapitelvorschlag"
-                                    Binding="{Binding ChapterTitle}"
-                                    Width="160"
-                                    CanUserSort="False"
-                                    HeaderStyle="{StaticResource ChapterPreviewColumnHeaderStyle}"/>
-                <DataGridTextColumn Header="Dauer" Binding="{Binding Duration}" SortMemberPath="Duration" Width="75"/>
-                <DataGridTextColumn Header="Bitrate" Binding="{Binding BitrateKbps}" SortMemberPath="BitrateKbps" Width="70"/>
-                <DataGridTextColumn Header="Mono/Stereo" Binding="{Binding ChannelLayout}" SortMemberPath="ChannelLayout" Width="95"/>
-                <DataGridTextColumn Header="Dateiwarnung" Binding="{Binding DisplayFileWarning}" SortMemberPath="FileWarningText" Width="150" MinWidth="150"/>
-                <DataGridTextColumn Header="Kapitelwarnung" Binding="{Binding DisplayChapterWarning}" SortMemberPath="ChapterWarningText" Width="130" MinWidth="130"/>
-                <DataGridTextColumn Header="Typ" Binding="{Binding Extension}" SortMemberPath="Extension" Width="60" Visibility="Collapsed"/>
-                <DataGridTextColumn Header="Codec" Binding="{Binding Codec}" SortMemberPath="Codec" Width="75"/>
-                <DataGridTextColumn Header="Output MB" Binding="{Binding DisplayOutputSizeMb}" SortMemberPath="ConvertedSizeMb" Width="90" MinWidth="90"/>
+                <DataGridTemplateColumn x:Name="TrackGridIndicatorColumn"
+                                        local:TrackGridChildColumn.Key="StatusIndicator"
+                                        Header="{services:LocalizedText Key=UiSymbol}"
+                                        DisplayIndex="1" Width="Auto"
+                                        CanUserSort="False"
+                                        CanUserReorder="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid Width="54"
+                                  Height="22"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="18"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Viewbox Grid.Column="0"
+                                         Width="16"
+                                         Height="16"
+                                         AutomationProperties.Name="{Binding DisplayFileWarning}"
+                                         Visibility="{Binding HasFileWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid Width="16" Height="16">
+                                        <Path Stretch="Uniform"
+                                              Stroke="{DynamicResource QuietDangerTextBrush}"
+                                              StrokeThickness="2"
+                                              Data="{StaticResource TrackFileWarningCircleGeometry}"/>
+                                        <Path Stretch="Uniform"
+                                              Stroke="{DynamicResource QuietDangerTextBrush}"
+                                              StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="{StaticResource TrackWarningBangGeometry}"/>
+                                    </Grid>
+                                </Viewbox>
+
+                                <Viewbox Grid.Column="1"
+                                         Width="16"
+                                         Height="16"
+                                         AutomationProperties.Name="{Binding DisplayChapterWarning}"
+                                         Visibility="{Binding HasChapterWarning, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid Width="16" Height="16">
+                                        <Path Stretch="Uniform"
+                                              Fill="Transparent"
+                                              Stroke="{StaticResource TrackChapterWarningIconBrush}"
+                                              StrokeThickness="1.8"
+                                              Data="{StaticResource TrackWarningTriangleGeometry}"/>
+                                        <Path Stretch="Uniform"
+                                              Stroke="{StaticResource TrackChapterWarningIconBrush}"
+                                              StrokeThickness="1.6"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              Data="{StaticResource TrackWarningBangGeometry}"/>
+                                    </Grid>
+                                </Viewbox>
+
+                                <ToggleButton Grid.Column="2"
+                                              IsChecked="{Binding IsChapterDetailsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              AutomationProperties.Name="{Binding DisplayChapterDetailsAutomationName}"
+                                              Visibility="{Binding HasEmbeddedChapterDetails, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                              Click="ChapterDetailsToggle_Click"
+                                              Style="{StaticResource ChapterDisclosureToggleStyle}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn x:Name="TrackGridAutoColumn"
+                                    Header="{services:LocalizedText Key=UiAuto}"
+                                    Binding="{Binding DisplayAutomaticOrderPosition}"
+                                    SortMemberPath="AutomaticOrderPosition"
+                                    DisplayIndex="0" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridDiscColumn" Header="{services:LocalizedText Key=UiDisc}" Binding="{Binding DiscNumber}" SortMemberPath="DiscNumber" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridTrackColumn" Header="{services:LocalizedText Key=UiTrack}" Binding="{Binding TrackNumber}" SortMemberPath="TrackNumber" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridFileColumn"
+                                    local:TrackGridChildColumn.Key="FileName"
+                                    Header="{services:LocalizedText Key=UiDatei}"
+                                    Binding="{Binding FileName}"
+                                    SortMemberPath="FileName" Width="Auto">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridStartColumn"
+                                    local:TrackGridChildColumn.Key="Start"
+                                    Header="{services:LocalizedText Key=UiStart}"
+                                    Binding="{Binding DisplayChapterStart}" Width="Auto"
+                                    CanUserSort="False"/>
+                <DataGridTemplateColumn x:Name="TrackGridChapterProposalColumn"
+                                        local:TrackGridChildColumn.Key="ChapterProposal"
+                                        Header="{services:LocalizedText Key=UiKapitelvorschlag}" Width="Auto"
+                                        CanUserSort="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Grid VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="22"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Style="{StaticResource DataGridCellInheritedTextStyle}"
+                                           Text="{Binding DisplayChapterProposal}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,4,0"/>
+                                <ToggleButton Grid.Column="1"
+                                              IsChecked="{Binding IsChapterDetailsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              AutomationProperties.Name="{Binding DisplayChapterDetailsAutomationName}"
+                                              Visibility="{Binding HasEmbeddedChapterDetails, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                              Click="ChapterDetailsToggle_Click"
+                                              Style="{StaticResource ChapterDisclosureToggleStyle}"/>
+                                    </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn x:Name="TrackGridTagTitleColumn" Header="{services:LocalizedText Key=UiTagTitel}" Binding="{Binding TagTitle}" SortMemberPath="TagTitle" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridDurationColumn" local:TrackGridChildColumn.Key="Duration" Header="{services:LocalizedText Key=UiDauer}" Binding="{Binding Duration}" SortMemberPath="Duration" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridOriginalBitrateColumn" Header="{services:LocalizedText Key=UiOriginalBitrateCompact}" Binding="{Binding BitrateKbps}" SortMemberPath="BitrateKbps" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalBitrate}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridOriginalSampleRateColumn" Header="{services:LocalizedText Key=UiOriginalSampleRateCompact}" Binding="{Binding DisplayOriginalSampleRateHz}" SortMemberPath="SampleRateHz" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalSampleRate}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridOriginalChannelLayoutColumn" Header="{services:LocalizedText Key=UiOriginalMonoStereo}" Binding="{Binding DisplayOriginalChannelLayout}" SortMemberPath="Channels" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalMonoStereo}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridBitrateColumn" Header="{services:LocalizedText Key=UiBitrate}" Binding="{Binding DisplayPreparedBitrateKbps}" SortMemberPath="DisplayPreparedBitrateKbps" Visibility="Collapsed" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridChannelLayoutColumn" Header="{services:LocalizedText Key=UiMonoStereo}" Binding="{Binding DisplayPreparedChannelLayout}" SortMemberPath="DisplayPreparedChannelLayout" Visibility="Collapsed" Width="Auto"/>
+                <DataGridTemplateColumn Header="{services:LocalizedText Key=UiDateiwarnung}" SortMemberPath="FileWarningText" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource DataGridCellInheritedTextStyle}"
+                                       Text="{Binding DisplayFileWarning}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="NoWrap"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{services:LocalizedText Key=UiKapitelwarnung}" SortMemberPath="ChapterWarningText" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource DataGridCellInheritedTextStyle}"
+                                       Text="{Binding DisplayChapterWarning}"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="NoWrap"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="{services:LocalizedText Key=UiTyp}" Binding="{Binding Extension}" SortMemberPath="Extension" Width="Auto" Visibility="Collapsed"/>
+                <DataGridTextColumn Header="{services:LocalizedText Key=UiCodec}" Binding="{Binding DisplayCodec}" SortMemberPath="Codec" Width="Auto"/>
+                <DataGridTemplateColumn Header="{services:LocalizedText Key=UiOrdner}" SortMemberPath="DisplayFolder" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource DataGridCellInheritedTextStyle}"
+                                       local:FolderPathInlineBehavior.Text="{Binding DisplayFolder}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
 
         </DataGrid>
 
     </DockPanel>
+    </DockPanel>
+        <TextBlock Text="{services:LocalizedText Key=Developer.Images.HeaderText}"
+                   Visibility="{DynamicResource HeaderBrandTextVisibility}"
+                   Margin="12,18,0,0" Height="64" HorizontalAlignment="Left" VerticalAlignment="Top"
+                   FontSize="42" FontWeight="SemiBold" Foreground="{DynamicResource MainTextBrush}"
+                   IsHitTestVisible="False"/>
+        <Image x:Name="BookStitchHeaderBrandImage"
+               Source="{DynamicResource HeaderBrandImageSource}" Visibility="{DynamicResource HeaderBrandImageVisibility}"
+               Width="241.826" Height="72" Margin="12,8,0,0"
+               HorizontalAlignment="Left" VerticalAlignment="Top" Stretch="Fill"
+               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"
+               AutomationProperties.Name="{Binding EnvironmentBrandText}"/>
+    </Grid>
 </Window>

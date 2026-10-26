@@ -1,16 +1,34 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
+    <NeutralResourcesLanguage>en</NeutralResourcesLanguage>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>Assets\Icons\BookStitchAppIcon-Simplified-multisize.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\Icons\icon\BookStitch-Icon-OpenBook.ico</ApplicationIcon>
+    <Version>2.0.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- English is the neutral runtime fallback; German remains the editorial source. -->
+    <EmbeddedResource Update="Resources/LocalizationResources.en.resx" WithCulture="false" LogicalName="BookStitch.Resources.LocalizationResources.resources" />
+    <EmbeddedResource Include="Resources/Faq.en.json" WithCulture="false" />
+    <Resource Include="Assets/Faq/*.png" />
+    <Resource Include="Assets/Faq/*.jpg" />
+    <Resource Include="Assets/Icons/BookStitch-Language-Petrol.png" />
+    <Resource Include="Assets/Icons/BookStitch-Heart-Petrol.png" />
+    <Resource Include="Assets/Icons/Placeholder/*.png" />
+    <Resource Include="Assets/Banners/HeaderBrand-Ornates.png" />
+    <Resource Include="Assets/Banners/HeaderBrand-Ornates-Ivory.png" />
+    <Resource Include="Assets/Banners/MetadataBanner-*.png" />
+    <EmbeddedResource Include="Assets/Faq/audible-timing.json" LogicalName="BookStitch.Faq.AudibleTiming.json" />
+    <Content Include="Assets/Faq/audible-narration.mp3" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <Using Remove="System.Windows.Forms" />
@@ -18,19 +36,27 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Assets\Icons\BookStitchAppIcon-Simplified-multisize.ico" />
+    <None Remove="Assets\Icons\icon\BookStitch-Icon-Feather.ico" />
+    <None Remove="Assets\Icons\icon\BookStitch-Icon-OpenBook.ico" />
     <None Remove="Assets\Icons\BookStitchLogo-Round.png" />
+    <None Remove="Assets\Icons\BookStitchBrandLogo-Light.png" />
+    <None Remove="Assets\Icons\ProjectTypes\*.png" />
     <None Remove="Assets\Sounds\**\*.wav" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Updates require the NeroChplPreservationGuard tests; see AGENTS.md. -->
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\Icons\BookStitchAppIcon-Simplified-multisize.ico" />
+    <Resource Include="Assets\Icons\icon\BookStitch-Icon-Feather.ico" />
+    <Resource Include="Assets\Icons\icon\BookStitch-Icon-OpenBook.ico" />
     <Resource Include="Assets\Icons\BookStitchLogo-Round.png" />
+    <Resource Include="Assets\Icons\BookStitchBrandLogo-Light.png" />
+    <Resource Include="Assets\Icons\ProjectTypes\*.png" />
+    <Resource Include="Assets\Icons\TrackOrder\*.png" />
     <Content Include="Assets\Sounds\**\*.wav">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -44,19 +70,13 @@
 
   <Target Name="CopyTagLibSharpRuntimeAssembly" AfterTargets="Build;Publish">
     <ItemGroup>
-      <TagLibSharpRuntimeAssembly Include="$(NuGetPackageRoot)taglibsharp\2.3.0\lib\netstandard2.0\TagLibSharp.dll"
-                                  Condition="Exists('$(NuGetPackageRoot)taglibsharp\2.3.0\lib\netstandard2.0\TagLibSharp.dll')" />
+      <TagLibSharpRuntimeAssembly Remove="@(TagLibSharpRuntimeAssembly)" />
+      <TagLibSharpRuntimeAssembly Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' == 'TagLibSharp'" />
     </ItemGroup>
 
-    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="'@(TagLibSharpRuntimeAssembly)' != ''" />
+    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="'@(TagLibSharpRuntimeAssembly)' != ''" />
 
-    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)"
-          DestinationFolder="$(PublishDir)"
-          SkipUnchangedFiles="true"
-          Condition="'@(TagLibSharpRuntimeAssembly)' != '' and '$(PublishDir)' != ''" />
+    <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" Condition="'@(TagLibSharpRuntimeAssembly)' != '' and '$(PublishDir)' != ''" />
   </Target>
 
 </Project>

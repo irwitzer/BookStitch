@@ -1,13 +1,43 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using System.ComponentModel;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
 
-public class TrackListActionServiceTests
+public sealed class TrackListActionServiceTests
 {
     private readonly TrackListActionService _service = new();
+
+    [Fact]
+    public void Original_channel_sort_uses_source_channels_without_changing_prepared_channels()
+    {
+        var tracks = CreateTracks("A", "B", "C");
+        tracks[0].Channels = 6;
+        tracks[1].Channels = 2;
+        tracks[2].Channels = 1;
+        foreach (var track in tracks)
+        {
+            track.PreparedConvertedPreset = "AAC Mono 64 kbps";
+            track.HasReusableConvertedFile = true;
+        }
+        var sorted = _service.Sort(tracks, "Channels", ListSortDirection.Ascending);
+        Assert.Equal(new[] { "C", "B", "A" }, sorted.Select(track => track.FileName));
+        Assert.All(tracks, track => Assert.Equal("Mono", track.DisplayPreparedChannelLayout));
+    }
+
+    [Fact]
+    public void Sample_rate_sort_uses_numeric_source_values_without_changing_original_indexes()
+    {
+        var tracks = CreateTracks("A", "B", "C");
+        tracks[0].SampleRateHz = 96000;
+        tracks[1].SampleRateHz = 11025;
+        tracks[2].SampleRateHz = 44100;
+        var indexes = tracks.Select(track => track.Index).ToArray();
+        var sorted = _service.Sort(tracks, "SampleRateHz", ListSortDirection.Ascending);
+        Assert.Equal(new[] { "B", "C", "A" }, sorted.Select(track => track.FileName));
+        Assert.Equal(indexes, tracks.Select(track => track.Index));
+    }
 
     [Fact]
     public void MoveSelectedUp_KeepsSelectedBlockOrder()
@@ -17,7 +47,7 @@ public class TrackListActionServiceTests
 
         var result = _service.MoveSelectedUp(tracks, selected);
 
-        Assert.Equal(new[] { "A", "C", "D", "B" }, result.Select(track => track.FileName));
+        Assert.Equal(["A", "C", "D", "B"], result.Select(track => track.FileName));
     }
 
     [Fact]
@@ -28,7 +58,31 @@ public class TrackListActionServiceTests
 
         var result = _service.MoveSelectedDown(tracks, selected);
 
-        Assert.Equal(new[] { "C", "A", "B", "D" }, result.Select(track => track.FileName));
+        Assert.Equal(["C", "A", "B", "D"], result.Select(track => track.FileName));
+    }
+
+    [Fact]
+    public void MoveSelectedUp_PreservesNonContiguousSelectionOrderAndStopsAtTop()
+    {
+        var tracks = CreateTracks("A", "B", "C", "D", "E");
+        var selected = new[] { tracks[0], tracks[2], tracks[4] };
+
+        var result = _service.MoveSelectedUp(tracks, selected);
+
+        Assert.Equal(["A", "C", "B", "E", "D"], result.Select(track => track.FileName));
+        Assert.Equal(["A", "C", "E"], result.Where(selected.Contains).Select(track => track.FileName));
+    }
+
+    [Fact]
+    public void MoveSelectedDown_PreservesNonContiguousSelectionOrderAndStopsAtBottom()
+    {
+        var tracks = CreateTracks("A", "B", "C", "D", "E");
+        var selected = new[] { tracks[0], tracks[2], tracks[4] };
+
+        var result = _service.MoveSelectedDown(tracks, selected);
+
+        Assert.Equal(["B", "A", "D", "C", "E"], result.Select(track => track.FileName));
+        Assert.Equal(["A", "C", "E"], result.Where(selected.Contains).Select(track => track.FileName));
     }
 
     [Fact]
@@ -39,7 +93,7 @@ public class TrackListActionServiceTests
 
         var result = _service.MoveSelectedToTop(tracks, selected);
 
-        Assert.Equal(new[] { "C", "A", "B", "D" }, result.Select(track => track.FileName));
+        Assert.Equal(["C", "A", "B", "D"], result.Select(track => track.FileName));
     }
 
     [Fact]
@@ -50,11 +104,27 @@ public class TrackListActionServiceTests
 
         var result = _service.MoveSelectedToBottom(tracks, selected);
 
-        Assert.Equal(new[] { "A", "C", "B", "D" }, result.Select(track => track.FileName));
+        Assert.Equal(["A", "C", "B", "D"], result.Select(track => track.FileName));
     }
 
     [Fact]
-    public void ExcludeSelected_MarksOnlySelectedTracks()
+    public void MoveSelectedToTop_UsesCurrentOrderAndKeepsAutomaticOrder()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { FileName = "A", AutomaticOrderPosition = 1 },
+            new() { FileName = "B", AutomaticOrderPosition = 2 },
+            new() { FileName = "C", AutomaticOrderPosition = 3 }
+        };
+
+        var moved = _service.MoveSelectedToTop(tracks, [tracks[2]]);
+
+        Assert.Equal(["C", "A", "B"], moved.Select(track => track.FileName));
+        Assert.Equal([3, 1, 2], moved.Select(track => track.AutomaticOrderPosition));
+    }
+
+    [Fact]
+    public void ExcludeSelected_MarksOnlySelectedTracksAndStoresRestoreTitle()
     {
         var tracks = CreateTracks("A", "B", "C", "D");
         var selected = new[] { tracks[1], tracks[3] };
@@ -64,10 +134,25 @@ public class TrackListActionServiceTests
         Assert.Equal(2, changed);
         Assert.False(tracks[0].IsExcluded);
         Assert.True(tracks[1].IsExcluded);
+        Assert.Equal("B", tracks[1].ExcludedChapterTitle);
+        Assert.Equal(string.Empty, tracks[1].ChapterTitle);
         Assert.False(tracks[2].IsExcluded);
         Assert.True(tracks[3].IsExcluded);
     }
 
+    [Fact]
+    public void RestoreSelected_RestoresChapterTitle()
+    {
+        var tracks = CreateTracks("A", "B");
+        _service.ExcludeSelected([tracks[1]]);
+
+        var changed = _service.RestoreSelected([tracks[1]]);
+
+        Assert.Equal(1, changed);
+        Assert.False(tracks[1].IsExcluded);
+        Assert.Equal("B", tracks[1].ChapterTitle);
+        Assert.Equal(string.Empty, tracks[1].ExcludedChapterTitle);
+    }
 
     [Fact]
     public void ToggleSelectedForDelete_ExcludesWhenAllSelectedTracksAreActive()
@@ -105,7 +190,7 @@ public class TrackListActionServiceTests
 
         var result = _service.Sort(tracks, "FileName", ListSortDirection.Ascending);
 
-        Assert.Equal(new[] { "Track 1.mp3", "Track 2.mp3", "Track 10.mp3" }, result.Select(track => track.FileName));
+        Assert.Equal(["Track 1.mp3", "Track 2.mp3", "Track 10.mp3"], result.Select(track => track.FileName));
     }
 
     [Fact]
@@ -120,50 +205,60 @@ public class TrackListActionServiceTests
 
         var result = _service.Sort(tracks, "Duration", ListSortDirection.Ascending);
 
-        Assert.Equal(new[] { "B", "C", "A" }, result.Select(track => track.FileName));
+        Assert.Equal(["B", "C", "A"], result.Select(track => track.FileName));
     }
 
     [Fact]
-    public void Renumber_RewritesIndexSequentially()
+    public void Sort_UsesAutomaticOrderPosition()
     {
         var tracks = CreateTracks("A", "B", "C");
-        tracks[0].Index = 10;
-        tracks[1].Index = 20;
-        tracks[2].Index = 30;
+        tracks[0].AutomaticOrderPosition = 3;
+        tracks[1].AutomaticOrderPosition = 1;
+        tracks[2].AutomaticOrderPosition = 2;
 
-        _service.Renumber(tracks);
+        var result = _service.Sort(tracks, "AutomaticOrderPosition", ListSortDirection.Ascending);
 
-        Assert.Equal(new[] { 1, 2, 3 }, tracks.Select(track => track.Index));
-    }
-
-
-    [Fact]
-    public void Renumber_UpdatesLeadingChapterNumbersAfterReordering()
-    {
-        var tracks = new List<TrackInfo>
-        {
-            new() { Index = 2, FileName = "002.flac", ChapterTitle = "002 Zweites Kapitel" },
-            new() { Index = 1, FileName = "001.flac", ChapterTitle = "001 Erstes Kapitel" }
-        };
-
-        _service.Renumber(tracks);
-
-        Assert.Equal(new[] { 1, 2 }, tracks.Select(track => track.Index));
-        Assert.Equal(new[] { "1 Zweites Kapitel", "2 Erstes Kapitel" }, tracks.Select(track => track.ChapterTitle));
+        Assert.Equal(["B", "C", "A"], result.Select(track => track.FileName));
     }
 
     [Fact]
-    public void Renumber_KeepsCustomChapterTitlesWithoutLeadingNumber()
+    public void Sort_UsesTheVisibleProjectFolderProjection()
     {
-        var tracks = new List<TrackInfo>
-        {
-            new() { Index = 9, FileName = "intro.flac", ChapterTitle = "Prolog" }
-        };
+        var tracks = CreateTracks("A", "B", "C");
+        tracks[0].ProjectRelativeFolder = "Volume 2";
+        tracks[1].ProjectRelativeFolder = "Volume 10";
+        tracks[2].ProjectRelativeFolder = "Volume 1";
 
-        _service.Renumber(tracks);
+        var result = _service.Sort(tracks, "DisplayFolder", ListSortDirection.Ascending);
 
-        Assert.Equal(1, tracks[0].Index);
-        Assert.Equal("Prolog", tracks[0].ChapterTitle);
+        Assert.Equal(["C", "A", "B"], result.Select(track => track.FileName));
+    }
+
+    [Fact]
+    public void Sort_UsesFileWarningText()
+    {
+        var tracks = CreateTracks("A", "B", "C");
+        tracks[0].FileWarningText = "Zeta";
+        tracks[1].FileWarningText = "Alpha";
+        tracks[2].FileWarningText = "";
+
+        var result = _service.Sort(tracks, "FileWarningText", ListSortDirection.Ascending);
+
+        Assert.Equal(["C", "B", "A"], result.Select(track => track.FileName));
+    }
+
+    [Fact]
+    public void RestoreAutomaticOrder_DoesNotChangeAutomaticOrderPositions()
+    {
+        var tracks = CreateTracks("A", "B", "C");
+        tracks[0].AutomaticOrderPosition = 3;
+        tracks[1].AutomaticOrderPosition = 1;
+        tracks[2].AutomaticOrderPosition = 2;
+
+        var result = _service.RestoreAutomaticOrder(tracks);
+
+        Assert.Equal(["B", "C", "A"], result.Select(track => track.FileName));
+        Assert.Equal(new int?[] { 3, 1, 2 }, tracks.Select(track => track.AutomaticOrderPosition).ToArray());
     }
 
     private static List<TrackInfo> CreateTracks(params string[] names)
@@ -177,100 +272,4 @@ public class TrackListActionServiceTests
             })
             .ToList();
     }
-
-
-    [Fact]
-    public void UpdateGeneratedChapterTitles_ReplacesProjectGeneratedTitlesOnly()
-    {
-        var service = new TrackListActionService();
-        var tracks = new List<TrackInfo>
-        {
-            new() { Index = 1, ChapterTitle = "001 Alter Titel" },
-            new() { Index = 2, ChapterTitle = "Prolog" },
-            new() { Index = 3, ChapterTitle = "003 Kapitel" }
-        };
-
-        var changed = service.UpdateGeneratedChapterTitles(tracks, "Alter Titel", "Neuer Titel");
-
-        Assert.Equal(2, changed);
-        Assert.Equal("1 Neuer Titel", tracks[0].ChapterTitle);
-        Assert.Equal("Prolog", tracks[1].ChapterTitle);
-        Assert.Equal("3 Neuer Titel", tracks[2].ChapterTitle);
-    }
-
-    [Fact]
-    public void UpdateGeneratedChapterTitles_LeavesExcludedTracksUntouched()
-    {
-        var service = new TrackListActionService();
-        var tracks = new List<TrackInfo>
-        {
-            new() { Index = 1, ChapterTitle = "001 Alter Titel", IsExcluded = true }
-        };
-
-        var changed = service.UpdateGeneratedChapterTitles(tracks, "Alter Titel", "Neuer Titel");
-
-        Assert.Equal(0, changed);
-        Assert.Equal("001 Alter Titel", tracks[0].ChapterTitle);
-    }
-
-    [Theory]
-    [InlineData(1, 9, true, "1")]
-    [InlineData(1, 10, true, "01")]
-    [InlineData(9, 99, true, "09")]
-    [InlineData(1, 100, true, "001")]
-    [InlineData(99, 999, true, "099")]
-    [InlineData(1, 1000, true, "0001")]
-    [InlineData(999, 1000, true, "0999")]
-    [InlineData(1, 1000, false, "1")]
-    [InlineData(999, 1000, false, "999")]
-    public void ChapterNumberingService_FormatsNumberFromTotalChapterCount(
-        int index,
-        int chapterCount,
-        bool useLeadingZeros,
-        string expected)
-    {
-        var service = new ChapterNumberingService();
-
-        var result = service.FormatNumber(index, chapterCount, useLeadingZeros);
-
-        Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void Renumber_UsesActiveTrackCountAndIgnoresExcludedTracks()
-    {
-        var tracks = Enumerable.Range(1, 11)
-            .Select(index => new TrackInfo
-            {
-                Index = index,
-                ChapterTitle = $"{index:000} Kapitel",
-                IsExcluded = index == 11
-            })
-            .ToList();
-
-        _service.Renumber(tracks, useLeadingZeros: true);
-
-        Assert.Equal("01 Kapitel", tracks[0].ChapterTitle);
-        Assert.Equal("10 Kapitel", tracks[9].ChapterTitle);
-        Assert.Equal(0, tracks[10].Index);
-        Assert.Equal("011 Kapitel", tracks[10].ChapterTitle);
-    }
-
-    [Fact]
-    public void Renumber_CanRemoveAllLeadingZeros()
-    {
-        var tracks = Enumerable.Range(1, 12)
-            .Select(index => new TrackInfo
-            {
-                Index = index,
-                ChapterTitle = $"{index:000} Kapitel"
-            })
-            .ToList();
-
-        _service.Renumber(tracks, useLeadingZeros: false);
-
-        Assert.Equal("1 Kapitel", tracks[0].ChapterTitle);
-        Assert.Equal("12 Kapitel", tracks[11].ChapterTitle);
-    }
-
 }

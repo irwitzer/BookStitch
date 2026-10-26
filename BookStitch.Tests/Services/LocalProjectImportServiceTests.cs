@@ -10,6 +10,25 @@ public sealed class LocalProjectImportServiceTests
     private readonly LocalProjectImportService _service = new();
 
     [Fact]
+    public async Task CopySourcesAsync_Repairs_a_changed_target_of_the_same_size()
+    {
+        using var source = new TemporaryFolder();
+        using var project = new TemporaryFolder();
+        var file = Path.Combine(source.Path, "001.mp3");
+        File.WriteAllBytes(file, [1, 2, 3]);
+        var service = new LocalProjectImportService();
+        await service.CopySourcesAsync(source.Path, [file], project.Path, null, null, CancellationToken.None);
+        var target = Path.Combine(ProjectFolderLayout.GetOriginalsFolder(project.Path), "001.mp3");
+        File.WriteAllBytes(target, [9, 8, 7]);
+
+        var result = await service.CopySourcesAsync(source.Path, [file], project.Path, null, null, CancellationToken.None);
+
+        Assert.False(result.WasCanceled);
+        Assert.Equal(File.ReadAllBytes(file), File.ReadAllBytes(target));
+        Assert.Empty(Directory.EnumerateFiles(project.Path, "*.copying", SearchOption.AllDirectories));
+    }
+
+    [Fact]
     public void CreateProjectFolder_UsesSourceNameAndStableTimestamp()
     {
         using var folder = new TemporaryFolder();
@@ -23,7 +42,7 @@ public sealed class LocalProjectImportServiceTests
             new DateTime(2026, 7, 17, 14, 30, 45));
 
         Assert.Equal(
-            Path.Combine(projectsFolder, "Kummer_aller_Art_20260717_143045"),
+            Path.Combine(projectsFolder, "Kummer_aller_Art_2026-07-17_14-30-45_000"),
             result);
     }
 
@@ -67,12 +86,17 @@ public sealed class LocalProjectImportServiceTests
         using var projects = new TemporaryFolder();
         var sourceFile = CreateFile(source.Path, "Track 01.mp3", "same audio bytes");
         var projectFolder = Path.Combine(projects.Path, "Project");
-        var existingTarget = CreateFile(
-            Path.Combine(projectFolder, LocalProjectImportService.OriginalsFolderName),
-            "Track 01.mp3",
-            "same audio bytes");
-        var originalWriteTime = File.GetLastWriteTimeUtc(existingTarget);
         var copiedItems = new List<LocalProjectCopiedFile>();
+
+        await _service.CopySourcesAsync(
+            source.Path,
+            [sourceFile],
+            projectFolder,
+            progress: null,
+            copiedFileProgress: null,
+            CancellationToken.None);
+        var existingTarget = Path.Combine(projectFolder, LocalProjectImportService.OriginalsFolderName, "Track 01.mp3");
+        var originalWriteTime = File.GetLastWriteTimeUtc(existingTarget);
 
         var result = await _service.CopySourcesAsync(
             source.Path,
@@ -86,6 +110,43 @@ public sealed class LocalProjectImportServiceTests
         Assert.Single(copiedItems);
         Assert.True(copiedItems[0].WasReused);
         Assert.Equal(originalWriteTime, File.GetLastWriteTimeUtc(existingTarget));
+        Assert.NotNull(copiedItems[0].SourceIdentity);
+        Assert.Equal("Track 01.mp3", copiedItems[0].SourceIdentity!.SourceFileName);
+    }
+
+    [Fact]
+    public async Task CopySourcesAsync_DoesNotReuseEqualSizedTargetWhenSourceIdentityDiffers()
+    {
+        using var source = new TemporaryFolder();
+        using var projects = new TemporaryFolder();
+        var sourceFile = CreateFile(source.Path, "Track 01.mp3", "same size");
+        var projectFolder = Path.Combine(projects.Path, "Project");
+
+        await _service.CopySourcesAsync(
+            source.Path,
+            [sourceFile],
+            projectFolder,
+            progress: null,
+            copiedFileProgress: null,
+            CancellationToken.None);
+
+        var targetFile = Path.Combine(projectFolder, LocalProjectImportService.OriginalsFolderName, "Track 01.mp3");
+        var firstTargetWriteTime = File.GetLastWriteTimeUtc(targetFile);
+        File.SetLastWriteTimeUtc(sourceFile, File.GetLastWriteTimeUtc(sourceFile).AddMinutes(5));
+        var copiedItems = new List<LocalProjectCopiedFile>();
+
+        await _service.CopySourcesAsync(
+            source.Path,
+            [sourceFile],
+            projectFolder,
+            progress: null,
+            new CollectingProgress<LocalProjectCopiedFile>(copiedItems.Add),
+            CancellationToken.None);
+
+        var copiedItem = Assert.Single(copiedItems);
+        Assert.False(copiedItem.WasReused);
+        Assert.True(File.GetLastWriteTimeUtc(targetFile) >= firstTargetWriteTime);
+        Assert.Equal(File.GetLastWriteTimeUtc(sourceFile).Ticks, copiedItem.SourceIdentity!.SourceLastWriteUtcTicks);
     }
 
     [Fact]

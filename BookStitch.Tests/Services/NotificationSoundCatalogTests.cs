@@ -7,6 +7,7 @@ namespace BookStitch.Tests.Services;
 public sealed class NotificationSoundCatalogTests
 {
     [Theory]
+    [InlineData(SoundLibrary.None, "")]
     [InlineData(SoundLibrary.Gentle, "Gentle")]
     [InlineData(SoundLibrary.Bass, "Bass")]
     [InlineData(SoundLibrary.HammondOrgan, "HammondOrgan")]

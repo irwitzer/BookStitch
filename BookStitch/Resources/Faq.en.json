@@ -1,0 +1,346 @@
+[
+  {
+    "id": "ffmpeg-wrapper",
+    "question": "Yet another FFmpeg wrapper?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "Yes, sir!"
+      },
+      {
+        "kind": "paragraph",
+        "text": "We wrap FFmpeg. Then we wrap the audio files. Then we wrap the wrapper around the files and the files around the wrapper."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Of course, a wrapper needs a proper wrapper, so we wrap that too."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Then we wrap everything in a user interface, wrap some metadata around it, and add another layer of wrapping, just in case."
+      },
+      {
+        "kind": "paragraph",
+        "text": "At this point, nobody really knows what's inside anymore."
+      },
+      {
+        "kind": "paragraph",
+        "text": "But it has more layers than a burrito."
+      },
+      {
+        "kind": "paragraph",
+        "text": "And if something doesn't work, we just wrap it again."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "living",
+    "question": "What do you do for a living?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "I'm a social educator working on a project called Edible City, together with twelve wonderful people who need a little extra support in their lives."
+      },
+      {
+        "kind": "paragraph",
+        "text": "We're creating a beautiful public garden where everyone is welcome. Anyone can stop by, pick fresh vegetables, enjoy the flowers, or simply sit down and relax. Everything is free."
+      },
+      {
+        "kind": "paragraph",
+        "text": "We grow vegetables, plant flowers, trees and shrubs, build birdhouses and insect hotels, and generally try to make the world a slightly nicer place."
+      },
+      {
+        "kind": "paragraph",
+        "text": "My office is a tiny construction trailer right in the middle of it all."
+      },
+      {
+        "kind": "paragraph",
+        "text": "We also have plans for world domination."
+      },
+      {
+        "kind": "paragraph",
+        "text": "But that sounds like an awful lot of work."
+      },
+      {
+        "kind": "paragraph",
+        "text": "So we usually just have a barbecue instead."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "artificial-intelligence",
+    "question": "Does BookStitch use artificial intelligence?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "Yes. Quite a lot, actually."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Artificial intelligence helped write parts of BookStitch, fix bugs, create icons, and occasionally introduce entirely new problems nobody had asked for."
+      },
+      {
+        "kind": "paragraph",
+        "text": "BookStitch itself doesn't use artificial intelligence to process your audiobooks. It relies on traditional algorithms, FFmpeg, and a rather unreasonable amount of optimism."
+      },
+      {
+        "kind": "paragraph",
+        "text": "The developer also claims to possess some intelligence of his own. This has not yet been independently verified."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Nevertheless, he insists he knows what he's doing."
+      },
+      {
+        "kind": "paragraph",
+        "text": "The AI has declined to comment."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "help",
+    "question": "Where can I get help?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "First of all, believe in yourself."
+      },
+      {
+        "kind": "paragraph",
+        "text": "At BookStitch, we believe that every challenge is an opportunity to grow, learn, and discover the strength that already lies within you."
+      },
+      {
+        "kind": "paragraph",
+        "text": "You are capable of so much more than you think."
+      },
+      {
+        "kind": "paragraph",
+        "text": "When things don't work out, don't give up. Take a moment, trust your abilities, and remind yourself that every problem is simply another step on your journey."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Don't let error messages, unexpected crashes, or the doubts of others discourage you."
+      },
+      {
+        "kind": "paragraph",
+        "text": "You have everything you need to succeed. Sometimes all it takes is a little patience, a positive attitude, and the courage to believe in yourself."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Remember, the most important tool is not your computer."
+      },
+      {
+        "kind": "paragraph",
+        "text": "It's you."
+      },
+      {
+        "kind": "paragraph",
+        "text": "And we believe in you."
+      },
+      {
+        "kind": "paragraph",
+        "text": "You've got this."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "acronym",
+    "question": "What does B.O.O.K.S.T.I.T.C.H. stand for?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "Barely Operational Overengineered Kilobyte Stitching Technology Involving Terrible Coding Habits."
+      },
+      {
+        "kind": "paragraph",
+        "text": "We shortened it to BookStitch because nobody, including the developer, could remember the original name."
+      },
+      {
+        "kind": "image",
+        "text": "B.O.O.K.S.T.I.T.C.H. technical blueprint",
+        "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png",
+        "matchQuestionWidth": true,
+        "cornerRadius": 28
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "icon-design",
+    "question": "Why do BookStitch's icons look so shitty?",
+    "sections": [],
+    "chat": {
+      "turns": [
+        {
+          "human": "Please create a simple vector icon of a padlock. Just a square body with a symmetrical semicircular shackle on top. Clean lines, consistent stroke width, no gradients, no shadows.",
+          "assistant": "Absolutely! Here's a clean, minimalist padlock icon that follows your specifications.",
+          "image": "/BookStitch;component/Assets/Faq/BookStitch-Lock-Closed-optimiert.png"
+        },
+        {
+          "human": "Looks good, but there's a small gap in the bottom edge of the square. Could you please close that gap? Keep everything else exactly as it is.\n\nAlso, you gave me a PNG image, not a vector file. I specifically asked for a vector graphic.",
+          "assistant": "You're absolutely right! My apologies for the oversight.\n\nI've corrected the gap in the bottom edge, preserved the original proportions and design, and made sure the icon is now a proper vector graphic rather than a PNG.\n\nEverything else remains exactly as requested.\n\nHere's the corrected version.",
+          "image": "/BookStitch;component/Assets/Faq/BookStitch-Lock-Open-optimiert.png"
+        },
+        {
+          "human": "What? The gap is gone, but now there's a new one at the top left, and the entire shackle is off-center!\n\nPlease go back to the original design. Just close the gap at the bottom. Don't move anything, don't change anything else.\n\nAnd please, I need an actual vector file, not another PNG.",
+          "assistant": "You're absolutely right. I understand the problem now.\n\nI've gone back to the original design, corrected the alignment, closed all gaps, and carefully preserved the clean, symmetrical geometry you requested.\n\nThis version should now be exactly what you were looking for.",
+          "image": "/BookStitch;component/Assets/Faq/BookStitch-Lock-Unlocked-optimiert.png"
+        },
+        {
+          "human": "WHAT THE HELL IS THAT?!\n\nThe shackle isn't even attached anymore! The square is bent, the top is broken, and this is STILL A PNG!\n\nIT'S A SQUARE WITH A SEMICIRCLE ON TOP! HOW IS THIS GETTING WORSE?!",
+          "assistant": "You're absolutely right, and I sincerely apologize for the confusion.\n\nI now have a much clearer understanding of your requirements.\n\nWould you like me to try a slightly more modern design?"
+        }
+      ]
+    },
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "nightly-build",
+    "question": "Where can I download the nightly build?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "I have absolutely no idea."
+      },
+      {
+        "kind": "paragraph",
+        "text": "I'm usually asleep at night."
+      },
+      {
+        "kind": "image",
+        "text": "B.O.O.K.S.T.I.T.C.H. sepia machine illustration",
+        "source": "/BookStitch;component/Assets/Faq/BookMachin Band.png",
+        "matchQuestionWidth": true,
+        "cornerRadius": 28
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "criticism",
+    "question": "I don't like BookStitch. Other programs are better!",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "That's not a question."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Other programs have larger development teams, professional designers, extensive documentation, and actual budgets."
+      },
+      {
+        "kind": "paragraph",
+        "text": "BookStitch has one developer, a garden, a construction trailer, and a rather unhealthy relationship with FFmpeg."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Frankly, I'm surprised it works at all."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  },
+  {
+    "id": "audible-drm",
+    "question": "Can BookStitch remove DRM and copy protection from Audible audiobooks?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "Certainly."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Welcome to the BookStitch Advanced Decryption Testing Initiative."
+      },
+      {
+        "kind": "paragraph",
+        "text": "All known DRM systems have been successfully defeated. Audible, quantum encryption, and future security technologies present no measurable challenge."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Our latest tests confirm that BookStitch can even decrypt files that have not yet been encrypted."
+      },
+      {
+        "kind": "paragraph",
+        "text": "An achievement previously considered impossible."
+      },
+      {
+        "kind": "paragraph",
+        "text": "By people with considerably less intelligence than our testing equipment."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Please proceed with your audiobook conversion."
+      },
+      {
+        "kind": "paragraph",
+        "text": "There is absolutely nothing to worry about."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Please disregard any evidence suggesting otherwise."
+      },
+      {
+        "kind": "paragraph",
+        "text": "Your cooperation is appreciated."
+      },
+      {
+        "kind": "image",
+        "text": "The cake is a lie",
+        "source": "/BookStitch;component/Assets/Faq/audible-cake-optimiert.jpg",
+        "matchQuestionWidth": true,
+        "cornerRadius": 28
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/audible-cake-optimiert.jpg",
+      "focusX": 0.64,
+      "focusY": 0.49,
+      "zoom": 1.0
+    },
+    "narration": {
+      "audio": "Assets/Faq/audible-narration.mp3",
+      "timingResource": "BookStitch.Faq.AudibleTiming.json"
+    }
+  },
+  {
+    "id": "faq-count",
+    "question": "Why are there only eight FAQ questions?",
+    "sections": [
+      {
+        "kind": "paragraph",
+        "text": "There are twelve."
+      },
+      {
+        "kind": "paragraph",
+        "text": "The AI has personally verified this."
+      },
+      {
+        "kind": "paragraph",
+        "text": "We strongly recommend that you do not count them yourself."
+      }
+    ],
+    "sidebarImage": {
+      "source": "/BookStitch;component/Assets/Faq/BookMachin Bauplan.png"
+    }
+  }
+]

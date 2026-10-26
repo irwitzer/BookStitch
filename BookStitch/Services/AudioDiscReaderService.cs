@@ -9,21 +9,30 @@ namespace BookStitch.Services;
 
 /// <summary>
 /// Reads the table of contents of a Windows audio CD without ripping audio data.
-/// MCI remains the device-access boundary for the first pipeline version. Exact
-/// frame offsets are requested separately so the result can be used for a
-/// MusicBrainz-compatible disc lookup without coupling metadata access to ripping.
+/// MCI supplies presentation timing and the persisted legacy identity. Exact
+/// frame offsets supply sector boundaries and MusicBrainz-compatible metadata lookup.
 /// </summary>
 public sealed class AudioDiscReaderService
 {
-    private readonly AudioDiscTocReaderService _tocReaderService = new();
+    private readonly Func<string, AudioDiscToc?> _readToc;
 
-    public AudioDiscReadResult ReadDisc(string sourcePath)
+    public AudioDiscReaderService() : this(new AudioDiscTocReaderService().TryReadToc) { }
+
+    internal AudioDiscReaderService(Func<string, AudioDiscToc?> readToc) =>
+        _readToc = readToc ?? throw new ArgumentNullException(nameof(readToc));
+
+    public AudioDiscReadResult ReadDisc(string sourcePath) =>
+        DiscDriveOperationService.Execute(sourcePath, () => ReadDiscCore(sourcePath));
+
+    private AudioDiscReadResult ReadDiscCore(string sourcePath)
     {
         var driveRoot = NormalizeDriveRoot(sourcePath);
         if (string.IsNullOrWhiteSpace(driveRoot))
             return AudioDiscReadResult.NotAudioDisc("Das ausgewählte CD-Laufwerk ist ungültig.");
 
-        var exactToc = _tocReaderService.TryReadToc(driveRoot);
+        var exactToc = _readToc(driveRoot);
+        if (exactToc?.ContainsDataTracks == true)
+            return AudioDiscReadResult.MixedModeUnsupported(LocalizationText.Get("Disc.Audio.MixedModeUnsupported"));
         var alias = $"BookStitchAudioDisc_{Guid.NewGuid():N}";
 
         try
@@ -35,6 +44,12 @@ public sealed class AudioDiscReaderService
             if (trackCount <= 0)
                 return AudioDiscReadResult.NotAudioDisc();
 
+            if (exactToc is null)
+            {
+                for (var number = 1; number <= trackCount; number++)
+                    if (!string.Equals(ReadValue($"status {alias} type track {number}"), "audio", StringComparison.OrdinalIgnoreCase))
+                        return AudioDiscReadResult.MixedModeUnsupported(LocalizationText.Get("Disc.Audio.MixedModeUnsupported"));
+            }
             var rawTracks = ReadTrackTimes(alias, trackCount);
             var toc = exactToc is not null && exactToc.LastTrackNumber - exactToc.FirstTrackNumber + 1 == trackCount
                 ? exactToc
@@ -61,6 +76,7 @@ public sealed class AudioDiscReaderService
                 discIdentity,
                 toc));
         }
+        catch (OperationCanceledException) { throw; }
         catch (AudioDiscReadException ex)
         {
             return AudioDiscReadResult.NotAudioDisc(ex.Message);
@@ -216,6 +232,7 @@ public sealed class AudioDiscReaderService
 
     private static string ReadValue(string command)
     {
+        DiscDriveOperationService.CurrentCancellationToken.ThrowIfCancellationRequested();
         var buffer = new StringBuilder(256);
         var errorCode = NativeMciSendString(command, buffer, buffer.Capacity, IntPtr.Zero);
         if (errorCode != 0)
@@ -226,6 +243,7 @@ public sealed class AudioDiscReaderService
 
     private static void SendRequired(string command)
     {
+        DiscDriveOperationService.CurrentCancellationToken.ThrowIfCancellationRequested();
         var errorCode = NativeMciSendString(command, null, 0, IntPtr.Zero);
         if (errorCode != 0)
             throw new AudioDiscReadException(GetMciErrorMessage(errorCode));

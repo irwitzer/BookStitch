@@ -6,12 +6,12 @@ namespace BookStitch.Services;
 public sealed class Mp3DiscPresetPreparationWorkflowService
 {
     private readonly Mp3DiscPreparationService _preparationService;
-    private readonly AacExportProcessingService _aacExportProcessingService;
+    private readonly IAudioExportProcessingService _aacExportProcessingService;
     private readonly Func<string> _ffmpegPathProvider;
 
     public Mp3DiscPresetPreparationWorkflowService(
         Mp3DiscPreparationService preparationService,
-        AacExportProcessingService aacExportProcessingService,
+        IAudioExportProcessingService aacExportProcessingService,
         Func<string> ffmpegPathProvider)
     {
         _preparationService = preparationService;
@@ -32,7 +32,9 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
         int workerCount,
         Action onCompleted,
         Action onFailed,
-        CancellationToken token)
+        CancellationToken token,
+        Action<Mp3DiscPresetPreparationItem>? persistPreparedTrack = null,
+        Func<Mp3DiscPresetPreparationItem, bool>? tryStartPreparation = null)
     {
         ArgumentNullException.ThrowIfNull(tracks);
         ArgumentNullException.ThrowIfNull(preset);
@@ -44,6 +46,7 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
         ArgumentNullException.ThrowIfNull(onCompleted);
         ArgumentNullException.ThrowIfNull(onFailed);
 
+        FolderSampleRateService.Apply(tracks, ProjectSampleRateService.ReadTarget(projectFolder));
         var candidates = _preparationService.BuildMissingPresetPreparationItems(
             tracks,
             projectFolder,
@@ -75,6 +78,7 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
                             continue;
                         }
 
+                        if (tryStartPreparation is not null && !tryStartPreparation(item)) continue;
                         await _aacExportProcessingService.PrepareTrackForExportAsync(
                             item.Track,
                             item.SourcePath,
@@ -84,6 +88,7 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
                             token,
                             _ => { });
 
+                        persistPreparedTrack?.Invoke(item);
                         onCompleted();
                     }
                     catch (OperationCanceledException)
@@ -116,12 +121,16 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
         Func<string, string, bool> canReusePreparedTrack,
         int maxParallel,
         Action<int, int>? onProgress,
-        CancellationToken token)
+        CancellationToken token,
+        PerformanceExternalProcessContext? performanceContext = null,
+        Action<Mp3DiscPresetPreparationItem>? persistPreparedTrack = null,
+        Func<Mp3DiscPresetPreparationItem, bool>? tryStartPreparation = null)
     {
         ArgumentNullException.ThrowIfNull(tracks);
         ArgumentNullException.ThrowIfNull(preset);
         ArgumentNullException.ThrowIfNull(canReusePreparedTrack);
 
+        FolderSampleRateService.Apply(tracks, ProjectSampleRateService.ReadTarget(projectFolder));
         var candidates = _preparationService.BuildMissingPresetPreparationItems(
             tracks,
             projectFolder,
@@ -132,6 +141,10 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
             return 0;
 
         var parallel = Math.Clamp(maxParallel, 1, 40);
+        if (performanceContext is not null)
+            performanceContext.TraceService.RecordParallelism(performanceContext.OperationId,
+                maxParallel.ToString(System.Globalization.CultureInfo.InvariantCulture), parallel,
+                "Preparation", performanceContext.PhaseId);
         var completed = 0;
         var failed = new ConcurrentBag<string>();
 
@@ -150,6 +163,7 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
                     return;
                 }
 
+                if (tryStartPreparation is not null && !tryStartPreparation(item)) return;
                 await _aacExportProcessingService.PrepareTrackForExportAsync(
                     item.Track,
                     item.SourcePath,
@@ -157,8 +171,10 @@ public sealed class Mp3DiscPresetPreparationWorkflowService
                     preset,
                     _ffmpegPathProvider(),
                     token,
-                    _ => { });
+                    _ => { },
+                    performanceContext);
 
+                persistPreparedTrack?.Invoke(item);
                 var done = Interlocked.Increment(ref completed);
                 onProgress?.Invoke(done, candidates.Count);
             }

@@ -4,12 +4,40 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 
 namespace BookStitch.Services;
 
 public sealed class WorkManifestService
 {
     private const int MaxHistoryEntries = 200;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
+    private static readonly AtomicJsonStore JsonStore = new();
+    private readonly AtomicJsonStore _jsonStore;
+    private readonly PerformanceTraceService? _trace;
+    public WorkManifestService() : this(JsonStore) { }
+    public WorkManifestService(PerformanceTraceService trace) : this(JsonStore) => _trace = trace;
+    internal WorkManifestService(AtomicJsonStore jsonStore) => _jsonStore = jsonStore;
+    private static readonly ConditionalWeakTable<ExportWorkManifest, Dictionary<string, long>> Revisions = new();
+
+    // Status readers never normalize, migrate or persist project state.
+    public ExportWorkManifest ReadOnly(string manifestPath)
+    {
+        using var measurement = PerformanceMeasurement.Start("manifest.read", _trace);
+        using var stream = new FileStream(manifestPath, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var json = reader.ReadToEnd();
+        measurement?.Add("Bytes", stream.Position);
+        PersistentJsonSchema.Read(json, "Work-/Export-Manifest", manifestPath,
+            ExportWorkManifestVersions.CurrentSchemaVersion);
+        PersistentJsonSchema.RequireState(json, manifestPath, "Tracks", "Export", "State");
+        return JsonSerializer.Deserialize<ExportWorkManifest>(json)
+            ?? throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
+    }
 
     public ExportWorkManifest LoadOrCreate(
         string manifestPath,
@@ -32,24 +60,57 @@ public sealed class WorkManifestService
         string sourceFolder,
         string selectedPreset)
     {
+        using var measurement = PerformanceMeasurement.Start("manifest.load", _trace);
+        var state = AtomicJsonStore.ForPath(manifestPath);
+        lock (state)
+        {
+            var manifest = LoadOrCreateCore(manifestPath, projectType, projectWorkFolder, sourceFolder, selectedPreset);
+            RememberRevision(manifestPath, manifest, state.Revision);
+            return manifest;
+        }
+    }
+
+    private ExportWorkManifest LoadOrCreateCore(string manifestPath, string projectType,
+        string projectWorkFolder, string sourceFolder, string selectedPreset)
+    {
         try
         {
             if (File.Exists(manifestPath))
             {
+                using var read = PerformanceMeasurement.Start("manifest.read", _trace);
                 var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+                read?.FileBytes(manifestPath);
+                var schema = PersistentJsonSchema.Read(
+                    json,
+                    "Work-/Export-Manifest",
+                    manifestPath,
+                    ExportWorkManifestVersions.CurrentSchemaVersion);
+                PersistentJsonSchema.RequireState(json, manifestPath, "Tracks", "Export", "State");
                 var loaded = JsonSerializer.Deserialize<ExportWorkManifest>(json);
+                read?.Dispose(); // Reading/parsing excludes normalization and migration writes.
 
                 if (loaded is not null)
                 {
-                    NormalizeLoadedManifest(loaded, projectType, projectWorkFolder, sourceFolder, selectedPreset);
+                    var normalized = NormalizeLoadedManifest(loaded, projectType, projectWorkFolder, sourceFolder, selectedPreset);
+                    if (schema.IsLegacy || normalized)
+                    {
+                        Store(manifestPath, loaded);
+                        if (schema.IsLegacy)
+                            PersistentJsonSchema.TraceLegacyMigration("Work-/Export-Manifest", manifestPath);
+                    }
+
                     return loaded;
                 }
+                throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
             }
         }
-        catch
+        catch (PersistentJsonSchemaException)
         {
-            // Eine beschädigte project.json darf den Export nicht blockieren.
-            // Sie wird unten sauber neu geschrieben.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable"), ex);
         }
 
         return CreateNewManifest(projectType, projectWorkFolder, sourceFolder, selectedPreset);
@@ -57,26 +118,51 @@ public sealed class WorkManifestService
 
     public void Save(string manifestPath, ExportWorkManifest manifest)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
-        manifest.UpdatedUtc = DateTime.UtcNow;
-        NormalizeBeforeSave(manifest);
-
-        var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions
+        using var measurement = PerformanceMeasurement.Start("manifest.save", _trace);
+        var state = AtomicJsonStore.ForPath(manifestPath);
+        lock (state)
         {
-            WriteIndented = true
-        });
-
-        var partPath = manifestPath + ".part";
-        File.WriteAllText(partPath, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
-        if (File.Exists(manifestPath))
-        {
-            File.Replace(partPath, manifestPath, null);
+            var path = Path.GetFullPath(manifestPath);
+            var revisions = Revisions.GetValue(manifest, _ => new(AtomicJsonStore.PathComparer));
+            lock (revisions)
+            {
+                if (revisions.TryGetValue(path, out var expected)
+                    ? expected != state.Revision
+                    : File.Exists(path))
+                    throw new IOException(LocalizationText.Get("Persistence.Manifest.Stale"));
+                using (var prepare = PerformanceMeasurement.Start("manifest.save.prepare", _trace))
+                {
+                    manifest.UpdatedUtc = DateTime.UtcNow;
+                    NormalizeBeforeSave(manifest);
+                }
+                try { Store(manifestPath, manifest); measurement?.FileBytes(manifestPath); }
+                catch (IOException error)
+                {
+                    throw new IOException(LocalizationText.Get("Persistence.Manifest.CheckpointFailed"), error);
+                }
+                catch (UnauthorizedAccessException error)
+                {
+                    throw new IOException(LocalizationText.Get("Persistence.Manifest.CheckpointFailed"), error);
+                }
+                revisions[path] = state.Revision;
+                if (manifest.ProjectType == ProjectManifestTypes.FolderProject &&
+                    string.Equals(Path.GetFullPath(manifestPath), Path.GetFullPath(ProjectFolderLayout.GetExportManifestPath(manifest.ProjectWorkFolder)), StringComparison.OrdinalIgnoreCase))
+                    new FolderProjectManifestService().SaveLifecycle(manifest);
+            }
         }
-        else
-        {
-            File.Move(partPath, manifestPath);
-        }
+    }
+
+    private void Store(string path, ExportWorkManifest manifest)
+    {
+        using var measurement = PerformanceMeasurement.Start("manifest.save.atomic-store", _trace);
+        _jsonStore.Save(path, manifest, JsonOptions, measurement);
+        measurement?.Add("CommittedWrites");
+    }
+
+    private static void RememberRevision(string path, ExportWorkManifest manifest, long revision)
+    {
+        var revisions = Revisions.GetValue(manifest, _ => new(AtomicJsonStore.PathComparer));
+        lock (revisions) revisions[Path.GetFullPath(path)] = revision;
     }
 
     public void UpdateExportSettings(
@@ -95,21 +181,11 @@ public sealed class WorkManifestService
         manifest.Export.ParallelJobs = parallelJobs ?? "";
     }
 
-    public void UpdateBookMetadata(
+    public void UpdateCoverMetadata(
         ExportWorkManifest manifest,
-        string title,
-        string author,
-        string album,
-        string narrator,
-        string genre,
         string coverSourcePath,
         string processedCoverPath)
     {
-        manifest.Metadata.Title = title ?? "";
-        manifest.Metadata.Author = author ?? "";
-        manifest.Metadata.Album = album ?? "";
-        manifest.Metadata.Narrator = narrator ?? "";
-        manifest.Metadata.Genre = genre ?? "";
         manifest.Metadata.CoverSourcePath = coverSourcePath ?? "";
         manifest.Metadata.ProcessedCoverPath = processedCoverPath ?? "";
     }
@@ -156,6 +232,7 @@ public sealed class WorkManifestService
 
     public void MarkExportStarted(ExportWorkManifest manifest)
     {
+        manifest.Resume.MergePaused = false;
         manifest.State.Status = ProjectManifestStatuses.Converting;
         manifest.State.CancelRequestedUtc = null;
         manifest.State.LastErrorUtc = null;
@@ -211,41 +288,22 @@ public sealed class WorkManifestService
         AddHistory(manifest, "ExportFailed", manifest.State.LastErrorSummary);
     }
 
-    public void MarkConversionCompleted(ExportWorkManifest manifest, string selectedPreset)
+    public void MarkConversionCompleted(ExportWorkManifest manifest)
     {
+        manifest.Resume.MergePaused = false;
+        manifest.State.CancelRequestedUtc = null;
+        manifest.State.LastErrorUtc = null;
+        manifest.State.LastErrorSummary = "";
         manifest.State.Status = ProjectManifestStatuses.ReviewBeforeMerge;
         manifest.State.LastSuccessfulStep = "ConversionCompleted";
         manifest.Resume.CanResume = false;
         manifest.Resume.Reason = "Alle Tracks wurden vorbereitet. Das Projekt kann geöffnet und final zusammengefügt werden.";
-        MarkManualMergeReviewCompleted(manifest, selectedPreset);
         AddHistory(manifest, "ConversionCompleted", "Alle Tracks wurden vorbereitet.");
-    }
-
-    public bool HasCompletedManualMergeReview(ExportWorkManifest manifest, string selectedPreset)
-    {
-        ArgumentNullException.ThrowIfNull(manifest);
-
-        var normalizedPreset = (selectedPreset ?? string.Empty).Trim();
-        if (normalizedPreset.Length == 0)
-            return false;
-
-        return manifest.State.ManualMergeReviewCompletedPresets.Any(preset =>
-            string.Equals(preset, normalizedPreset, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public void MarkManualMergeReviewCompleted(ExportWorkManifest manifest, string selectedPreset)
-    {
-        ArgumentNullException.ThrowIfNull(manifest);
-
-        var normalizedPreset = (selectedPreset ?? string.Empty).Trim();
-        if (normalizedPreset.Length == 0 || HasCompletedManualMergeReview(manifest, normalizedPreset))
-            return;
-
-        manifest.State.ManualMergeReviewCompletedPresets.Add(normalizedPreset);
     }
 
     public void MarkExportCompleted(ExportWorkManifest manifest)
     {
+        manifest.Resume.MergePaused = false;
         manifest.State.Status = ProjectManifestStatuses.Completed;
         manifest.State.LastSuccessfulStep = "ExportCompleted";
         manifest.Resume.CanResume = false;
@@ -404,14 +462,18 @@ public sealed class WorkManifestService
             .Count();
     }
 
-    private static bool IsReusableConvertedManifestEntry(
+    public static bool IsReusableConvertedManifestEntry(
         ExportWorkManifestTrack entry,
-        string presetDisplayName)
+        string presetDisplayName, PerformanceMeasurement? measurement = null)
     {
         if (!string.Equals(entry.Status, ProjectManifestTrackStatuses.Converted, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(entry.Preset, presetDisplayName, StringComparison.OrdinalIgnoreCase) ||
+            entry.PreparationVersion != 1 || entry.PreparationId == Guid.Empty ||
             string.IsNullOrWhiteSpace(entry.SourcePath) ||
-            string.IsNullOrWhiteSpace(entry.ConvertedPath))
+            string.IsNullOrWhiteSpace(entry.ConvertedPath) ||
+            entry.ConvertedPath.EndsWith(".part", StringComparison.OrdinalIgnoreCase) ||
+            entry.ConvertedPath.EndsWith(".copying", StringComparison.OrdinalIgnoreCase) ||
+            Path.GetFileNameWithoutExtension(entry.ConvertedPath).EndsWith(".part", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -421,13 +483,14 @@ public sealed class WorkManifestService
             var sourceInfo = new FileInfo(entry.SourcePath);
             var convertedInfo = new FileInfo(entry.ConvertedPath);
 
-            return sourceInfo.Exists &&
-                   convertedInfo.Exists &&
+            return Exists(sourceInfo, "SourceFileChecks", measurement) &&
+                   Exists(convertedInfo, "PreparedFileChecks", measurement) &&
                    sourceInfo.Length > 0 &&
                    convertedInfo.Length > 0 &&
                    entry.SourceSizeBytes == sourceInfo.Length &&
                    entry.SourceLastWriteUtcTicks == sourceInfo.LastWriteTimeUtc.Ticks &&
                    entry.ConvertedSizeBytes == convertedInfo.Length &&
+                   entry.ConvertedLastWriteUtcTicks == convertedInfo.LastWriteTimeUtc.Ticks &&
                    entry.ConvertedSizeBytes > 0;
         }
         catch
@@ -436,13 +499,44 @@ public sealed class WorkManifestService
         }
     }
 
+    private static bool Exists(FileInfo file, string counter, PerformanceMeasurement? measurement)
+    {
+        measurement?.Add(counter);
+        return file.Exists;
+    }
+
+    internal static bool MigratePreparedEntry(ExportWorkManifestTrack entry)
+    {
+        if (entry.PreparationId != Guid.Empty || entry.PreparationVersion is not (0 or 1) ||
+            !string.Equals(entry.Status, ProjectManifestTrackStatuses.Converted, StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            var source = new FileInfo(entry.SourcePath);
+            var converted = new FileInfo(entry.ConvertedPath);
+            if (!source.Exists || !converted.Exists || source.Length <= 0 || converted.Length <= 0 ||
+                source.Length != entry.SourceSizeBytes || source.LastWriteTimeUtc.Ticks != entry.SourceLastWriteUtcTicks ||
+                converted.Length != entry.ConvertedSizeBytes || string.IsNullOrWhiteSpace(entry.Preset) ||
+                (entry.ConvertedLastWriteUtcTicks != 0 && entry.ConvertedLastWriteUtcTicks != converted.LastWriteTimeUtc.Ticks)) return false;
+            entry.PreparationId = Guid.NewGuid();
+            entry.PreparationVersion = 1;
+            entry.ConvertedLastWriteUtcTicks = converted.LastWriteTimeUtc.Ticks;
+            if (entry.AacTiming is not { IsValid: true } timing || timing.Length != converted.Length ||
+                timing.LastWriteUtcTicks != converted.LastWriteTimeUtc.Ticks) entry.AacTiming = null;
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (ArgumentException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     public bool CanReuseConvertedTrack(
         ExportWorkManifest manifest,
         int index,
         TrackInfo track,
         string sourcePath,
         string convertedPath,
-        ExportPreset preset)
+        ExportPreset preset,
+        CancellationToken token = default)
     {
         if (!File.Exists(sourcePath) || !File.Exists(convertedPath))
             return false;
@@ -458,16 +552,21 @@ public sealed class WorkManifestService
         var sourceFullPath = Path.GetFullPath(sourcePath);
         var convertedFullPath = Path.GetFullPath(convertedPath);
 
-        return manifest.Tracks.Any(entry =>
-            string.Equals(entry.SourcePath, sourceFullPath, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(entry.ConvertedPath, convertedFullPath, StringComparison.OrdinalIgnoreCase) &&
+        var matching = manifest.Tracks.FirstOrDefault(entry =>
+            TrackPathService.PathEquals(entry.SourcePath, sourceFullPath) &&
+            TrackPathService.PathEquals(entry.ConvertedPath, convertedFullPath) &&
             string.Equals(entry.Preset, preset.DisplayName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(entry.Action, action, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(ProcessingActionIds.Normalize(entry.Action), action, StringComparison.OrdinalIgnoreCase) &&
+            entry.TargetSampleRateHz == track.TargetSampleRateHz &&
             entry.SourceSizeBytes == sourceInfo.Length &&
             entry.SourceLastWriteUtcTicks == sourceLastWriteTicks &&
             entry.ConvertedSizeBytes == convertedInfo.Length &&
             entry.ConvertedSizeBytes > 0 &&
             string.Equals(entry.Status, ProjectManifestTrackStatuses.Converted, StringComparison.OrdinalIgnoreCase));
+        token.ThrowIfCancellationRequested();
+        return matching is not null && IsReusableConvertedManifestEntry(matching, preset.DisplayName) &&
+            (track.SourceId == Guid.Empty || matching.SourceId == Guid.Empty || track.SourceId == matching.SourceId);
+
     }
 
     public bool MarkTrackPendingForPreparation(
@@ -518,13 +617,14 @@ public sealed class WorkManifestService
         return true;
     }
 
-    public void UpdateTrack(
+    public ExportWorkManifestTrack UpdateTrack(
         ExportWorkManifest manifest,
         int index,
         TrackInfo track,
         string sourcePath,
         string convertedPath,
-        ExportPreset preset)
+        ExportPreset preset,
+        bool existingContentVerified = false)
     {
         var sourceInfo = new FileInfo(sourcePath);
         var convertedInfo = new FileInfo(convertedPath);
@@ -535,6 +635,15 @@ public sealed class WorkManifestService
 
         var action = AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction);
 
+        var previousEntry = FindTrackEntry(manifest, track, sourcePath, convertedPath, preset);
+        if (track.SourceId == Guid.Empty) track.SourceId = previousEntry?.SourceId is Guid sourceId && sourceId != Guid.Empty
+            ? sourceId : Guid.NewGuid();
+        var previousTiming = previousEntry?.AacTiming;
+        var retainedTiming = existingContentVerified && previousTiming is { IsValid: true } &&
+            previousTiming.Length == convertedInfo.Length &&
+            previousTiming.LastWriteUtcTicks == convertedInfo.LastWriteTimeUtc.Ticks
+            ? previousTiming : null;
+
         manifest.Tracks.RemoveAll(entry => IsSameTrackCacheEntry(
             entry,
             sourceFullPath,
@@ -542,8 +651,9 @@ public sealed class WorkManifestService
             preset.DisplayName,
             action));
 
-        manifest.Tracks.Add(new ExportWorkManifestTrack
+        var completedEntry = new ExportWorkManifestTrack
         {
+            SourceId = track.SourceId,
             TrackIndex = trackIndex,
             SourcePath = sourceFullPath,
             SourceFileName = track.FileName,
@@ -553,19 +663,25 @@ public sealed class WorkManifestService
             SourceExtension = NormalizeSourceExtension(track.Extension),
             Duration = track.Duration ?? "",
             DurationTicks = track.DurationTicks,
-            ChapterTitle = track.ChapterTitle ?? "",
             Action = action,
             Preset = preset.DisplayName,
             Status = ProjectManifestTrackStatuses.Converted,
             ConvertedPath = convertedFullPath,
             ConvertedSizeBytes = convertedInfo.Length,
             ConvertedLastWriteUtcTicks = convertedInfo.LastWriteTimeUtc.Ticks,
+            PreparationId = existingContentVerified && previousEntry is { PreparationId: var previousId } && previousId != Guid.Empty
+                ? previousEntry!.PreparationId : Guid.NewGuid(),
+            PreparationVersion = 1,
+            TargetSampleRateHz = track.TargetSampleRateHz,
+            AacTiming = retainedTiming,
             CompletedUtc = DateTime.UtcNow
-        });
+        };
+        manifest.Tracks.Add(completedEntry);
 
         manifest.State.LastCompletedTrackIndex = Math.Max(manifest.State.LastCompletedTrackIndex, trackIndex);
         manifest.State.LastSuccessfulStep = "TrackConverted";
         AddHistory(manifest, "TrackConverted", "Track wurde fertig vorbereitet.", trackIndex: trackIndex);
+        return completedEntry;
     }
 
     public void AddHistory(
@@ -614,9 +730,11 @@ public sealed class WorkManifestService
         ExportPreset preset)
     {
         var sourceInfo = new FileInfo(sourcePath);
+        if (track.SourceId == Guid.Empty) track.SourceId = Guid.NewGuid();
 
         return new ExportWorkManifestTrack
         {
+            SourceId = track.SourceId,
             TrackIndex = index + 1,
             SourcePath = Path.GetFullPath(sourcePath),
             SourceFileName = track.FileName,
@@ -626,12 +744,12 @@ public sealed class WorkManifestService
             SourceExtension = NormalizeSourceExtension(track.Extension),
             Duration = track.Duration ?? "",
             DurationTicks = track.DurationTicks,
-            ChapterTitle = track.ChapterTitle ?? "",
             Action = AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction),
             Preset = preset.DisplayName,
             Status = ProjectManifestTrackStatuses.Pending,
             ConvertedPath = Path.GetFullPath(convertedPath),
             ConvertedSizeBytes = 0,
+            PreparationVersion = 1,
             ConvertedLastWriteUtcTicks = 0
         };
     }
@@ -643,14 +761,31 @@ public sealed class WorkManifestService
         string presetDisplayName,
         string action)
     {
-        if (!string.Equals(entry.Preset, presetDisplayName, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(entry.Action, action, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(entry.Preset, presetDisplayName, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (string.Equals(entry.ConvertedPath, convertedFullPath, StringComparison.OrdinalIgnoreCase))
+        // A physical cache file has one owner, including across processing-action changes.
+        if (TrackPathService.PathEquals(entry.ConvertedPath, convertedFullPath))
             return true;
 
-        return string.Equals(entry.SourcePath, sourceFullPath, StringComparison.OrdinalIgnoreCase);
+        // Legacy entries represented a physical source rather than a list occurrence.
+        // They are rebuilt under the current preparation contract; do not retain stale aliases.
+        return entry.PreparationVersion == 0 &&
+            string.Equals(ProcessingActionIds.Normalize(entry.Action), action, StringComparison.OrdinalIgnoreCase) &&
+            TrackPathService.PathEquals(entry.SourcePath, sourceFullPath);
+    }
+
+    private static string? ReadMainProjectId(string folder)
+    {
+        foreach (var path in new[] { ProjectFolderLayout.GetFolderManifestPath(folder),
+                     ProjectFolderLayout.GetMp3DiscManifestPath(folder), ProjectFolderLayout.GetAudioDiscManifestPath(folder) })
+        {
+            if (!File.Exists(path)) continue;
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            if (document.RootElement.TryGetProperty("ProjectId", out var id) && !string.IsNullOrWhiteSpace(id.GetString()))
+                return id.GetString();
+        }
+        return null;
     }
 
     private static ExportWorkManifest CreateNewManifest(
@@ -663,7 +798,7 @@ public sealed class WorkManifestService
         {
             FormatVersion = ExportWorkManifestVersions.Current,
             ProjectType = NormalizeProjectType(projectType),
-            ProjectId = Guid.NewGuid().ToString("N"),
+            ProjectId = ReadMainProjectId(projectWorkFolder) ?? Guid.NewGuid().ToString("N"),
             ProjectWorkFolder = projectWorkFolder,
             SourceFolder = sourceFolder,
             SelectedPreset = selectedPreset,
@@ -682,13 +817,17 @@ public sealed class WorkManifestService
         return manifest;
     }
 
-    private static void NormalizeLoadedManifest(
+    private static bool NormalizeLoadedManifest(
         ExportWorkManifest manifest,
         string projectType,
         string projectWorkFolder,
         string sourceFolder,
         string selectedPreset)
     {
+        var before = JsonSerializer.Serialize(manifest, JsonOptions);
+        var changed = false;
+
+        manifest.SchemaVersion = ExportWorkManifestVersions.CurrentSchemaVersion;
         manifest.FormatVersion = string.IsNullOrWhiteSpace(manifest.FormatVersion)
             ? ExportWorkManifestVersions.Current
             : manifest.FormatVersion;
@@ -710,6 +849,7 @@ public sealed class WorkManifestService
         manifest.State.ManualMergeReviewCompletedPresets ??= [];
         manifest.Resume ??= new ExportManifestResume();
         manifest.Tracks ??= [];
+        changed |= NormalizeTrackActionIds(manifest.Tracks);
         manifest.Discs ??= [];
         manifest.History ??= [];
 
@@ -732,6 +872,9 @@ public sealed class WorkManifestService
             sourcesComplete).ToManifestValue();
 
         NormalizeTrackProgress(manifest);
+        changed |= BackfillMissingTrackSourceIds(manifest, projectWorkFolder);
+        foreach (var entry in manifest.Tracks) changed |= MigratePreparedEntry(entry);
+        return changed || before != JsonSerializer.Serialize(manifest, JsonOptions);
     }
 
     private static string NormalizeProjectType(string projectType)
@@ -746,6 +889,8 @@ public sealed class WorkManifestService
 
     private static void NormalizeBeforeSave(ExportWorkManifest manifest)
     {
+        manifest.SchemaVersion = ExportWorkManifestVersions.CurrentSchemaVersion;
+
         manifest.State ??= new ExportManifestState();
         manifest.State.ManualMergeReviewCompletedPresets ??= [];
         manifest.State.ManualMergeReviewCompletedPresets = manifest.State.ManualMergeReviewCompletedPresets
@@ -757,14 +902,217 @@ public sealed class WorkManifestService
         manifest.Tracks = manifest.Tracks
             .OrderBy(track => track.TrackIndex)
             .ToList();
+        NormalizeTrackActionIds(manifest.Tracks);
 
         manifest.Discs = manifest.Discs
             .OrderBy(disc => disc.DiscIndex)
             .ToList();
 
         NormalizeTrackProgress(manifest);
+        BackfillMissingTrackSourceIds(manifest, manifest.ProjectWorkFolder);
         TrimHistory(manifest);
     }
+
+    private static bool NormalizeTrackActionIds(IEnumerable<ExportWorkManifestTrack> tracks)
+    {
+        var changed = false;
+        foreach (var track in tracks)
+        {
+            var id = ProcessingActionIds.NormalizeOrEmpty(track.Action);
+            if (string.Equals(track.Action, id, StringComparison.Ordinal))
+                continue;
+
+            track.Action = id;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool BackfillMissingTrackSourceIds(ExportWorkManifest manifest, string projectWorkFolder)
+    {
+        var changed = false;
+        var evidence = BuildSourceIdEvidence(projectWorkFolder);
+        foreach (var track in manifest.Tracks)
+        {
+            if (track.SourceId != Guid.Empty)
+                continue;
+
+            track.SourceId = ResolveExistingSourceId(track, evidence) ?? Guid.NewGuid();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static Guid? ResolveExistingSourceId(
+        ExportWorkManifestTrack track,
+        IReadOnlyCollection<SourceIdEvidence> evidence)
+    {
+        if (evidence.Count == 0)
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(track.SourcePath))
+        {
+            var pathMatch = evidence.FirstOrDefault(item =>
+                !string.IsNullOrWhiteSpace(item.SourcePath) &&
+                PathsEqual(item.SourcePath, track.SourcePath));
+            if (pathMatch is not null)
+                return pathMatch.SourceId;
+        }
+
+        if (track.SourceSizeBytes > 0 && track.SourceLastWriteUtcTicks > 0)
+        {
+            var matches = evidence
+                .Where(item =>
+                    item.SourceSizeBytes == track.SourceSizeBytes &&
+                    item.SourceLastWriteUtcTicks == track.SourceLastWriteUtcTicks &&
+                    string.Equals(item.SourceFileName, track.SourceFileName, StringComparison.OrdinalIgnoreCase))
+                .Select(item => item.SourceId)
+                .Distinct()
+                .Take(2)
+                .ToList();
+
+            if (matches.Count == 1)
+                return matches[0];
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyCollection<SourceIdEvidence> BuildSourceIdEvidence(string projectWorkFolder)
+    {
+        if (string.IsNullOrWhiteSpace(projectWorkFolder))
+            return [];
+
+        var result = new List<SourceIdEvidence>();
+        AddSourceCopyIdentityEvidence(projectWorkFolder, result);
+        AddMp3DiscManifestEvidence(projectWorkFolder, result);
+        AddAudioDiscManifestEvidence(projectWorkFolder, result);
+        return result;
+    }
+
+    private static void AddSourceCopyIdentityEvidence(string projectWorkFolder, List<SourceIdEvidence> result)
+    {
+        try
+        {
+            foreach (var identity in new SourceCopyIdentityStore().Load(projectWorkFolder))
+            {
+                if (identity.SourceId == Guid.Empty)
+                    continue;
+
+                result.Add(new SourceIdEvidence(
+                    identity.SourceId,
+                    Path.Combine(projectWorkFolder, identity.TargetRelativePath),
+                    identity.SourceFileName,
+                    identity.SourceSizeBytes,
+                    identity.SourceLastWriteUtcTicks));
+            }
+        }
+        catch
+        {
+            // Source-copy evidence is optional during legacy manifest normalization.
+        }
+    }
+
+    private static void AddMp3DiscManifestEvidence(string projectWorkFolder, List<SourceIdEvidence> result)
+    {
+        try
+        {
+            var manifestPath = ProjectFolderLayout.ResolveMp3DiscManifestPath(projectWorkFolder);
+            if (!File.Exists(manifestPath))
+                return;
+
+            var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+            if (!json.Contains("Mp3Disc", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            PersistentJsonSchema.Read(
+                json,
+                "MP3-CD-Projektmanifest",
+                manifestPath,
+                Mp3DiscManifestVersions.CurrentSchemaVersion);
+            var manifest = JsonSerializer.Deserialize<Mp3DiscProjectManifest>(json, JsonOptions);
+            if (manifest is null ||
+                !manifest.ProjectType.Contains("Mp3Disc", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            foreach (var sourceFile in manifest.ImportedDiscs.SelectMany(disc => disc.SourceFiles))
+            {
+                if (sourceFile.SourceId == Guid.Empty)
+                    continue;
+
+                result.Add(new SourceIdEvidence(
+                    sourceFile.SourceId,
+                    Path.Combine(ProjectFolderLayout.GetOriginalsFolder(projectWorkFolder), sourceFile.RelativePath),
+                    sourceFile.SourceFileName,
+                    sourceFile.SourceSizeBytes,
+                    sourceFile.SourceLastWriteUtcTicks));
+            }
+        }
+        catch
+        {
+            // Disc manifest evidence is optional during export manifest normalization.
+        }
+    }
+
+    private static void AddAudioDiscManifestEvidence(string projectWorkFolder, List<SourceIdEvidence> result)
+    {
+        try
+        {
+            var manifestPath = ProjectFolderLayout.ResolveAudioDiscManifestPath(projectWorkFolder);
+            if (!File.Exists(manifestPath))
+                return;
+
+            var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+            PersistentJsonSchema.Read(
+                json,
+                "Audio-CD-Projektmanifest",
+                manifestPath,
+                AudioDiscProjectManifestVersions.CurrentSchemaVersion);
+            var manifest = JsonSerializer.Deserialize<AudioDiscProjectManifest>(json, JsonOptions);
+            if (manifest is null)
+                return;
+
+            foreach (var track in manifest.Discs.SelectMany(disc => disc.Tracks))
+            {
+                if (track.SourceId == Guid.Empty)
+                    continue;
+
+                result.Add(new SourceIdEvidence(
+                    track.SourceId,
+                    Path.Combine(projectWorkFolder, track.RelativePath),
+                    track.FileName,
+                    SourceSizeBytes: 0,
+                    SourceLastWriteUtcTicks: 0));
+            }
+        }
+        catch
+        {
+            // Audio-disc manifest evidence is optional during export manifest normalization.
+        }
+    }
+
+    private static bool PathsEqual(string left, string right)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private sealed record SourceIdEvidence(
+        Guid SourceId,
+        string SourcePath,
+        string SourceFileName,
+        long SourceSizeBytes,
+        long SourceLastWriteUtcTicks);
 
 
     private static void NormalizeTrackProgress(ExportWorkManifest manifest)

@@ -11,7 +11,7 @@ public sealed class WorkflowExportFailureStatusService
         if (exception is ExportTrackException trackException)
         {
             var message = string.IsNullOrWhiteSpace(trackException.ErrorSummary)
-                ? "Export fehlgeschlagen."
+                ? LocalizationText.Get("MainWindow.Export.Failed.Progress")
                 : trackException.ErrorSummary.Trim();
             var failedTrackOrFileNumber = trackException.TrackIndex > 0
                 ? trackException.TrackIndex
@@ -26,7 +26,7 @@ public sealed class WorkflowExportFailureStatusService
 
         return new WorkflowErrorStatus(
             string.IsNullOrWhiteSpace(firstLine)
-                ? "Export fehlgeschlagen."
+                ? LocalizationText.Get("MainWindow.Export.Failed.Progress")
                 : firstLine.Trim());
     }
 }

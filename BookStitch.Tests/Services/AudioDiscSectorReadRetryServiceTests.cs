@@ -33,6 +33,7 @@ public sealed class AudioDiscSectorReadRetryServiceTests
     {
         var service = CreateWithoutDelay();
         var calls = 0;
+        var retries = 0;
 
         var result = await service.ReadAsync(
             800,
@@ -45,10 +46,12 @@ public sealed class AudioDiscSectorReadRetryServiceTests
 
                 return new byte[] { 7 };
             },
-            CancellationToken.None);
+            CancellationToken.None,
+            () => retries++);
 
         Assert.Equal(new byte[] { 7 }, result);
         Assert.Equal(3, calls);
+        Assert.Equal(2, retries);
     }
 
     [Fact]
@@ -74,6 +77,30 @@ public sealed class AudioDiscSectorReadRetryServiceTests
         Assert.Equal(3, exception.Attempts);
         Assert.Contains("nach 3 Versuchen", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Unvollständige Sektordaten", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadAsync_RetryObserverFailureDoesNotAlterSuccessfulRetry()
+    {
+        var service = CreateWithoutDelay();
+        var calls = 0;
+
+        var result = await service.ReadAsync(
+            900,
+            8,
+            (_, _) =>
+            {
+                calls++;
+                if (calls == 1)
+                    throw new IOException("Transient");
+
+                return new byte[] { 9 };
+            },
+            CancellationToken.None,
+            () => throw new InvalidOperationException("diagnostic observer failure"));
+
+        Assert.Equal(new byte[] { 9 }, result);
+        Assert.Equal(2, calls);
     }
 
     [Fact]

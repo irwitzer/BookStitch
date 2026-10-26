@@ -1,0 +1,40 @@
+<UserControl x:Class="BookStitch.Controls.SettingsLanguageControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services">
+    <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+        <StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <TextBlock x:Name="LanguageHeadingTextBlock" FontSize="18" FontWeight="SemiBold"
+                           Foreground="{DynamicResource MainTextBrush}" VerticalAlignment="Center"/>
+                <ContentControl x:Name="LanguageHeadingIcon" Width="30" Height="24" Margin="10,0,0,0"
+                                Foreground="{DynamicResource AccentForegroundBrush}"
+                                ContentTemplate="{StaticResource LanguageSymbolTemplate}"
+                                Focusable="False" IsHitTestVisible="False"/>
+            </StackPanel>
+            <Grid Margin="0,0,0,6" MinHeight="{DynamicResource StandardButtonHeight}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{services:LocalizedText Key=Settings.LanguageSelection}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ComboBox x:Name="UiLanguageComboBox" AutomationProperties.Name="{services:LocalizedText Key=Settings.LanguageSelection}" MinWidth="220" HorizontalAlignment="Left"
+                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                              SelectionChanged="UiLanguageComboBox_Changed"/>
+                    <Button x:Name="UiLanguageRestartButton" MinWidth="110" Margin="12,0,0,0"
+                            Style="{StaticResource SettingsSecondaryButtonStyle}"
+                            Visibility="Collapsed" Click="UiLanguageRestartButton_Click"/>
+                </StackPanel>
+            </Grid>
+            <TextBlock x:Name="LanguageRestartTextBlock" TextWrapping="Wrap"
+                       Visibility="Hidden" MinHeight="40" LineHeight="20" Margin="110,0,0,18"/>
+            <StackPanel Margin="110,0,0,0">
+                <TextBlock x:Name="TranslationNoticeTextBlock" TextWrapping="Wrap" LineHeight="20"
+                           Foreground="{DynamicResource MainTextBrush}" Margin="0,0,0,22"/>
+                <TextBlock x:Name="ChapterNoticeTextBlock" TextWrapping="Wrap" LineHeight="20"
+                           Foreground="{DynamicResource MainTextBrush}"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

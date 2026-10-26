@@ -1,16 +1,44 @@
 using BookStitch.Dialog;
 using BookStitch.Models;
 using BookStitch.Services;
+using BookStitch.Tests.TestHelpers;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
 
 public sealed class AudioDiscProjectServiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prepared_manifest_survives_successful_or_failed_metadata_attachment_without_ripping(bool failAttachment)
+    {
+        using var folder = new TemporaryFolder();
+        var service = new AudioDiscProjectService();
+        var manifest = service.CreateInitialManifest(folder.Path, CreateDisc(trackCount: 2), 1,
+            CreateSetup(title: "Prepared"), AudioDiscWorkingFormat.Flac);
+        service.Save(manifest);
+        var session = new ProjectMetadataSession();
+        session.BeginNew();
+        if (failAttachment)
+        {
+            new ProjectMetadataStore().Save(folder.Path, new ProjectMetadata());
+            Assert.Throws<InvalidOperationException>(() => session.AttachNewProject(folder.Path));
+        }
+        else session.AttachNewProject(folder.Path);
+        var loaded = service.TryLoad(folder.Path)!;
+        Assert.Equal(manifest.ProjectId, loaded.ProjectId);
+        Assert.Equal(2, Assert.Single(loaded.Discs).Tracks.Count);
+        Assert.All(loaded.Discs[0].Tracks, track => Assert.Equal(AudioDiscTrackStatus.Pending, track.Status));
+        Assert.True(File.Exists(ProjectFolderLayout.GetProjectMetadataPath(folder.Path)));
+        Assert.True(File.Exists(ProjectFolderLayout.GetAudioDiscManifestPath(folder.Path)));
+    }
+
     [Fact]
-    public void CreateInitialManifest_UsesMetadataForContinuousFileAndChapterNames()
+    public void CreateInitialManifest_UsesMetadataForContinuousFileNamesWithoutPersistingChapterTitles()
     {
         var service = new AudioDiscProjectService();
         var disc = CreateDisc(trackCount: 3);
@@ -23,23 +51,37 @@ public sealed class AudioDiscProjectServiceTests
             setup,
             AudioDiscWorkingFormat.Flac);
 
+        Assert.Equal(string.Empty, manifest.Title);
+        Assert.Equal(string.Empty, manifest.Author);
+        Assert.Equal(string.Empty, manifest.Album);
+        Assert.Equal(string.Empty, manifest.Narrator);
+        Assert.Equal(string.Empty, manifest.Genre);
+
         var tracks = manifest.Discs.Single().Tracks;
         Assert.Equal(new[] { "001_NSA.flac", "002_NSA.flac", "003_NSA.flac" }, tracks.Select(track => track.FileName));
-        Assert.Equal(new[] { "001 NSA", "002 NSA", "003 NSA" }, tracks.Select(track => track.ChapterTitle));
+        Assert.All(tracks, track => Assert.Equal(string.Empty, track.ChapterTitle));
         Assert.All(tracks, track => Assert.Equal(AudioDiscTrackStatus.Pending, track.Status));
         Assert.All(tracks, track => Assert.Equal(4500, track.SectorCount));
+        Assert.All(tracks, track => Assert.NotEqual(Guid.Empty, track.SourceId));
+        Assert.Equal(tracks.Count, tracks.Select(track => track.SourceId).Distinct().Count());
     }
 
     [Fact]
-    public void BuildDiscEntry_ContinuesGlobalNumberingAcrossAdditionalDiscs()
+    public void BuildDiscEntry_ContinuesGlobalNumberingAcrossAdditionalDiscsUsingCanonicalProjectTitle()
     {
+        using var folder = new TemporaryFolder();
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
-            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            folder.Path,
             CreateDisc(trackCount: 2),
             discNumber: 1,
             CreateSetup(title: "Stonehenge"),
             AudioDiscWorkingFormat.Flac);
+        manifest.Title = "Veralteter Manifest-Titel";
+
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, "Stonehenge", MetadataOrigin.User);
+        new ProjectMetadataStore().Save(folder.Path, metadata);
 
         var secondDisc = service.BuildDiscEntry(manifest, CreateDisc(trackCount: 2), discNumber: 2, startingGlobalIndex: 3);
 
@@ -61,23 +103,27 @@ public sealed class AudioDiscProjectServiceTests
 
         var tracks = manifest.Discs.Single().Tracks;
         Assert.Equal(new[] { "001_Track_01.flac", "002_Track_02.flac" }, tracks.Select(track => track.FileName));
-        Assert.Equal(new[] { "001 Kapitel", "002 Kapitel" }, tracks.Select(track => track.ChapterTitle));
+        Assert.All(tracks, track => Assert.Equal(string.Empty, track.ChapterTitle));
     }
 
     [Fact]
     public void CreateTrackPreview_ShowsAudioCdSourcePropertiesInsteadOfFutureWorkingFileProperties()
     {
+        using var folder = new TemporaryFolder();
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
-            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            folder.Path,
             CreateDisc(trackCount: 1),
             discNumber: 1,
             CreateSetup(title: "NSA"),
             AudioDiscWorkingFormat.Flac);
+        SaveCanonicalProjectMetadata(folder.Path, "NSA", "Autor");
 
         var track = Assert.Single(service.CreateTrackPreview(manifest));
 
+        Assert.Equal(44100, track.SampleRateHz);
         Assert.Equal(@"CD-Laufwerk G:\", track.RelativeFolder);
+        Assert.Equal(string.Empty, track.DisplayFolder);
         Assert.Equal("Audio-CD", track.Extension);
         Assert.Equal(string.Empty, track.TagTitle);
         Assert.Equal("001 NSA", track.ChapterTitle);
@@ -85,13 +131,15 @@ public sealed class AudioDiscProjectServiceTests
         Assert.Equal(2, track.Channels);
         Assert.Equal("Stereo", track.ChannelLayout);
         Assert.Equal("PCM", track.Codec);
-        Assert.Equal("FLAC rippen", track.ProcessingAction);
+        Assert.Equal(ProcessingActionIds.RipFlac, track.ProcessingAction);
+        Assert.Equal("FLAC rippen", track.DisplayProcessingAction);
         Assert.Equal(10.1d, track.SizeMb, precision: 1);
+        Assert.Equal(1, track.AutomaticOrderPosition);
+        Assert.Equal(manifest.Discs.Single().Tracks.Single().SourceId, track.SourceId);
     }
 
-
     [Fact]
-    public void ApplyManifestMetadataToRippedTracks_RestoresProjectChapterDataAndClearsMetadataHints()
+    public void CreateTrackPreview_FromManifest_UsesGlobalIndexAsAutomaticOrder()
     {
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
@@ -100,6 +148,57 @@ public sealed class AudioDiscProjectServiceTests
             discNumber: 1,
             CreateSetup(title: "NSA"),
             AudioDiscWorkingFormat.Flac);
+        service.AddDisc(
+            manifest,
+            CreateDisc(trackCount: 2, identity: "disc-two"),
+            discNumber: 2);
+
+        var tracks = service.CreateTrackPreview(manifest);
+
+        Assert.Equal(new[] { 1, 2, 3, 4 }, tracks.Select(track => track.Index));
+        Assert.Equal(new int?[] { 1, 2, 3, 4 }, tracks.Select(track => track.AutomaticOrderPosition));
+        Assert.Equal(4, tracks.Select(track => track.AutomaticOrderPosition).Distinct().Count());
+        Assert.All(tracks, track => Assert.Equal(string.Empty, track.DisplayFolder));
+    }
+
+
+    [Fact]
+    public void CreateTrackPreview_UsesCanonicalAuthorInsteadOfLegacyManifestAuthor()
+    {
+        using var folder = new TemporaryFolder();
+        var service = new AudioDiscProjectService();
+        var manifest = service.CreateInitialManifest(
+            folder.Path,
+            CreateDisc(trackCount: 1),
+            discNumber: 1,
+            CreateSetup(title: "NSA"),
+            AudioDiscWorkingFormat.Flac);
+        manifest.Author = "Veralteter Manifest-Autor";
+
+        var metadata = new ProjectMetadata();
+        metadata.SetValue<IReadOnlyList<string>>(
+            ProjectMetadataField.Authors,
+            ["Kanonischer Autor"],
+            MetadataOrigin.User);
+        new ProjectMetadataStore().Save(folder.Path, metadata);
+
+        var track = Assert.Single(service.CreateTrackPreview(manifest));
+
+        Assert.Equal("Kanonischer Autor", track.Artist);
+    }
+
+    [Fact]
+    public void ApplyManifestMetadataToRippedTracks_DerivesProjectChapterDataAndClearsMetadataHints()
+    {
+        using var folder = new TemporaryFolder();
+        var service = new AudioDiscProjectService();
+        var manifest = service.CreateInitialManifest(
+            folder.Path,
+            CreateDisc(trackCount: 2),
+            discNumber: 1,
+            CreateSetup(title: "NSA"),
+            AudioDiscWorkingFormat.Flac);
+        SaveCanonicalProjectMetadata(folder.Path, "NSA", "Autor");
         var tracks = new List<TrackInfo>
         {
             new()
@@ -127,21 +226,68 @@ public sealed class AudioDiscProjectServiceTests
         service.ApplyManifestMetadataToRippedTracks(manifest, tracks);
 
         Assert.Equal(new[] { "001 NSA", "002 NSA" }, tracks.Select(track => track.ChapterTitle));
+        Assert.Equal(manifest.Discs.Single().Tracks.Select(track => track.SourceId), tracks.Select(track => track.SourceId));
         Assert.All(tracks, track => Assert.Equal(string.Empty, track.TagTitle));
+        Assert.Equal(new int?[] { 1, 2 }, tracks.Select(track => track.AutomaticOrderPosition));
         Assert.All(tracks, track => Assert.Equal(string.Empty, track.Warning));
         Assert.Equal(new int?[] { 1, 2 }, tracks.Select(track => track.TrackNumber).ToArray());
+        Assert.All(tracks, track => Assert.Equal(string.Empty, track.DisplayFolder));
+    }
+
+    [Fact]
+    public void ApplyManifestOrderAndMetadataToRippedTracks_RestoresGlobalDiscOrderBeforeProjection()
+    {
+        using var folder = new TemporaryFolder();
+        var service = new AudioDiscProjectService();
+        var manifest = service.CreateInitialManifest(
+            folder.Path,
+            CreateDisc(trackCount: 2),
+            discNumber: 1,
+            CreateSetup(title: "NSA"),
+            AudioDiscWorkingFormat.Flac);
+        service.AddDisc(
+            manifest,
+            CreateDisc(trackCount: 2, identity: "disc-two"),
+            discNumber: 2);
+        SaveCanonicalProjectMetadata(folder.Path, "NSA", "Autor");
+
+        var manifestTracks = manifest.Discs
+            .SelectMany(disc => disc.Tracks)
+            .OrderBy(track => track.GlobalIndex)
+            .ToList();
+        var tracks = manifestTracks
+            .OrderByDescending(track => track.GlobalIndex)
+            .Select(track => new TrackInfo
+            {
+                FileName = track.FileName,
+                FilePath = Path.Combine(manifest.ProjectFolder, track.RelativePath),
+                Codec = "FLAC",
+                ProcessingAction = "Konvertieren",
+                AudioValidationPassed = true
+            })
+            .ToList();
+
+        service.ApplyManifestOrderAndMetadataToRippedTracks(manifest, tracks);
+
+        Assert.Equal(new[] { 1, 2, 3, 4 }, tracks.Select(track => track.Index));
+        Assert.Equal(new int?[] { 1, 2, 3, 4 }, tracks.Select(track => track.AutomaticOrderPosition));
+        Assert.Equal(new int?[] { 1, 1, 2, 2 }, tracks.Select(track => track.DiscNumber));
+        Assert.Equal(new int?[] { 1, 2, 1, 2 }, tracks.Select(track => track.TrackNumber));
+        Assert.Equal(manifestTracks.Select(track => track.SourceId), tracks.Select(track => track.SourceId));
     }
 
     [Fact]
     public void ApplyManifestMetadataToRippedTracks_PreservesBlockingAudioErrors()
     {
+        using var folder = new TemporaryFolder();
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
-            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            folder.Path,
             CreateDisc(trackCount: 1),
             discNumber: 1,
             CreateSetup(title: "NSA"),
             AudioDiscWorkingFormat.Flac);
+        SaveCanonicalProjectMetadata(folder.Path, "NSA", "Autor");
         var track = new TrackInfo
         {
             FileName = "001_NSA.flac",
@@ -193,13 +339,17 @@ public sealed class AudioDiscProjectServiceTests
     [Fact]
     public void AddDisc_AppendsDiscWithContinuousGlobalNumbering()
     {
+        using var folder = new TemporaryFolder();
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
-            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            folder.Path,
             CreateDisc(trackCount: 2, identity: "disc-one"),
             discNumber: 1,
             CreateSetup(title: "NSA"),
             AudioDiscWorkingFormat.Flac);
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, "NSA", MetadataOrigin.User);
+        new ProjectMetadataStore().Save(folder.Path, metadata);
 
         var added = service.AddDisc(
             manifest,
@@ -249,6 +399,30 @@ public sealed class AudioDiscProjectServiceTests
     }
 
     [Fact]
+    public void AddDisc_DuplicateOverrideAddsNextDiscWithoutChangingExistingIdentity()
+    {
+        var service = new AudioDiscProjectService();
+        var setup = CreateSetup(title: "NSA") with { TotalDiscs = 2 };
+        var manifest = service.CreateInitialManifest(
+            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            CreateDisc(2, "disc-one"),
+            discNumber: 1,
+            setup,
+            AudioDiscWorkingFormat.Flac);
+
+        var added = service.AddDisc(
+            manifest,
+            CreateDisc(2, "disc-one"),
+            discNumber: 2,
+            acceptDuplicate: true);
+
+        Assert.Equal(2, added.DiscNumber);
+        Assert.Equal(
+            ["disc-one", "disc-one"],
+            manifest.Discs.OrderBy(disc => disc.DiscNumber).Select(disc => disc.DiscIdentity));
+    }
+
+    [Fact]
     public void AddDisc_RejectsDifferentPhysicalDiscForOccupiedNumber()
     {
         var service = new AudioDiscProjectService();
@@ -268,7 +442,7 @@ public sealed class AudioDiscProjectServiceTests
 
 
     [Fact]
-    public void UpdateSnapshot_RefreshesEditableMetadataAndChapterSuggestions()
+    public void UpdateSnapshot_RefreshesOperationalStateWithoutRewritingLegacyMetadataScalars()
     {
         var service = new AudioDiscProjectService();
         var manifest = service.CreateInitialManifest(
@@ -277,6 +451,13 @@ public sealed class AudioDiscProjectServiceTests
             discNumber: 1,
             CreateSetup(title: "Alter Titel"),
             AudioDiscWorkingFormat.Flac);
+        manifest.Title = "Legacy Titel";
+        manifest.Author = "Legacy Autor";
+        manifest.Album = "Legacy Album";
+        manifest.Narrator = "Legacy Sprecher";
+        manifest.Genre = "Legacy Genre";
+        manifest.Discs.Single().Tracks[0].ChapterTitle = "Legacy Kapitel 1";
+        manifest.Discs.Single().Tracks[1].ChapterTitle = "Legacy Kapitel 2";
         var originalFileNames = manifest.Discs.Single().Tracks.Select(track => track.FileName).ToList();
         var snapshot = new ProjectSnapshotUiState(
             "AAC Stereo 128 kbps",
@@ -301,14 +482,14 @@ public sealed class AudioDiscProjectServiceTests
         Assert.Equal(".m4a", manifest.OutputExtension);
         Assert.Equal(@"D:\Ausgabe", manifest.OutputFolder);
         Assert.Equal("{Titel}", manifest.FileNameTemplate);
-        Assert.Equal("Neuer Titel", manifest.Title);
-        Assert.Equal("Neue Autorin", manifest.Author);
-        Assert.Equal("Neuer Titel", manifest.Album);
-        Assert.Equal("Neue Sprecherin", manifest.Narrator);
-        Assert.Equal("Hörbuch", manifest.Genre);
+        Assert.Equal("Legacy Titel", manifest.Title);
+        Assert.Equal("Legacy Autor", manifest.Author);
+        Assert.Equal("Legacy Album", manifest.Album);
+        Assert.Equal("Legacy Sprecher", manifest.Narrator);
+        Assert.Equal("Legacy Genre", manifest.Genre);
         Assert.Equal(@"D:\Cover.png", manifest.CoverSourcePath);
         Assert.Equal(@"D:\Cover.jpg", manifest.ProcessedCoverPath);
-        Assert.Equal(new[] { "001 Neuer Titel", "002 Neuer Titel" },
+        Assert.Equal(new[] { "Legacy Kapitel 1", "Legacy Kapitel 2" },
             manifest.Discs.Single().Tracks.Select(track => track.ChapterTitle));
         Assert.Equal(originalFileNames, manifest.Discs.Single().Tracks.Select(track => track.FileName));
     }
@@ -396,6 +577,28 @@ public sealed class AudioDiscProjectServiceTests
     }
 
     [Fact]
+    public void CompleteDiscImportEarly_ShrinksExpectedSequenceAndMarksRipCompleted()
+    {
+        var service = new AudioDiscProjectService();
+        var setup = CreateSetup(title: "NSA") with { TotalDiscs = 3 };
+        var manifest = service.CreateInitialManifest(
+            Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Test"),
+            CreateDisc(trackCount: 1, identity: "disc-one"),
+            discNumber: 1,
+            setup,
+            AudioDiscWorkingFormat.Flac);
+        manifest.Discs[0].Tracks.Single().Status = AudioDiscTrackStatus.Ripped;
+        service.MarkDiscCompleted(manifest, 1, TimeSpan.FromMinutes(2));
+
+        service.CompleteDiscImportEarly(manifest);
+
+        Assert.Equal(1, manifest.TotalDiscs);
+        Assert.True(service.IsProjectRipCompleted(manifest));
+        Assert.Equal(AudioDiscProjectStatus.RippingCompleted, manifest.Status);
+        Assert.Single(manifest.Discs);
+    }
+
+    [Fact]
     public void MarkProjectCanceled_ResetsActiveDiscToPendingForResume()
     {
         var service = new AudioDiscProjectService();
@@ -475,13 +678,115 @@ public sealed class AudioDiscProjectServiceTests
                 }
                 """);
 
+            Directory.CreateDirectory(Path.Combine(projectFolder, "ripped"));
+            File.WriteAllBytes(Path.Combine(projectFolder, "ripped", "001_NSA.flac"), [1, 2, 3]);
+            Assert.Equal(ProjectUpgradeOutcome.Upgraded, new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder).Outcome);
             var manifest = service.TryLoad(projectFolder);
 
             Assert.NotNull(manifest);
             Assert.Equal(AudioDiscProjectManifestVersions.Current, manifest.FormatVersion);
+            Assert.Equal(AudioDiscProjectManifestVersions.CurrentSchemaVersion, manifest.SchemaVersion);
             Assert.Equal(AudioDiscProjectStatus.RippingCompleted, manifest.Status);
             Assert.Equal(AudioDiscStatus.Completed, manifest.Discs.Single().Status);
             Assert.NotNull(manifest.CompletedUtc);
+
+            var migratedJson = File.ReadAllText(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder));
+            Assert.Contains("\"schemaVersion\": 1", migratedJson);
+        }
+        finally
+        {
+            Directory.Delete(projectFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryLoad_CurrentSchemaTrackWithoutSourceId_UsesExportManifestEvidence()
+    {
+        var service = new AudioDiscProjectService();
+        var projectFolder = Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Load-" + Guid.NewGuid());
+        Directory.CreateDirectory(projectFolder);
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        try
+        {
+            var sourceId = Guid.NewGuid();
+            var relativePath = Path.Combine(ProjectFolderLayout.OriginalsFolderName, "CD 01", "001_NSA.flac");
+            var sourcePath = Path.Combine(projectFolder, relativePath);
+            WriteAudioDiscManifestWithoutSourceId(projectFolder, relativePath);
+            WriteExportManifestWithSourceId(
+                ProjectFolderLayout.GetWorkManifestPath(projectFolder),
+                sourceId,
+                sourcePath);
+
+            Assert.Equal(ProjectUpgradeOutcome.Upgraded, new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder).Outcome);
+            var manifest = service.TryLoad(projectFolder);
+
+            Assert.NotNull(manifest);
+            Assert.Equal(sourceId, manifest.Discs.Single().Tracks.Single().SourceId);
+            Assert.Contains(sourceId.ToString(), File.ReadAllText(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder)), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(projectFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryLoad_CurrentSchemaTrackWithoutSourceId_BackfillsAndPersistsOnce()
+    {
+        var service = new AudioDiscProjectService();
+        var projectFolder = Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Load-" + Guid.NewGuid());
+        Directory.CreateDirectory(projectFolder);
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        try
+        {
+            WriteAudioDiscManifestWithoutSourceId(
+                projectFolder,
+                Path.Combine(ProjectFolderLayout.OriginalsFolderName, "CD 01", "001_NSA.flac"));
+
+            Assert.Equal(ProjectUpgradeOutcome.Upgraded, new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder).Outcome);
+            var first = service.TryLoad(projectFolder);
+            Assert.NotNull(first);
+            var sourceId = first.Discs.Single().Tracks.Single().SourceId;
+            var persistedJson = File.ReadAllText(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder));
+
+            var second = service.TryLoad(projectFolder);
+
+            Assert.Equal(Guid.Empty, sourceId);
+            Assert.NotNull(second);
+            Assert.Equal(sourceId, second.Discs.Single().Tracks.Single().SourceId);
+            Assert.Contains(sourceId.ToString(), persistedJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(persistedJson, File.ReadAllText(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder)));
+        }
+        finally
+        {
+            Directory.Delete(projectFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryLoad_UnsupportedSchema_RejectsAndLeavesFileUnchanged()
+    {
+        var service = new AudioDiscProjectService();
+        var projectFolder = Path.Combine(Path.GetTempPath(), "BookStitch-AudioDisc-Load-" + Guid.NewGuid());
+        Directory.CreateDirectory(projectFolder);
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        try
+        {
+            var path = ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder);
+            var json = """
+            {
+              "schemaVersion": 99,
+              "FormatVersion": "4",
+              "ProjectType": "AudioCdProject",
+              "ProjectFolder": "ignored",
+              "TotalDiscs": 1,
+              "Discs": []
+            }
+            """;
+            File.WriteAllText(path, json);
+
+            Assert.Throws<PersistentJsonSchemaException>(() => service.TryLoad(projectFolder));
+            Assert.Equal(json, File.ReadAllText(path));
         }
         finally
         {
@@ -635,6 +940,17 @@ public sealed class AudioDiscProjectServiceTests
         Assert.Equal(ProjectPipelineStateNames.AcquiringSources, manifest.PipelineState);
     }
 
+    private static void SaveCanonicalProjectMetadata(string projectFolder, string title, string author)
+    {
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, title, MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(
+            ProjectMetadataField.Authors,
+            [author],
+            MetadataOrigin.User);
+        new ProjectMetadataStore().Save(projectFolder, metadata);
+    }
+
     private static AudioDiscInfo CreateDisc(int trackCount, string identity = "disc-identity")
     {
         var tracks = Enumerable.Range(1, trackCount)
@@ -673,4 +989,63 @@ public sealed class AudioDiscProjectServiceTests
         CoverSourcePath: "",
         ProcessedCoverPath: "",
         AutoMergeAfterConversion: false);
+
+    private static void WriteAudioDiscManifestWithoutSourceId(string projectFolder, string relativePath)
+    {
+        var path = ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder);
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{AudioDiscProjectManifestVersions.Current}}",
+          "ProjectType": "AudioCdProject",
+          "ProjectFolder": "{{JsonEncodedText.Encode(projectFolder)}}",
+          "TotalDiscs": 1,
+          "Discs": [
+            {
+              "DiscNumber": 1,
+              "DiscIdentity": "legacy-disc",
+              "Tracks": [
+                {
+                  "GlobalIndex": 1,
+                  "DiscNumber": 1,
+                  "TrackNumber": 1,
+                  "FileName": "001_NSA.flac",
+                  "RelativePath": "{{JsonEncodedText.Encode(relativePath)}}",
+                  "Status": "Ripped"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+        File.WriteAllText(path, json);
+    }
+
+    private static void WriteExportManifestWithSourceId(string path, Guid sourceId, string sourcePath)
+    {
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "AudioCdProject",
+          "ProjectId": "export-id",
+          "State": {
+            "Status": "ReviewBeforeMerge",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": [
+            {
+              "SourceId": "{{sourceId}}",
+              "TrackIndex": 1,
+              "SourcePath": "{{JsonEncodedText.Encode(sourcePath)}}",
+              "SourceFileName": "001_NSA.flac",
+              "Preset": "AAC Mono 64 kbps",
+              "Action": "Konvertieren",
+              "Status": "Pending"
+            }
+          ]
+        }
+        """;
+        File.WriteAllText(path, json);
+    }
 }

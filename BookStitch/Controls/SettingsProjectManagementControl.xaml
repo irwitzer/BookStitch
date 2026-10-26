@@ -1,0 +1,160 @@
+<UserControl x:Class="BookStitch.Controls.SettingsProjectManagementControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <Grid Margin="16,16,14,16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Text="{services:LocalizedText Key=UiProjektverwaltung}"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource MainTextBrush}"
+                       Margin="0,0,0,14"/>
+
+            <TextBlock Grid.Row="1" Text="{services:LocalizedText Key=UiProjekte}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource MainTextBrush}"
+                       Margin="0,0,0,6"/>
+
+            <Grid Grid.Row="2" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox x:Name="ProjectsComboBox"
+                          Grid.Column="0"
+                          Height="27"
+                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                          ItemsSource="{Binding Projects}"
+                          SelectedItem="{Binding SelectedProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          ItemTemplate="{StaticResource ProjectTypeListItemTemplate}"
+                          IsEnabled="{Binding HasProjects}"/>
+                <Button Grid.Column="1"
+                        Content="{services:LocalizedText Key=UiAktualisieren}"
+                        MinWidth="105"
+                        Margin="10,0,0,0"
+                        Style="{StaticResource SettingsSecondaryButtonStyle}"
+                        Click="RefreshProjects_Click"/>
+            </Grid>
+
+            <Border Grid.Row="3" Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{DynamicResource InputBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10"
+                    MinHeight="150"
+                    Margin="0,0,0,10">
+                <ScrollViewer x:Name="ProjectPreviewScrollViewer"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="140"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+<TextBlock Text="{Binding SelectedProject.HealthMessage}" TextWrapping="Wrap" Margin="0,0,0,6">
+ <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+ <Style.Triggers><DataTrigger Binding="{Binding SelectedProject.HealthStatus}" Value="Damaged"><Setter Property="Foreground" Value="{DynamicResource ErrorTextBrush}"/></DataTrigger></Style.Triggers>
+ </Style></TextBlock.Style></TextBlock>
+ <TextBlock Text="{Binding ProjectHeaderTitle}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentForegroundBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding ProjectDetails}"
+                                       Foreground="{DynamicResource MainTextBrush}"
+                                       TextWrapping="Wrap"/>
+</StackPanel>
+                            <TextBlock Text="{Binding ProjectLocationDetails}"
+                                       Foreground="{DynamicResource MutedTextBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,10,0,0"/>
+                        </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Width="126"
+                            Height="126"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,0,8,0"
+                            Style="{StaticResource CoverDisplayBorderStyle}">
+                        <Image Source="{Binding ProjectCoverSource}"
+                               Style="{StaticResource CoverDisplayImageStyle}"/>
+                    </Border>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <Button Grid.Row="4" Content="{services:LocalizedText Key=Resume.Project.OpenFolder}"
+                    HorizontalAlignment="Left" IsEnabled="{Binding HasSelectedProject}"
+                     Click="OpenSelectedProjectFolder_Click" Margin="0,0,0,12"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SettingsSecondaryButtonStyle}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedProject.ShowProjectFolder}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+            <Button Grid.Row="4" Content="{services:LocalizedText Key=Integrity.Rebuild}" HorizontalAlignment="Center" Click="RebuildProject_Click" Margin="0,0,0,12">
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SettingsSecondaryButtonStyle}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedProject.CanRebuild}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+            </Button>
+            <Button Grid.Row="4" x:Name="DeleteSelectedProjectButton"
+                    Content="{services:LocalizedText Key=Settings.Projects.DeleteSelected}"
+                    HorizontalAlignment="Right"
+                    MinWidth="120"
+                    IsEnabled="{Binding HasSelectedProject}"
+                    Style="{StaticResource SettingsDestructiveButtonStyle}"
+                    Click="DeleteSelectedProject_Click"
+                    Margin="0,0,0,12"/>
+
+            <Separator Grid.Row="5" Margin="0,0,0,12" Opacity="0.35"/>
+
+            <ScrollViewer x:Name="IntegrityRetentionScrollViewer" Grid.Row="6" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <StackPanel x:Name="ProjectRetentionSection">
+                    <TextBlock Text="{services:LocalizedText Key=Settings.Projects.Retention.Title}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <WrapPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,16,8">
+                            <TextBlock Text="{services:LocalizedText Key=UiProjekteAufbewahrenFuer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="ProjectRetentionDaysComboBox"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="False"
+                                  Style="{StaticResource SettingsProjectRetentionComboBoxStyle}"
+                                  SelectionChanged="ProjectRetentionDaysComboBox_Changed"
+                                  LostFocus="ProjectRetentionDaysComboBox_LostFocus">
+                            <ComboBoxItem Content="0"/><ComboBoxItem Content="1"/>
+                            <ComboBoxItem Content="5"/><ComboBoxItem Content="15"/>
+                            <ComboBoxItem Content="30"/><ComboBoxItem Content="60"/>
+                            <ComboBoxItem Content="90"/><ComboBoxItem Content="120"/>
+                            <ComboBoxItem Content="150"/><ComboBoxItem Content="180"/>
+                            <ComboBoxItem Content="360"/><ComboBoxItem Content="{services:LocalizedText Key=UiNie}"/>
+                        </ComboBox>
+                            <TextBlock x:Name="RetentionUnitTextBlock" Text="{services:LocalizedText Key=UiTage}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <Button x:Name="DeleteOldProjectsButton" Content="{services:LocalizedText Key=UiAeltereProjekteLoeschen}" Style="{StaticResource SettingsSecondaryButtonStyle}" Click="DeleteOldProjectsNow_Click" Margin="0,0,16,8"/>
+                        <Button Content="{services:LocalizedText Key=UiAlleProjekteLoeschen}" Style="{StaticResource SettingsDestructiveButtonStyle}" Click="DeleteAllProjects_Click" Margin="0,0,0,8"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="ProjectRetentionHintTextBlock" TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"/>
+                </StackPanel>
+                <Separator Margin="0,8,0,12" Opacity="0.35"/>
+                <StackPanel x:Name="ProjectIntegritySection">
+                    <TextBlock Text="{services:LocalizedText Key=Integrity.Title}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="IntegritySummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <WrapPanel Margin="0,0,0,4">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,18,8">
+                            <CheckBox x:Name="FullContentHashesCheckBox" IsChecked="False" Content="{services:LocalizedText Key=Integrity.HashToggle}" Style="{StaticResource SettingsToggleStyle}" AutomationProperties.Name="{services:LocalizedText Key=Integrity.HashToggle}"/>
+                            <controls:InfoPoint Title="{services:LocalizedText Key=Integrity.HashToggle}" Body="{services:LocalizedText Key=Integrity.HashInfo}" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <Button x:Name="IntegrityCheckButton" Content="{services:LocalizedText Key=Integrity.Check}" Style="{StaticResource SettingsSecondaryButtonStyle}" Click="IntegrityCheck_Click" Margin="0,0,0,8"/>
+                    </WrapPanel>
+                </StackPanel>
+
+            </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

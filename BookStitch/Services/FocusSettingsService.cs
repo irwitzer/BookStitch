@@ -20,28 +20,15 @@ public static class FocusSettingsService
             : DefaultProfile;
     }
 
-    public static FocusAttentionPlan GetAttentionPlan(FocusProfile profile, NotificationEvent notificationEvent)
+    public static FocusAttentionPlan GetAttentionPlan(FocusProfile profile)
     {
         if (profile == FocusProfile.Off)
             return FocusAttentionPlan.None;
 
-        var flashCount = notificationEvent switch
-        {
-            NotificationEvent.DiscChangeRequired => 10,
-            NotificationEvent.UserActionRequired => 5,
-            NotificationEvent.Warning => 5,
-            NotificationEvent.Error => 5,
-            _ => 0
-        };
-
-        if (flashCount == 0)
-            return FocusAttentionPlan.None;
-
-        var bringToForeground = profile == FocusProfile.Foreground
-            || notificationEvent == NotificationEvent.Error;
+        var bringToForeground = profile == FocusProfile.Foreground;
 
         return new FocusAttentionPlan(
-            flashCount,
+            FlashCount: bringToForeground ? 10 : 5,
             bringToForeground,
             UseTemporaryTopmost: bringToForeground);
     }

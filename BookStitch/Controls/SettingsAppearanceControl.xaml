@@ -1,0 +1,45 @@
+<UserControl x:Class="BookStitch.Controls.SettingsAppearanceControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <StackPanel>
+        <TextBlock Text="{services:LocalizedText Key=Settings.AppearanceHeading}"
+                   FontSize="18" FontWeight="SemiBold"
+                   Foreground="{DynamicResource MainTextBrush}" Margin="0,0,0,14"/>
+        <Grid Margin="110,0,0,22" HorizontalAlignment="Left">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="156"/>
+                <ColumnDefinition Width="60"/>
+                <ColumnDefinition Width="156"/>
+                <ColumnDefinition Width="24"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="{services:LocalizedText Key=UiHintergrund}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="BackgroundPresetComboBox"
+                              Width="156"
+                              AutomationProperties.Name="{services:LocalizedText Key=UiHintergrund}"
+                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                              SelectionChanged="BackgroundPresetComboBox_Changed"/>
+                </StackPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="{services:LocalizedText Key=UiFarbkonzept}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="TextColorPresetComboBox"
+                              Width="156"
+                              AutomationProperties.Name="{services:LocalizedText Key=UiFarbkonzept}"
+                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                              SelectionChanged="TextColorPresetComboBox_Changed"/>
+                </StackPanel>
+            </StackPanel>
+            <controls:InfoPoint Title="{services:LocalizedText Key=UiHintergrund}"
+                                Body="{services:LocalizedText Key=UiLegtNurDenGrundhintergrundVonFensternUndDial}"
+                                Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8,0,0,5"/>
+            <controls:InfoPoint Title="{services:LocalizedText Key=UiFarbkonzept}"
+                                Body="{services:LocalizedText Key=UiSteuertDiePrimaerenSekundaerenUndUntergeordn}"
+                                Grid.Column="3" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="8,0,0,5"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

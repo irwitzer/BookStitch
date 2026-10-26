@@ -43,6 +43,9 @@ Generated\ Files/
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
+# Local smoke and regression test evidence
+/dev-support/test-results/
+/.test-output/
 [Bb]uild[Ll]og.*
 
 # NUnit
@@ -361,3 +364,21 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# BookStitch LocalizationExporter generated backups and reports
+/dev-support/project-tools/backups/
+/dev-support/project-tools/reports/
+
+# Generated state of the localization tool (not release/source files)
+/dev-support/project-tools/LocalizationExporter/backups/
+/dev-support/project-tools/LocalizationExporter/reports/
+/dev-support/project-tools/LocalizationExporter/work/
+
+# Latest generated localization diagnostics (not translation sources)
+/BookStitch/Resources/BookStitch.LocalizationValidation.json
+/BookStitch/Resources/BookStitch.LocalizationValidation.txt
+
+# Generated state of the public localization tool
+/dev-support-public/LocalizationExporter/backups/
+/dev-support-public/LocalizationExporter/reports/
+/dev-support-public/LocalizationExporter/work/

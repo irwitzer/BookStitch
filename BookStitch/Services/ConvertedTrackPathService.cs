@@ -37,6 +37,23 @@ public static class ConvertedTrackPathService
         return Path.Combine(convertedFolder, $"{safeBaseName}_{stableId}.m4a");
     }
 
+    public static string[] GetConvertedTrackPaths(string convertedFolder, string sourceFolder, IReadOnlyList<TrackInfo> tracks)
+    {
+        var occurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        return tracks.Select(track =>
+        {
+            var source = Path.GetFullPath(TrackPathService.GetTrackPath(sourceFolder, track));
+            var target = GetConvertedTrackPath(convertedFolder, source, track);
+            occurrences.TryGetValue(source, out var occurrence);
+            occurrences[source] = ++occurrence;
+            return occurrence == 1 ? target : Path.Combine(convertedFolder,
+                Path.GetFileNameWithoutExtension(target) + $"_occurrence-{occurrence}.m4a");
+        }).ToArray();
+    }
+
+    public static string GetMergePartFilePath(string projectFolder, string outputPath) =>
+        Path.Combine(ProjectFolderLayout.GetMergeFolder(projectFolder), Path.GetFileName(GetPartFilePath(outputPath)));
+
     public static string GetPartFilePath(string outputPath)
     {
         var directory = Path.GetDirectoryName(outputPath) ?? "";

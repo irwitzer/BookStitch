@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -6,7 +6,7 @@ using System.Windows.Media.Media3D;
 
 namespace BookStitch.Dialog;
 
-public static class DialogWindowBehavior
+public static partial class DialogWindowBehavior
 {
     public static readonly DependencyProperty IsDragRegionProperty = DependencyProperty.RegisterAttached(
         "IsDragRegion",
@@ -38,6 +38,7 @@ public static class DialogWindowBehavior
         if (dependencyObject is not UIElement element)
             return;
 
+        CancelPendingDrag(element);
         element.PreviewMouseLeftButtonDown -= DragRegion_PreviewMouseLeftButtonDown;
         if (e.NewValue is true)
             element.PreviewMouseLeftButtonDown += DragRegion_PreviewMouseLeftButtonDown;
@@ -45,7 +46,10 @@ public static class DialogWindowBehavior
 
     private static void DragRegion_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed || e.ClickCount != 1)
+        if (sender is UIElement pendingElement)
+            CancelPendingDrag(pendingElement);
+
+        if (e.LeftButton != MouseButtonState.Pressed)
             return;
 
         if (sender is not UIElement dragElement)
@@ -55,12 +59,28 @@ public static class DialogWindowBehavior
         if (e.GetPosition(dragElement).Y > dragRegionHeight)
             return;
 
-        if (HasInteractiveAncestor(e.OriginalSource as DependencyObject, dragElement))
+        if (IsInteractiveDragSource(e.OriginalSource as DependencyObject, dragElement))
             return;
 
         var window = Window.GetWindow(dragElement);
         if (window is null)
             return;
+
+        if (e.ClickCount == 2 && TryToggleMaximizeRestore(window))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.ClickCount != 1)
+            return;
+
+        if (GetRestoreOnMaximizedDrag(dragElement) && window.WindowState == WindowState.Maximized)
+        {
+            e.Handled = TryBeginMaximizedDrag(window, dragElement,
+                e.GetPosition(dragElement), e.GetPosition(window));
+            return;
+        }
 
         try
         {
@@ -73,11 +93,24 @@ public static class DialogWindowBehavior
         }
     }
 
-    private static bool HasInteractiveAncestor(DependencyObject? current, DependencyObject? dragRegion)
+    internal static bool TryToggleMaximizeRestore(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        if (window.ResizeMode is not (ResizeMode.CanResize or ResizeMode.CanResizeWithGrip))
+            return false;
+
+        window.WindowState = window.WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+        return true;
+    }
+
+    internal static bool IsInteractiveDragSource(DependencyObject? current, DependencyObject? dragRegion)
     {
         while (current is not null && !ReferenceEquals(current, dragRegion))
         {
-            if (current is ButtonBase)
+            if (current is ButtonBase or TextBoxBase or Selector or RangeBase)
                 return true;
 
             current = GetParent(current);

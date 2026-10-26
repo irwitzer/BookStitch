@@ -9,8 +9,10 @@ namespace BookStitch.Dialog;
 
 public partial class DialogPreviewWindow : Window
 {
+    private readonly GlobalSettingsManager _settingsManager;
     private readonly AppSettings _settings;
     private readonly SettingsService _settingsService;
+    private readonly ProjectIndexService _projectIndexService;
     private readonly NotificationService _notificationService;
     private readonly DeveloperDiscTestService _developerDiscTestService = new();
     private readonly DiscDriveService _discDriveService = new();
@@ -21,17 +23,22 @@ public partial class DialogPreviewWindow : Window
     private CancellationTokenSource? _discTestCancellation;
 
     public DialogPreviewWindow(
-        AppSettings settings,
+        GlobalSettingsManager settingsManager,
         SettingsService settingsService,
-        NotificationService notificationService)
+        NotificationService notificationService,
+        ProjectIndexService? projectIndexService = null)
     {
-        _settings = settings;
-        _settingsService = settingsService;
-        _notificationService = notificationService;
-        _discWaitDialogService = new SwitchableDiscWaitDialogService(() => _settings.UseBoxedDiscWaitDialog);
+        _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
+        _settings = _settingsManager.Current;
+        _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _projectIndexService = projectIndexService ?? new ProjectIndexService();
+        var debugSettings = new DebugSettingsService(settingsService).Load();
+        _discWaitDialogService = new SwitchableDiscWaitDialogService(() => debugSettings.UseBoxedDiscWaitDialog);
         InitializeComponent();
         Closed += (_, _) =>
         {
+            _settingsManager.Flush();
             _delayedFocusTestCancellation?.Cancel();
             _delayedFocusTestCancellation?.Dispose();
             _discTestCancellation?.Cancel();
@@ -46,7 +53,7 @@ public partial class DialogPreviewWindow : Window
         _isLoadingSoundSettings = true;
         try
         {
-            SelectComboBoxItem(PreviewSoundProfileComboBox, SoundSettingsService.NormalizeProfile(_settings.SoundProfile));
+            SelectComboBoxItem(PreviewEventProfileComboBox, EventProfileSettingsService.NormalizeProfile(_settings.EventProfile));
             SelectComboBoxItem(PreviewFocusProfileComboBox, FocusSettingsService.NormalizeProfile(_settings.FocusProfile));
             SelectComboBoxItem(PreviewSoundLibraryComboBox, SoundSettingsService.NormalizeLibrary(_settings.SoundLibrary));
             PreviewSoundVolumeSlider.Value = SoundSettingsService.NormalizeVolumePercent(_settings.SoundVolumePercent);
@@ -64,16 +71,16 @@ public partial class DialogPreviewWindow : Window
             return;
 
         _settings.FocusProfile = GetSelectedEnum(comboBox, FocusSettingsService.DefaultProfile).ToString();
-        _settingsService.Save(_settings);
+        _settingsManager.SaveImmediate();
     }
 
-    private void PreviewSoundProfileComboBox_Changed(object sender, SelectionChangedEventArgs e)
+    private void PreviewEventProfileComboBox_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_isLoadingSoundSettings || sender is not ComboBox comboBox)
             return;
 
-        _settings.SoundProfile = GetSelectedEnum(comboBox, SoundSettingsService.DefaultProfile).ToString();
-        _settingsService.Save(_settings);
+        _settings.EventProfile = GetSelectedEnum(comboBox, EventProfileSettingsService.DefaultProfile).ToString();
+        _settingsManager.SaveImmediate();
     }
 
     private void PreviewSoundLibraryComboBox_Changed(object sender, SelectionChangedEventArgs e)
@@ -82,7 +89,7 @@ public partial class DialogPreviewWindow : Window
             return;
 
         _settings.SoundLibrary = GetSelectedEnum(comboBox, SoundSettingsService.DefaultLibrary).ToString();
-        _settingsService.Save(_settings);
+        _settingsManager.SaveImmediate();
         _notificationService.PlaySoundPreview();
     }
 
@@ -92,7 +99,7 @@ public partial class DialogPreviewWindow : Window
             return;
 
         _settings.SoundVolumePercent = SoundSettingsService.NormalizeVolumePercent((int)Math.Round(e.NewValue));
-        _settingsService.Save(_settings);
+        _settingsManager.SaveDebounced();
         UpdatePreviewSoundVolumeText();
     }
 
@@ -134,22 +141,22 @@ public partial class DialogPreviewWindow : Window
 
         AppDialogService.Show(
             this,
-            "BookStitch – Dialogvorschau",
+            LocalizationText.Get("Developer.PreviewTitle"),
             kind switch
             {
-                AppDialogKind.Warning => "Beispielwarnung",
-                AppDialogKind.Error => "Beispielfehler",
-                AppDialogKind.Question => "Beispielfrage",
-                _ => "Beispielinformation"
+                AppDialogKind.Warning => LocalizationText.Get("Developer.SampleWarning"),
+                AppDialogKind.Error => LocalizationText.Get("Developer.SampleError"),
+                AppDialogKind.Question => LocalizationText.Get("Developer.SampleQuestion"),
+                _ => LocalizationText.Get("Developer.SampleInformation")
             },
-            "Dieser Dialog dient ausschließlich der visuellen und mechanischen Prüfung. Es werden keine Projektdaten verändert.",
+            LocalizationText.Get("Developer.PreviewPurpose"),
             kind,
-            ["Erste optionale Detailzeile", "Zweite optionale Detailzeile"],
+            [LocalizationText.Get("Developer.DetailFirst"), LocalizationText.Get("Developer.DetailSecond")],
             kind == AppDialogKind.Question
                 ? [
-                    new AppDialogButton("Ja", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                    new AppDialogButton("Nein", AppDialogResult.No),
-                    new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                    new AppDialogButton(LocalizationText.Get("Common.Yes"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                    new AppDialogButton(LocalizationText.Get("Common.No"), AppDialogResult.No),
+                    new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
                   ]
                 : [new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true)]);
     }
@@ -173,16 +180,16 @@ public partial class DialogPreviewWindow : Window
         {
             for (var remaining = 4; remaining > 0; remaining--)
             {
-                DelayedFocusStatusTextBlock.Text = $"{button.Content}: Auslösung in {remaining} s";
+                DelayedFocusStatusTextBlock.Text = LocalizationText.Format("Developer.Countdown", button.Content, remaining);
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
 
-            DelayedFocusStatusTextBlock.Text = $"Ausgelöst: {button.Content}";
+            DelayedFocusStatusTextBlock.Text = LocalizationText.Format("Developer.Triggered", button.Content);
             _notificationService.Notify(notificationEvent);
         }
         catch (OperationCanceledException)
         {
-            DelayedFocusStatusTextBlock.Text = "Fokustest abgebrochen";
+            DelayedFocusStatusTextBlock.Text = LocalizationText.Get("Developer.FocusCanceled");
         }
         finally
         {
@@ -214,7 +221,7 @@ public partial class DialogPreviewWindow : Window
         var cancellationToken = _discTestCancellation.Token;
         var checkNumber = 0;
 
-        DiscTestStatusTextBlock.Text = $"Dialogsimulation gestartet: {GetSimulationDisplayName(scenario)}";
+        DiscTestStatusTextBlock.Text = LocalizationText.Format("Developer.SimulationStarted", GetSimulationDisplayName(scenario));
         try
         {
             var completed = await _discWaitDialogService.WaitForDiscAsync(
@@ -222,21 +229,21 @@ public partial class DialogPreviewWindow : Window
                 new DiscWaitDialogRequest(
                     DiscNumber: 2,
                     TotalDiscs: 3,
-                    MediaName: "Test-CD",
-                    InitialInstruction: "Entwicklersimulation wird vorbereitet...",
-                    HintText: "Diese Vorschau greift nicht auf ein Laufwerk zu und verändert keine Projektdaten."),
-                _ => Task.FromResult(_developerDiscTestService.CreateSimulationResult(scenario, ++checkNumber)),
+                    MediaName: LocalizationText.Get("Disc.Media.Mp3"),
+                    InitialInstruction: LocalizationText.Get("Developer.SimulationPreparing"),
+                    HintText: LocalizationText.Get("Developer.SimulationNoDrive")),
+                (_, _) => Task.FromResult(_developerDiscTestService.CreateSimulationResult(scenario, ++checkNumber)),
                 status => DiscTestStatusTextBlock.Text = status,
                 progress => DiscTestProgressTextBlock.Text = progress,
                 cancellationToken);
 
             DiscTestStatusTextBlock.Text = completed == DiscWaitDialogOutcome.Ready
-                ? $"Dialogsimulation abgeschlossen: {GetSimulationDisplayName(scenario)}"
-                : $"Dialogsimulation später fortsetzbar beendet: {GetSimulationDisplayName(scenario)}";
+                ? LocalizationText.Format("Developer.SimulationCompleted", GetSimulationDisplayName(scenario))
+                : LocalizationText.Format("Developer.SimulationPaused", GetSimulationDisplayName(scenario));
         }
         catch (OperationCanceledException)
         {
-            DiscTestStatusTextBlock.Text = "Dialogsimulation abgebrochen.";
+            DiscTestStatusTextBlock.Text = LocalizationText.Get("Developer.SimulationCanceled");
         }
     }
 
@@ -250,7 +257,7 @@ public partial class DialogPreviewWindow : Window
             return;
 
         _settings.LastSelectedOpticalDrive = selectedDrive;
-        _settingsService.Save(_settings);
+        _settingsManager.SaveImmediate();
 
         CancelCurrentDiscTest();
         _discTestCancellation = new CancellationTokenSource();
@@ -260,47 +267,47 @@ public partial class DialogPreviewWindow : Window
         {
             var isAudio = tag.StartsWith("Audio", StringComparison.Ordinal);
             var duplicateTest = tag.EndsWith("Duplicate", StringComparison.Ordinal);
-            var mediaName = isAudio ? "Audio-CD" : "MP3-CD";
+            var mediaName = isAudio ? LocalizationText.Get("Disc.Media.Audio") : LocalizationText.Get("Disc.Media.Mp3");
 
             HashSet<string> knownIdentities = [];
             if (duplicateTest)
             {
                 var identity = isAudio
-                    ? ReadCurrentAudioDiscIdentity(selectedDrive)
-                    : ReadCurrentMp3DiscIdentity(selectedDrive);
+                    ? await ReadCurrentAudioDiscIdentityAsync(selectedDrive, cancellationToken)
+                    : await ReadCurrentMp3DiscIdentityAsync(selectedDrive, cancellationToken);
                 if (string.IsNullOrWhiteSpace(identity))
                     return;
 
                 knownIdentities.Add(identity);
             }
 
-            var ejected = _discDriveService.TryEjectDisc(selectedDrive);
+            var ejected = await _discDriveService.TryEjectDiscAsync(selectedDrive, cancellationToken);
             DiscTestStatusTextBlock.Text = ejected
-                ? $"{mediaName}-Hardwaretest: Laufwerk wurde ausgeworfen. Bitte Disc einlegen."
-                : $"{mediaName}-Hardwaretest: Bitte Laufwerk öffnen und Disc einlegen.";
+                ? LocalizationText.Format("Developer.HardwareEjected", mediaName)
+                : LocalizationText.Format("Developer.HardwareInsert", mediaName);
             DiscTestProgressTextBlock.Text = duplicateTest
-                ? "Für den Duplikattest dieselbe Disc erneut einlegen."
-                : "Es wird nur erkannt und geprüft; Import und Ripping bleiben deaktiviert.";
+                ? LocalizationText.Get("Developer.DuplicateInstruction")
+                : LocalizationText.Get("Developer.DetectionOnly");
 
             var completed = isAudio
                 ? await RunAudioHybridTestAsync(selectedDrive, knownIdentities, cancellationToken)
                 : await RunMp3HybridTestAsync(selectedDrive, knownIdentities, cancellationToken);
 
             DiscTestStatusTextBlock.Text = completed == DiscWaitDialogOutcome.Ready
-                ? $"{mediaName}-Hardwaretest erfolgreich. Es wurden keine Tracks verarbeitet."
-                : $"{mediaName}-Hardwaretest wurde für später beendet.";
+                ? LocalizationText.Format("Developer.HardwareCompleted", mediaName)
+                : LocalizationText.Format("Developer.HardwarePaused", mediaName);
         }
         catch (OperationCanceledException)
         {
-            DiscTestStatusTextBlock.Text = "Hybridtest abgebrochen.";
+            DiscTestStatusTextBlock.Text = LocalizationText.Get("Developer.HybridCanceled");
         }
         catch (Exception ex)
         {
-            DiscTestStatusTextBlock.Text = "Hybridtest fehlgeschlagen.";
+            DiscTestStatusTextBlock.Text = LocalizationText.Get("Developer.HybridFailed");
             AppDialogService.Show(
                 this,
-                "BookStitch – Hybridtest",
-                "Hardwaretest fehlgeschlagen",
+                "BookStitch – " + LocalizationText.Get("Developer.HybridHardwareTest"),
+                LocalizationText.Get("Developer.HybridFailed"),
                 ex.Message,
                 AppDialogKind.Error,
                 buttons: [new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true)]);
@@ -318,14 +325,13 @@ public partial class DialogPreviewWindow : Window
             new DiscWaitDialogRequest(
                 DiscNumber: 2,
                 TotalDiscs: 3,
-                MediaName: "MP3-CD",
-                InitialInstruction: "Bitte CD 2 von 3 einlegen.\n\nBookStitch erkennt die eingelegte Disc automatisch und setzt anschließend fort.",
-                HintText: "Nach erfolgreicher Erkennung endet der Test ohne Import, Konvertierung oder Projektänderung.",
+                MediaName: LocalizationText.Get("Disc.Media.Mp3"),
+                InitialInstruction: LocalizationText.Format("Disc.Polling.Mp3.SourceNotReady.Dialog", 2, 3),
+                HintText: LocalizationText.Get("Developer.AfterDetection"),
                 DriveDisplayName: CreateDiscDriveDisplayName(driveRoot),
                 NotifyDisplayState: NotifyDiscTestPollingState),
-            token => Task.Run(
-                () => pollingService.CheckDiscSourceForNextImport(driveRoot, 2, 3, knownSignatures),
-                token),
+            (checkRequest, token) => pollingService.CheckDiscSourceForNextImportAsync(
+                driveRoot, 2, 3, knownSignatures, cancellationToken: token, acceptDuplicate: checkRequest.AcceptNextDuplicate),
             status => DiscTestStatusTextBlock.Text = status,
             progress => DiscTestProgressTextBlock.Text = progress,
             cancellationToken);
@@ -342,44 +348,49 @@ public partial class DialogPreviewWindow : Window
             new DiscWaitDialogRequest(
                 DiscNumber: 2,
                 TotalDiscs: 3,
-                MediaName: "Audio-CD",
-                InitialInstruction: "Bitte Audio-CD 2 von 3 einlegen.\n\nBookStitch erkennt die eingelegte Disc automatisch und setzt anschließend fort.",
-                HintText: "Nach erfolgreicher Erkennung endet der Test ohne Ripping, Konvertierung oder Projektänderung.",
+                MediaName: LocalizationText.Get("Disc.Media.Audio"),
+                InitialInstruction: LocalizationText.Format("Disc.Polling.Audio.SourceNotReady.Dialog", 2, 3),
+                HintText: LocalizationText.Get("Developer.AfterAudioDetection"),
                 DriveDisplayName: CreateDiscDriveDisplayName(driveRoot),
                 NotifyDisplayState: NotifyDiscTestPollingState),
-            token => Task.Run(
-                () => pollingService.CheckNextDisc(driveRoot, 2, 3, knownIdentities).PollingResult,
-                token),
+            async (checkRequest, token) => (await pollingService.CheckNextDiscAsync(
+                driveRoot, 2, 3, knownIdentities, token, checkRequest.AcceptNextDuplicate)).PollingResult,
             status => DiscTestStatusTextBlock.Text = status,
             progress => DiscTestProgressTextBlock.Text = progress,
             cancellationToken);
     }
 
-    private string? ReadCurrentMp3DiscIdentity(string driveRoot)
+    private async Task<string?> ReadCurrentMp3DiscIdentityAsync(string driveRoot, CancellationToken cancellationToken)
     {
-        var analysis = _mp3DiscImportService.AnalyzeSource(driveRoot);
-        if (!analysis.IsSupportedDataDisc)
+        var result = await Task.Run(() =>
         {
-            ShowDiscTestInformation("Für den Duplikattest muss zuerst eine unterstützte MP3-CD im ausgewählten Laufwerk liegen.");
+            var analysis = _mp3DiscImportService.AnalyzeSource(driveRoot);
+            return (analysis, signature: analysis.IsSupportedDataDisc
+                ? _mp3DiscImportService.CreateDiscSignature(driveRoot, analysis)
+                : null);
+        }, cancellationToken);
+        if (!result.analysis.IsSupportedDataDisc)
+        {
+            ShowDiscTestInformation(LocalizationText.Get("Developer.DuplicateMp3Required"));
             return null;
         }
 
-        return _mp3DiscImportService.CreateDiscSignature(driveRoot, analysis);
+        return result.signature;
     }
 
-    private string? ReadCurrentAudioDiscIdentity(string driveRoot)
+    private async Task<string?> ReadCurrentAudioDiscIdentityAsync(string driveRoot, CancellationToken cancellationToken)
     {
-        var mediaKind = _discDriveService.GetMediaKindForPath(driveRoot);
+        var mediaKind = await _discDriveService.GetMediaKindForPathAsync(driveRoot, cancellationToken);
         if (AudioDiscPollingService.IsClearlyNotAudioDisc(mediaKind))
         {
-            ShowDiscTestInformation("Für den Audio-CD-Duplikattest muss zuerst eine lesbare Audio-CD im ausgewählten Laufwerk liegen.");
+            ShowDiscTestInformation(LocalizationText.Get("Developer.DuplicateAudioRequired"));
             return null;
         }
 
-        var readResult = new AudioDiscReaderService().ReadDisc(driveRoot);
+        var readResult = await Task.Run(() => new AudioDiscReaderService().ReadDisc(driveRoot), cancellationToken);
         if (!readResult.IsAudioDisc || readResult.Disc is null)
         {
-            ShowDiscTestInformation("Für den Duplikattest muss zuerst eine lesbare Audio-CD im ausgewählten Laufwerk liegen.");
+            ShowDiscTestInformation(LocalizationText.Get("Developer.DuplicateReadableAudioRequired"));
             return null;
         }
 
@@ -395,31 +406,24 @@ public partial class DialogPreviewWindow : Window
     private static string CreateDiscDriveDisplayName(string driveRoot)
     {
         var root = Path.GetPathRoot(driveRoot)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar);
-        return string.IsNullOrWhiteSpace(root) ? string.Empty : $"CD-Laufwerk {root}";
+        return string.IsNullOrWhiteSpace(root) ? string.Empty : LocalizationText.Format("Developer.DriveName", root);
     }
 
     private string? SelectOpticalDrive()
     {
-        var drives = _discDriveService.GetCdDriveShells();
-        if (drives.Count == 0)
-        {
-            ShowDiscTestInformation("Windows hat kein optisches Laufwerk gemeldet.");
-            return null;
-        }
-
-        var dialog = new DiscSourceSelectionDialog(drives, string.Empty, _settings.LastSelectedOpticalDrive)
+        var dialog = new DiscSourceSelectionDialog([], string.Empty, _settings.LastSelectedOpticalDrive, _settings.DiscDriveOrder, _discDriveService)
         {
             Owner = this
         };
-        return dialog.ShowDialog() == true ? dialog.SelectedPath : null;
+        return ModalDialogService.ShowDialog(dialog, this) == true ? dialog.SelectedPath : null;
     }
 
     private void ShowDiscTestInformation(string message)
     {
         AppDialogService.Show(
             this,
-            "BookStitch – CD-Test",
-            "Test kann nicht gestartet werden",
+            "BookStitch",
+            LocalizationText.Get("Developer.TestUnavailable"),
             message,
             AppDialogKind.Information,
             buttons: [new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true)]);
@@ -434,61 +438,62 @@ public partial class DialogPreviewWindow : Window
 
     private static string GetSimulationDisplayName(DeveloperDiscSimulationScenario scenario) => scenario switch
     {
-        DeveloperDiscSimulationScenario.EmptyDrive => "Laufwerk leer",
-        DeveloperDiscSimulationScenario.UnsupportedDisc => "falsche oder nicht unterstützte Disc",
-        DeveloperDiscSimulationScenario.DuplicateEjected => "Duplikat erkannt und ausgeworfen",
-        DeveloperDiscSimulationScenario.DuplicateManualEject => "Duplikat, manuelles Auswerfen nötig",
-        DeveloperDiscSimulationScenario.SlowThenReady => "Laufwerk langsam, danach erkannt",
-        DeveloperDiscSimulationScenario.Ready => "richtige Disc erkannt",
+        DeveloperDiscSimulationScenario.EmptyDrive => LocalizationText.Get("Developer.EmptyDrive"),
+        DeveloperDiscSimulationScenario.UnsupportedDisc => LocalizationText.Get("Developer.UnsupportedDiscDescription"),
+        DeveloperDiscSimulationScenario.DuplicateEjected => LocalizationText.Get("Developer.DuplicateDetected"),
+        DeveloperDiscSimulationScenario.DuplicateManualEject => LocalizationText.Get("Developer.DuplicateManual"),
+        DeveloperDiscSimulationScenario.SlowThenReady => LocalizationText.Get("Developer.SlowDriveDescription"),
+        DeveloperDiscSimulationScenario.Ready => LocalizationText.Get("Developer.CorrectDisc"),
         _ => scenario.ToString()
     };
 
     private void InputPreview_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new AppInputDialog(
-            "BookStitch – Dialogvorschau",
-            "Beispielwert eingeben",
-            "Prüfe Eingabefeld, Fehlermeldung, Enter, Escape und die Fenstermechanik.",
+            LocalizationText.Get("Developer.PreviewTitle"),
+            LocalizationText.Get("Developer.NumberInput"),
+            LocalizationText.Get("Developer.CheckInput"),
             12,
             1,
             99)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+        ModalDialogService.ShowDialog(dialog, this);
     }
 
     private void DiscSourcePreview_Click(object sender, RoutedEventArgs e)
     {
-        var drives = new DiscDriveService().GetCdDriveShells();
-        var dialog = new DiscSourceSelectionDialog(drives, string.Empty, _settings.LastSelectedOpticalDrive)
+        var dialog = new DiscSourceSelectionDialog([], string.Empty, _settings.LastSelectedOpticalDrive, _settings.DiscDriveOrder, _discDriveService)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+        ModalDialogService.ShowDialog(dialog, this);
     }
 
     private void AddDiscsPreview_Click(object sender, RoutedEventArgs e)
     {
-        var drives = new DiscDriveService().GetCdDriveShells();
-        var dialog = new AddMoreDiscsDialog(1, 2, 2, 2, 99, drives, _settings.LastSelectedOpticalDrive, string.Empty)
+        var dialog = new AddMoreDiscsDialog(1, 2, 2, 2, 99, [], _settings.LastSelectedOpticalDrive, string.Empty, _settings.DiscDriveOrder, _discDriveService)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+        ModalDialogService.ShowDialog(dialog, this);
     }
 
     private void ResumeProjectPreview_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ResumeProjectDialog(
             _settingsService.ProjectRootFolder,
-            new ProjectIndexService(),
+            _projectIndexService,
             new ProjectResumePlanService(),
-            _settings.ProjectRetentionDays)
+            _settings.ProjectRetentionDays,
+            AppearanceSettingsService.GetEffectiveMode(_settings),
+            selectedProject: null,
+            projectRetentionMode: _settings.ProjectRetentionMode)
         {
             Owner = this
         };
-        dialog.ShowDialog();
+        ModalDialogService.ShowDialog(dialog, this);
     }
 
     private void ProjectSetupPreview_Click(object sender, RoutedEventArgs e)
@@ -505,16 +510,16 @@ public partial class DialogPreviewWindow : Window
         };
         var windowTitle = sourceKind switch
         {
-            ProjectSetupSourceKind.AudioDisc => "Audio-CD-Projekt vorbereiten",
-            ProjectSetupSourceKind.Mp3Disc => "MP3-CD-Projekt vorbereiten",
-            _ => "Lokales Projekt vorbereiten"
+            ProjectSetupSourceKind.AudioDisc => LocalizationText.Get("MainWindow.Setup.AudioPrepare"),
+            ProjectSetupSourceKind.Mp3Disc => LocalizationText.Get("MainWindow.Setup.Mp3Prepare"),
+            _ => LocalizationText.Get("Developer.SetUpLocalProject")
         };
 
         var request = new ProjectSetupDialogRequest(
             sourceKind,
             windowTitle,
             sourceLabel,
-            "Diese Vorschau verändert keine Projektdaten. Prüfe Größe, Buttons, Eingabefelder, Ziehen und Schließen.",
+            LocalizationText.Get("Developer.CheckSetup"),
             sourceKind == ProjectSetupSourceKind.Folder ? 1 : 2,
             1,
             99,
@@ -523,8 +528,8 @@ public partial class DialogPreviewWindow : Window
             _settings.SelectedParallelJobs,
             _settings.DefaultOutputExtension,
             _settings.OutputFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            "Beispielhörbuch",
-            "Beispielhörbuch",
+            LocalizationText.Get("Developer.SampleBook"),
+            LocalizationText.Get("Developer.SampleBook"),
             "Beispielautor",
             "Beispielsprecher",
             _settings.DefaultGenre,
@@ -533,14 +538,19 @@ public partial class DialogPreviewWindow : Window
             string.Empty,
             Path.Combine(_settingsService.ProjectRootFolder, "Covers"),
             _settings.MergeAutomaticallyAfterConversion,
-            _settings.KeepAlbumLinkedToTitle,
             UsePrivateGenreList: _settings.UsePrivateGenreList,
+            GenreOptions: GenreListService.GetGenres(_settings),
             SourceFolder: sourceLabel,
             MaxSourceBitrateKbps: 320,
             LastCoverFolder: _settings.LastCoverFolder ?? string.Empty);
 
-        var dialog = new DiscProjectSetupDialog(request) { Owner = this };
-        dialog.ShowDialog();
+        var dialog = new DiscProjectSetupDialog(
+            request,
+            AppearanceSettingsService.GetEffectiveMode(_settings))
+        {
+            Owner = this
+        };
+        ModalDialogService.ShowDialog(dialog, this);
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)

@@ -1,0 +1,58 @@
+<UserControl x:Class="BookStitch.Controls.DriveCircleSlot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:BookStitch.Controls"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             Width="240"
+             Height="34"
+             Focusable="True"
+             PreviewMouseLeftButtonDown="Slot_PreviewMouseLeftButtonDown"
+             PreviewMouseLeftButtonUp="Slot_PreviewMouseLeftButtonUp"
+             PreviewMouseMove="Slot_PreviewMouseMove"
+             PreviewMouseRightButtonDown="Slot_PreviewMouseRightButtonDown"
+             PreviewKeyDown="Slot_PreviewKeyDown">
+    <Border Style="{StaticResource DriveCircleSlotBorderStyle}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="34"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="{Binding DriveLabel, RelativeSource={RelativeSource AncestorType={x:Type controls:DriveCircleSlot}}}"
+                       VerticalAlignment="Center"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource MainTextBrush}"/>
+
+            <Grid Grid.Column="1" Margin="4,0,8,0">
+                <TextBlock x:Name="DisplayNameTextBlock"
+                           Text="{Binding UserName, RelativeSource={RelativeSource AncestorType={x:Type controls:DriveCircleSlot}}}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource MainTextBrush}"/>
+                <TextBox x:Name="NameEditor"
+                         Visibility="Collapsed"
+                         MaxLength="{x:Static services:DiscDriveConfigurationService.MaximumUserNameLength}"
+                         MinWidth="150"
+                         HorizontalAlignment="Stretch"
+                         VerticalContentAlignment="Center"
+                         Style="{StaticResource AppearanceCompactTextBoxStyle}"
+                         Background="{DynamicResource InputBackgroundBrush}"
+                         BorderBrush="{DynamicResource InputBorderBrush}"
+                         Foreground="{DynamicResource MainTextBrush}"
+                         CaretBrush="{DynamicResource MainTextBrush}"
+                         KeyDown="NameEditor_KeyDown"
+                         LostKeyboardFocus="NameEditor_LostKeyboardFocus"/>
+            </Grid>
+
+            <controls:InfoPoint Grid.Column="2"
+                                Width="20"
+                                Variant="OnPrimary"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Title="{Binding InfoTitle, RelativeSource={RelativeSource AncestorType={x:Type controls:DriveCircleSlot}}}"
+                                Body="{Binding InfoBody, RelativeSource={RelativeSource AncestorType={x:Type controls:DriveCircleSlot}}}"/>
+        </Grid>
+    </Border>
+</UserControl>

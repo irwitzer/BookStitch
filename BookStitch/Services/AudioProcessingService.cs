@@ -10,55 +10,62 @@ public static class AudioProcessingService
 {
     public static string DetermineProcessingAction(TrackInfo track, ExportPreset preset)
     {
+        if (!track.AllowAacReuse) return ProcessingActionIds.Convert;
         var codec = (track.Codec ?? "").Trim();
         var extension = (track.Extension ?? "").Trim().TrimStart('.');
 
         if (IsAlwaysConvertInput(codec, extension))
-            return "Konvertieren";
+            return ProcessingActionIds.Convert;
 
         // Rohe .aac-Dateien sind kein M4A/M4B-Container. Sie werden daher nicht einfach kopiert,
         // sondern sauber neu in den gewählten AAC/M4A-Zielcontainer geschrieben.
         if (IsRawAacExtension(extension))
-            return "Konvertieren";
+            return ProcessingActionIds.Convert;
 
         if (codec.Equals("AAC", StringComparison.OrdinalIgnoreCase))
         {
             if (IsM4aOrM4bExtension(extension))
-                return AacMatchesPreset(track.BitrateKbps, track.Channels, preset) ? "Übernehmen" : "Konvertieren";
+                return ((track.SampleRateHz is null || (FolderSampleRateService.CanVote(track.SampleRateHz) && track.SampleRateHz == track.TargetSampleRateHz)) && AacMatchesPreset(track.BitrateKbps, track.Channels, preset)) ? ProcessingActionIds.Reuse : ProcessingActionIds.Convert;
 
-            return "Prüfen";
+            return ProcessingActionIds.Inspect;
         }
 
         if (IsM4aOrM4bExtension(extension) && string.IsNullOrWhiteSpace(codec))
-            return "Prüfen";
+            return ProcessingActionIds.Inspect;
 
-        return "Prüfen";
+        if (IsM4aOrM4bExtension(extension) && !string.IsNullOrWhiteSpace(codec))
+            return ProcessingActionIds.Convert;
+
+        return ProcessingActionIds.Inspect;
     }
 
-    public static string DetermineProcessingAction(AudioProbeInfo probeInfo, ExportPreset preset)
+    public static string DetermineProcessingAction(AudioProbeInfo probeInfo, ExportPreset preset, int targetSampleRateHz = 44100)
     {
         if (!probeInfo.Success)
-            return "Prüfen";
+            return ProcessingActionIds.Inspect;
 
         var codec = NormalizeCodecName(probeInfo.CodecName);
         var extension = Path.GetExtension(probeInfo.FilePath).TrimStart('.');
 
         if (IsAlwaysConvertInput(codec, extension))
-            return "Konvertieren";
+            return ProcessingActionIds.Convert;
 
         // Rohe .aac-Dateien bekommen immer einen echten M4A-Zwischenschritt.
         if (IsRawAacExtension(extension))
-            return "Konvertieren";
+            return ProcessingActionIds.Convert;
 
         if (probeInfo.IsAac)
         {
             if (IsM4aOrM4bExtension(extension))
-                return AacMatchesPreset(probeInfo.BitrateKbps, probeInfo.Channels, preset) ? "Übernehmen" : "Konvertieren";
+                return (FolderSampleRateService.CanVote(probeInfo.SampleRateHz) && probeInfo.SampleRateHz == targetSampleRateHz && AacMatchesPreset(probeInfo.BitrateKbps, probeInfo.Channels, preset)) ? ProcessingActionIds.Reuse : ProcessingActionIds.Convert;
 
-            return "Prüfen";
+            return ProcessingActionIds.Inspect;
         }
 
-        return "Prüfen";
+        if (IsM4aOrM4bExtension(extension) && !string.IsNullOrWhiteSpace(codec))
+            return ProcessingActionIds.Convert;
+
+        return ProcessingActionIds.Inspect;
     }
 
     public static string BuildProcessingActionSummary(IEnumerable<TrackInfo> tracks)
@@ -66,7 +73,7 @@ public static class AudioProcessingService
         var trackList = tracks as IReadOnlyCollection<TrackInfo> ?? tracks.ToList();
 
         if (trackList.Count == 0)
-            return "noch keine Tracks";
+            return LocalizationText.Get("SummaryNoTracks");
 
         var counts = trackList
             .GroupBy(track => NormalizeProcessingAction(track.ProcessingAction))
@@ -74,13 +81,13 @@ public static class AudioProcessingService
 
         var parts = new List<string>();
 
-        AddActionPart(parts, counts, "Übernehmen", "übernehmen");
-        AddActionPart(parts, counts, "Konvertieren", "konvertieren");
-        AddActionPart(parts, counts, "Prüfen", "prüfen");
-        AddActionPart(parts, counts, "Offen", "offen");
+        AddActionPart(parts, counts, ProcessingActionIds.Reuse, LocalizationText.Get("SummaryReuse"));
+        AddActionPart(parts, counts, ProcessingActionIds.Convert, LocalizationText.Get("SummaryConvert"));
+        AddActionPart(parts, counts, ProcessingActionIds.Inspect, LocalizationText.Get("SummaryInspect"));
+        AddActionPart(parts, counts, ProcessingActionIds.Pending, LocalizationText.Get("SummaryPending"));
 
         return parts.Count == 0
-            ? "noch nicht bestimmt"
+            ? LocalizationText.Get("SummaryUndetermined")
             : string.Join(", ", parts);
     }
 
@@ -88,55 +95,32 @@ public static class AudioProcessingService
     {
         var trackList = tracks as IReadOnlyCollection<TrackInfo> ?? tracks.ToList();
         if (trackList.Count == 0)
-            return "noch keine Tracks";
+            return LocalizationText.Get("SummaryNoTracks");
 
         var ripCount = trackList.Count(track =>
-            string.Equals(track.ProcessingAction, "FLAC rippen", StringComparison.OrdinalIgnoreCase));
+            ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.RipFlac);
         var reuseCount = trackList.Count(track => track.HasReusableConvertedFile);
         var conversionCount = trackList.Count - ripCount - reuseCount;
         var parts = new List<string>();
 
         if (ripCount > 0)
-            parts.Add($"{ripCount} FLAC rippen");
+            parts.Add(string.Format(LocalizationText.Get("SummaryRipFlac"), ripCount));
 
         if (conversionCount > 0)
         {
             var preset = string.IsNullOrWhiteSpace(selectedPreset)
-                ? "AAC konvertieren"
+                ? LocalizationText.Get("SummaryDefaultPreset")
                 : selectedPreset.Trim();
-            parts.Add($"{conversionCount} zu {preset} konvertieren");
+            parts.Add(string.Format(LocalizationText.Get("SummaryConvertToPreset"), conversionCount, preset));
         }
 
         if (reuseCount > 0)
-            parts.Add($"{reuseCount} AAC wiederverwenden");
+            parts.Add(string.Format(LocalizationText.Get("SummaryReuseAac"), reuseCount));
 
         return string.Join(", ", parts);
     }
 
-    public static string NormalizeProcessingAction(string? action)
-    {
-        if (string.IsNullOrWhiteSpace(action))
-            return "Offen";
-
-        var normalized = action.Trim();
-
-        if (normalized.Equals("Übernehmen", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Equals("Uebernehmen", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Übernehmen";
-        }
-
-        if (normalized.Equals("Konvertieren", StringComparison.OrdinalIgnoreCase))
-            return "Konvertieren";
-
-        if (normalized.Equals("Prüfen", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Equals("Pruefen", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Prüfen";
-        }
-
-        return normalized;
-    }
+    public static string NormalizeProcessingAction(string? action) => ProcessingActionIds.Normalize(action);
 
     public static string FormatChannelLayout(int? channels)
     {
@@ -145,7 +129,7 @@ public static class AudioProcessingService
             1 => "Mono",
             2 => "Stereo",
             null => "",
-            _ => $"{channels} Kanäle"
+            _ => LocalizationText.Format("Audio.Channels", channels)
         };
     }
 
@@ -164,10 +148,17 @@ public static class AudioProcessingService
 
         return normalizedCodec.Equals("MP3", StringComparison.OrdinalIgnoreCase) ||
                normalizedCodec.Equals("FLAC", StringComparison.OrdinalIgnoreCase) ||
+               normalizedCodec.Equals("WMA", StringComparison.OrdinalIgnoreCase) ||
+               normalizedCodec.Equals("VORBIS", StringComparison.OrdinalIgnoreCase) ||
+               normalizedCodec.Equals("OPUS", StringComparison.OrdinalIgnoreCase) ||
                IsPcmCodec(normalizedCodec) ||
                normalizedExtension.Equals("MP3", StringComparison.OrdinalIgnoreCase) ||
                normalizedExtension.Equals("WAV", StringComparison.OrdinalIgnoreCase) ||
-               normalizedExtension.Equals("FLAC", StringComparison.OrdinalIgnoreCase);
+               normalizedExtension.Equals("FLAC", StringComparison.OrdinalIgnoreCase) ||
+               normalizedExtension.Equals("WMA", StringComparison.OrdinalIgnoreCase) ||
+               normalizedExtension.Equals("OGG", StringComparison.OrdinalIgnoreCase) ||
+               normalizedExtension.Equals("OGA", StringComparison.OrdinalIgnoreCase) ||
+               normalizedExtension.Equals("OPUS", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsM4aOrM4bExtension(string? extension)
@@ -192,7 +183,7 @@ public static class AudioProcessingService
                normalized.StartsWith("PCM_", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool AacMatchesPreset(int? bitrateKbps, int? channels, ExportPreset preset)
+    public static bool AacMatchesPreset(int? bitrateKbps, int? channels, ExportPreset preset)
     {
         if (channels is null || channels.Value != preset.Channels)
             return false;

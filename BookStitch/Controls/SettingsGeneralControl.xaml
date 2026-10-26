@@ -1,0 +1,243 @@
+<UserControl x:Class="BookStitch.Controls.SettingsGeneralControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <UserControl.Resources>
+        <Style x:Key="BookStitchSliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid VerticalAlignment="Center">
+                            <Border Height="6"
+                                    Background="{DynamicResource ScrollBarTrackBrush}"
+                                    BorderBrush="{DynamicResource InputBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track"
+                                   VerticalAlignment="Center"
+                                   IsDirectionReversed="False">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                                  Background="{DynamicResource AccentBrush}"
+                                                  BorderThickness="0">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="6"
+                                                        Background="{TemplateBinding Background}"
+                                                        CornerRadius="3"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="18" Height="18">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="{DynamicResource AccentSoftBrush}"
+                                                        BorderBrush="#8CE7EA"
+                                                        BorderThickness="1"
+                                                        CornerRadius="9"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                                  Background="Transparent"
+                                                  BorderThickness="0"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+        <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+            <StackPanel>
+                <TextBlock Text="{services:LocalizedText Key=UiExport}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,18" Width="706" HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="36"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{services:LocalizedText Key=UiAusgabeordner}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MainTextBrush}"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="ChooseOutputFolderPathButton" Grid.Column="1" HorizontalContentAlignment="Stretch"
+                            Style="{StaticResource HiddenTextButtonStyle}" Click="ChooseOutputFolder_Click"
+                            AutomationProperties.Name="{services:LocalizedText Key=AutomationChangeOutputFolder}">
+                        <Border MinHeight="28"
+                                Padding="9,4"
+                                BorderBrush="{DynamicResource InputBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="5"
+                                Background="{DynamicResource InputBackgroundBrush}">
+                            <TextBlock x:Name="OutputFolderPathTextBlock"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+                        </Border>
+                    </Button>
+                    <Button x:Name="OpenOutputFolderButton"
+                            Grid.Column="3"
+                            Width="36"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource OpenOutputFolderButtonStyle}"
+                            Click="OpenOutputFolder_Click"
+                            AutomationProperties.Name="{services:LocalizedText Key=MainWindow.Export.OpenFolder}"/>
+                </Grid>
+
+                <Grid Margin="110,0,0,22">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <CheckBox x:Name="MergeAutomaticallyCheckBox"
+                                  Content="{services:LocalizedText Key=UiAutoMerge}"
+                                  IsChecked="True"
+                                  Style="{StaticResource SettingsToggleStyle}"
+                                  Checked="MergeAutomaticallyCheckBox_Changed"
+                                  Unchecked="MergeAutomaticallyCheckBox_Changed"/>
+                        <controls:InfoPoint Title="{services:LocalizedText Key=UiAutoMerge}" Body="{services:LocalizedText Key=InfoAutoMergeBody}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <CheckBox x:Name="KeepComputerAwakeCheckBox"
+                                  Content="{services:LocalizedText Key=UiComputerWachhalten}"
+                                  Style="{StaticResource SettingsToggleStyle}"
+                                  Checked="KeepComputerAwakeCheckBox_Changed"
+                                  Unchecked="KeepComputerAwakeCheckBox_Changed"/>
+                        <controls:InfoPoint Title="{services:LocalizedText Key=UiComputerWachhalten}" Body="{services:LocalizedText Key=InfoKeepAwakeBody}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <controls:SettingsAppearanceControl x:Name="AppearanceSettingsControl"/>
+                <Separator Margin="0,0,0,18" Opacity="0.35"/>
+
+                <TextBlock Text="{services:LocalizedText Key=UiSoundsUndFenster}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource MainTextBrush}"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,22">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="184"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="184"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="196"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{services:LocalizedText Key=UiEreignisprofil}"
+                               FontWeight="SemiBold" VerticalAlignment="Bottom" Margin="0,0,8,7"/>
+                    <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Bottom">
+                        <ComboBox x:Name="EventProfileComboBox" AutomationProperties.Name="{services:LocalizedText Key=UiEreignisprofil}"
+                                  Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                  SelectionChanged="EventProfileComboBox_Changed">
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiNurCDWechsel}" Tag="DiscOnly"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiWichtigeEreignisse}" Tag="Important"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiAlleHinweise}" Tag="All"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="3">
+                        <TextBlock Text="{services:LocalizedText Key=UiSoundbibliothek}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="SoundLibraryComboBox" AutomationProperties.Name="{services:LocalizedText Key=UiSoundbibliothek}"
+                                  Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                  SelectionChanged="SoundLibraryComboBox_Changed">
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiKeineSounds}" Tag="None"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiSanft}" Tag="Gentle"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiBass}" Tag="Bass"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiHammondorgel}" Tag="HammondOrgan"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiWarm}" Tag="Warm"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiRetro}" Tag="Retro"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="5">
+                        <TextBlock Text="{services:LocalizedText Key=UiFensterfokus}" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="FocusProfileComboBox" AutomationProperties.Name="{services:LocalizedText Key=UiFensterfokus}"
+                                  Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                  SelectionChanged="FocusProfileComboBox_Changed">
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiKeinFokus}" Tag="Off"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiStandard}" Tag="Standard"/>
+                            <ComboBoxItem Content="{services:LocalizedText Key=UiInDenVordergrund}" Tag="Foreground"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="6" Margin="0,18,0,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="{services:LocalizedText Key=UiLautstaerke}" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="SoundVolumeTextBlock"
+                                       Text="65 %"
+                                       Foreground="{DynamicResource AccentForegroundBrush}"
+                                       FontWeight="SemiBold"
+                                       Margin="12,0,0,0"/>
+                        </StackPanel>
+                        <Grid HorizontalAlignment="Left">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="370"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="SoundVolumeSlider"
+                                    Grid.Column="0"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    Style="{StaticResource BookStitchSliderStyle}"
+                                    ValueChanged="SoundVolumeSlider_ValueChanged"/>
+                            <Button Grid.Column="2"
+                                    Content="{services:LocalizedText Key=UiTestton}"
+                                    MinWidth="100"
+                                    Style="{StaticResource SettingsSecondaryButtonStyle}"
+                                    Click="PlayTestSound_Click"/>
+                            <Button Grid.Column="4"
+                                    Content="{services:LocalizedText Key=UiFokusTest}"
+                                    MinWidth="100"
+                                    Style="{StaticResource SettingsSecondaryButtonStyle}"
+                                    Click="RunFocusTest_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Margin="110,0,0,22">
+                    <Button x:Name="ResetWarningsButton" Content="{services:LocalizedText Key=Warnings.ShowAll}"
+                        AutomationProperties.Name="{services:LocalizedText Key=Warnings.ShowAll}"
+                        HorizontalAlignment="Left" Style="{StaticResource SettingsSecondaryButtonStyle}"
+                        Click="ResetWarnings_Click"/>
+                    <controls:InfoPoint Title="{services:LocalizedText Key=Warnings.ShowAll}"
+                                        Body="{services:LocalizedText Key=Settings.ResetWarningsInfo}"
+                                        Margin="8,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+</UserControl>

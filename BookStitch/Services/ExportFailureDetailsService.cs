@@ -16,14 +16,14 @@ public sealed class ExportFailureDetailsService
             details.Add($"   ◦ {trackException.ErrorSummary}");
 
             if (!string.IsNullOrWhiteSpace(trackException.SourcePath))
-                details.Add("   ◦ Pfad: " + trackException.SourcePath);
+                details.Add(LocalizationText.Format("MainWindow.Export.Failed.SourcePath", trackException.SourcePath));
 
             foreach (var line in trackException.TechnicalLines.Take(14))
                 details.Add("   ◦ FFmpeg: " + line);
         }
         else
         {
-            details.Add("• Allgemeiner Exportfehler");
+            details.Add(LocalizationText.Get("MainWindow.Export.Failed.GeneralError"));
 
             foreach (var line in SplitMessageLines(exception.Message).Take(16))
                 details.Add("   ◦ " + line);
@@ -32,7 +32,7 @@ public sealed class ExportFailureDetailsService
         if (!string.IsNullOrWhiteSpace(convertedFolder))
         {
             details.Add("");
-            details.Add("Arbeitsordner:");
+            details.Add(LocalizationText.Get("MainWindow.Export.Failed.WorkFolder"));
             details.Add(convertedFolder);
         }
 

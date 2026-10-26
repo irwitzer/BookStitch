@@ -4,9 +4,27 @@ public class AudioProbeInfo
 {
     public string FilePath { get; set; } = "";
 
+    public int StreamCount { get; set; }
+    public int AudioStreamCount { get; set; }
+    public bool HasNonCoverVideo { get; set; }
+    public string? AudioProfile { get; set; }
+    public string? AudioTimeBase { get; set; }
+    public string? AudioChannelLayout { get; set; }
+    public string? SampleFormat { get; set; }
+    public int AacExtradataSize { get; set; }
+    public string? AacConfigurationId { get; set; }
+    public bool SupportsAacStreamCopy => HasPlausibleAudioProperties && IsAac &&
+        AudioStreamCount == 1 && !HasNonCoverVideo && AudioProfile == "LC" &&
+        SampleFormat == "fltp" && AacExtradataSize > 0 &&
+        AudioTimeBase == $"1/{SampleRateHz}" &&
+        ((Channels == 1 && AudioChannelLayout == "mono") || (Channels == 2 && AudioChannelLayout == "stereo")) &&
+        !string.IsNullOrWhiteSpace(AacConfigurationId);
+
     public bool Success { get; set; }
 
     public string? ErrorMessage { get; set; }
+
+    public bool TimedOut { get; set; }
 
     public string? FormatName { get; set; }
 

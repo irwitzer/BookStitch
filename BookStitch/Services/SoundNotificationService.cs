@@ -22,11 +22,6 @@ public sealed class SoundNotificationService : IDisposable
     public void Play(NotificationEvent notificationEvent)
     {
         var settings = _settingsProvider();
-        var profile = SoundSettingsService.NormalizeProfile(settings.SoundProfile);
-
-        if (!SoundSettingsService.IsEnabled(profile, notificationEvent))
-            return;
-
         var library = SoundSettingsService.NormalizeLibrary(settings.SoundLibrary);
         PlayFile(library, NotificationSoundCatalog.GetFileName(notificationEvent), settings.SoundVolumePercent);
     }
@@ -40,7 +35,7 @@ public sealed class SoundNotificationService : IDisposable
 
     private void PlayFile(SoundLibrary library, string? fileName, int volumePercent)
     {
-        if (_disposed || string.IsNullOrWhiteSpace(fileName))
+        if (_disposed || library == SoundLibrary.None || string.IsNullOrWhiteSpace(fileName))
             return;
 
         try

@@ -10,12 +10,13 @@ public static class NotificationSoundCatalog
     {
         return library switch
         {
+            SoundLibrary.None => "",
             SoundLibrary.Gentle => "Gentle",
             SoundLibrary.Bass => "Bass",
             SoundLibrary.HammondOrgan => "HammondOrgan",
             SoundLibrary.Warm => "Warm",
             SoundLibrary.Retro => "Retro",
-            _ => "Gentle"
+            _ => SoundSettingsService.DefaultLibrary.ToString()
         };
     }
 

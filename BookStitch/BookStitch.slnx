@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="BookStitch/BookStitch.csproj" />
-  <Project Path="BookStitch.Tests/BookStitch.Tests.csproj" />
-</Solution>

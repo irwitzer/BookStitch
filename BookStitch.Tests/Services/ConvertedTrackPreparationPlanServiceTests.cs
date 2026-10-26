@@ -10,6 +10,19 @@ public sealed class ConvertedTrackPreparationPlanServiceTests
     private readonly WorkManifestService _workManifestService = new();
 
     [Fact]
+    public void Repeated_source_entries_have_independent_targets_and_actions()
+    {
+        using var folder = new TemporaryFolder();
+        var first = CreateTrack("same.m4a", 1); var second = CreateTrack("same.m4a", 2);
+        first.ProcessingAction = ProcessingActionIds.Reuse; second.ProcessingAction = ProcessingActionIds.Convert;
+        var plan = CreateService().Build(new ExportWorkManifest(), ProjectManifestTypes.FolderProject,
+            [first, second], folder.Path, Path.Combine(folder.Path, "converted"), ExportPreset.Parse("AAC Stereo 96 kbps"));
+        Assert.NotEqual(plan.Items[0].ConvertedPath, plan.Items[1].ConvertedPath);
+        Assert.Equal(first, plan.Items[0].Track);
+        Assert.Equal(second, plan.Items[1].Track);
+    }
+
+    [Fact]
     public void Build_ReconcilesAllTracksBeforePreparationStarts()
     {
         using var folder = new TemporaryFolder();
@@ -47,6 +60,7 @@ public sealed class ConvertedTrackPreparationPlanServiceTests
         File.SetLastWriteTimeUtc(secondConverted, DateTime.UtcNow.AddMinutes(-1));
 
         var manifest = new ExportWorkManifest();
+        _workManifestService.UpdateTrack(manifest, 0, tracks[0], firstSource, firstConverted, preset);
         _workManifestService.UpdateTrack(
             manifest,
             1,
@@ -111,6 +125,7 @@ public sealed class ConvertedTrackPreparationPlanServiceTests
             CreateTrack("002.flac", 2)
         };
 
+        var verifiedManifest = new ExportWorkManifest();
         foreach (var track in tracks)
         {
             var sourcePath = Path.Combine(sourceFolder, track.FileName);
@@ -123,10 +138,11 @@ public sealed class ConvertedTrackPreparationPlanServiceTests
             File.WriteAllBytes(convertedPath, [4, 5, 6]);
             File.SetLastWriteTimeUtc(sourcePath, DateTime.UtcNow.AddMinutes(-2));
             File.SetLastWriteTimeUtc(convertedPath, DateTime.UtcNow.AddMinutes(-1));
+            _workManifestService.UpdateTrack(verifiedManifest, track.Index - 1, track, sourcePath, convertedPath, preset);
         }
 
         var plan = CreateService().Build(
-            new ExportWorkManifest(),
+            verifiedManifest,
             ProjectManifestTypes.AudioCdProject,
             tracks,
             sourceFolder,

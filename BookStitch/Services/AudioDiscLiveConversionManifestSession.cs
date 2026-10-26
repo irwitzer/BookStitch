@@ -4,29 +4,34 @@ using BookStitch.Models;
 
 namespace BookStitch.Services;
 
-public sealed class AudioDiscLiveConversionManifestSession
+public sealed class AudioDiscLiveConversionManifestSession : IAsyncDisposable
 {
     private readonly WorkManifestService _workManifestService;
     private readonly ConvertedTrackReconciliationService _reconciliationService;
+    private readonly ProjectMetadataMigrationService _projectMetadataMigrationService;
     private readonly AudioDiscProjectManifest _audioDiscManifest;
     private readonly ExportPreset _preset;
     private readonly object _syncRoot = new();
     private readonly ExportWorkManifest _manifest;
+    private readonly PreparedTrackLifecycleSession _preparedLifecycle;
 
     public AudioDiscLiveConversionManifestSession(
         WorkManifestService workManifestService,
         AudioDiscProjectManifest audioDiscManifest,
-        ExportPreset preset)
+        ExportPreset preset,
+        ProjectMetadataMigrationService? projectMetadataMigrationService = null,
+        IAudioExportProcessingService? audio = null, string ffprobePath = "", int effectiveParallelism = 1)
     {
         _workManifestService = workManifestService ?? throw new ArgumentNullException(nameof(workManifestService));
         _reconciliationService = new ConvertedTrackReconciliationService(_workManifestService);
         _audioDiscManifest = audioDiscManifest ?? throw new ArgumentNullException(nameof(audioDiscManifest));
         _preset = preset ?? throw new ArgumentNullException(nameof(preset));
+        _projectMetadataMigrationService = projectMetadataMigrationService ?? new ProjectMetadataMigrationService();
 
         ArgumentException.ThrowIfNullOrWhiteSpace(audioDiscManifest.ProjectFolder);
 
         ProjectFolderLayout.EnsureProjectFolders(audioDiscManifest.ProjectFolder);
-        ManifestPath = ProjectFolderLayout.GetWorkManifestPath(audioDiscManifest.ProjectFolder);
+        ManifestPath = ProjectFolderLayout.GetExportManifestPath(audioDiscManifest.ProjectFolder);
         var sourceFolder = ProjectFolderLayout.GetOriginalsFolder(audioDiscManifest.ProjectFolder);
 
         _manifest = _workManifestService.LoadOrCreate(
@@ -35,6 +40,10 @@ public sealed class AudioDiscLiveConversionManifestSession
             audioDiscManifest.ProjectFolder,
             sourceFolder,
             preset.DisplayName);
+
+        _preparedLifecycle = new PreparedTrackLifecycleSession(_workManifestService,
+            audio ?? new AacExportProcessingService(), _manifest, ManifestPath, _syncRoot,
+            ffprobePath, effectiveParallelism);
 
         lock (_syncRoot)
         {
@@ -77,7 +86,7 @@ public sealed class AudioDiscLiveConversionManifestSession
     }
 
 
-    public bool ReconcileTrack(AudioDiscLiveConversionPreparation preparation)
+    public bool ReconcileTrack(AudioDiscLiveConversionPreparation preparation, CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(preparation);
 
@@ -90,11 +99,17 @@ public sealed class AudioDiscLiveConversionManifestSession
                 preparation.Track,
                 preparation.SourcePath,
                 preparation.ConvertedPath,
-                _preset);
+                _preset, token);
 
             if (result.ManifestChanged)
                 _workManifestService.Save(ManifestPath, _manifest);
 
+            if (result.CanReuse)
+            {
+                var entry = _manifest.Tracks.Single(entry => TrackPathService.PathEquals(entry.ConvertedPath, preparation.ConvertedPath) &&
+                    string.Equals(entry.Preset, _preset.DisplayName, StringComparison.OrdinalIgnoreCase));
+                _preparedLifecycle.QueueTiming(entry, token);
+            }
             return result.CanReuse;
         }
     }
@@ -113,26 +128,17 @@ public sealed class AudioDiscLiveConversionManifestSession
                 preparation.ConvertedPath,
                 _preset,
                 ProjectManifestTrackStatuses.Converting);
-            _workManifestService.Save(ManifestPath, _manifest);
         }
     }
 
-    public void MarkTrackCompleted(AudioDiscLiveConversionPreparation preparation)
+    public void MarkTrackCompleted(AudioDiscLiveConversionPreparation preparation, CancellationToken token = default)
     {
-        ArgumentNullException.ThrowIfNull(preparation);
-
-        lock (_syncRoot)
-        {
-            _workManifestService.UpdateTrack(
-                _manifest,
-                preparation.Track.Index,
-                preparation.Track,
-                preparation.SourcePath,
-                preparation.ConvertedPath,
-                _preset);
-            _workManifestService.Save(ManifestPath, _manifest);
-        }
+        _preparedLifecycle.Complete(preparation.Track.Index, preparation.Track,
+            preparation.SourcePath, preparation.ConvertedPath, _preset, token);
     }
+
+    public Task DrainTimingAsync() => _preparedLifecycle.DrainAsync();
+    public ValueTask DisposeAsync() => _preparedLifecycle.DisposeAsync();
 
     public void MarkTrackFailed(AudioDiscLiveConversionPreparation preparation, string errorSummary)
     {
@@ -171,13 +177,20 @@ public sealed class AudioDiscLiveConversionManifestSession
 
     private void UpdateProjectSnapshotCore()
     {
+        var metadata = ProjectMetadataMigrationService.CreateProjection(
+            _projectMetadataMigrationService.EnsureMigrated(
+                _audioDiscManifest.ProjectFolder,
+                mp3DiscManifest: null,
+                exportManifest: _manifest,
+                audioDiscManifest: _audioDiscManifest));
+
         var outputFileName = FileNameTemplateService.BuildOutputFileName(
-            _audioDiscManifest.Title,
-            _audioDiscManifest.Author,
-            _audioDiscManifest.Narrator,
+            metadata.Title,
+            metadata.Author,
+            metadata.Narrator,
             _audioDiscManifest.FileNameTemplate,
             _audioDiscManifest.OutputExtension,
-            _audioDiscManifest.Album);
+            metadata.Album);
 
         _workManifestService.UpdateExportSettings(
             _manifest,
@@ -187,13 +200,8 @@ public sealed class AudioDiscLiveConversionManifestSession
             _audioDiscManifest.OutputExtension,
             _audioDiscManifest.ParallelJobs);
 
-        _workManifestService.UpdateBookMetadata(
+        _workManifestService.UpdateCoverMetadata(
             _manifest,
-            _audioDiscManifest.Title,
-            _audioDiscManifest.Author,
-            _audioDiscManifest.Album,
-            _audioDiscManifest.Narrator,
-            _audioDiscManifest.Genre,
             _audioDiscManifest.CoverSourcePath,
             _audioDiscManifest.ProcessedCoverPath);
     }

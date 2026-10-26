@@ -1,44 +1,32 @@
 <Window x:Class="BookStitch.Dialog.AppInputDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:services="clr-namespace:BookStitch.Services"
         xmlns:dialog="clr-namespace:BookStitch.Dialog"
-        Title="BookStitch"
-        Icon="/Assets/Icons/BookStitchAppIcon-Simplified-multisize.ico"
-        
+        Title="{services:LocalizedText Key=UiBookStitch}"
+        Icon="/BookStitch;component/Assets/Icons/icon/BookStitch-Icon-OpenBook.ico"
+
         Width="470"
         Height="260"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="#101418"
-        Foreground="#E8EDF2"
+        Background="{DynamicResource AppBackgroundBrush}"
+        Foreground="{DynamicResource MainTextBrush}"
         FontFamily="Segoe UI"
         KeyboardNavigation.TabNavigation="Cycle">
+    <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="44" ResizeBorderThickness="0" CornerRadius="8" GlassFrameThickness="0" UseAeroCaptionButtons="False"/></shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
         <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
-
-            <Style x:Key="DialogSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-                <Setter Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource InputBorderBrush}"/>
-                <Setter Property="Foreground" Value="{StaticResource MainTextBrush}"/>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#22303A"/>
-                        <Setter Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-        </ResourceDictionary>
+</ResourceDictionary>
     </Window.Resources>
 
-    <Border BorderBrush="{StaticResource AccentBrush}"
+    <Border BorderBrush="{DynamicResource AccentBrush}"
             BorderThickness="1"
-            Background="{StaticResource PanelBackgroundBrush}">
+            Background="{DynamicResource AppBackgroundBrush}" CornerRadius="8">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="46"/>
@@ -46,25 +34,27 @@
                 <RowDefinition Height="64"/>
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    Background="#111820"
-                    BorderBrush="{StaticResource PanelBorderBrush}"
+            <Border CornerRadius="8,8,0,0" Grid.Row="0"
+                    Background="{DynamicResource AppBackgroundBrush}"
+                    BorderBrush="{DynamicResource PanelBorderBrush}"
                     BorderThickness="0,0,0,1"
                     dialog:DialogWindowBehavior.IsDragRegion="True">
                 <Grid Margin="14,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" x:Name="TitleText"
-                               Text="BookStitch"
-                               Foreground="{StaticResource AccentSoftBrush}"
+                               Text="{services:LocalizedText Key=UiBookStitch}"
+                               Foreground="{DynamicResource AccentForegroundBrush}"
                                FontWeight="Bold"
                                FontSize="16"
                                VerticalAlignment="Center"/>
-                    <Button Grid.Column="1"
+
+                    <Button Grid.Column="2"
                             Content="×"
-                            Style="{StaticResource DialogCloseButtonStyle}"
+                            Style="{StaticResource DialogCloseButtonStyle}" shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             IsTabStop="False"
                             Click="CloseButton_Click"/>
                 </Grid>
@@ -74,11 +64,11 @@
                 <TextBlock x:Name="HeadingText"
                            FontSize="18"
                            FontWeight="Bold"
-                           Foreground="{StaticResource MainTextBrush}"
+                           Foreground="{DynamicResource MainTextBrush}"
                            Margin="0,0,0,10"/>
 
                 <TextBlock x:Name="MessageText"
-                           Foreground="{StaticResource MainTextBrush}"
+                           Foreground="{DynamicResource MainTextBrush}"
                            TextWrapping="Wrap"
                            Margin="0,0,0,14"/>
 
@@ -92,32 +82,30 @@
                          KeyDown="InputTextBox_KeyDown"/>
 
                 <TextBlock x:Name="ErrorText"
-                           Foreground="#FF7070"
+                           Foreground="{DynamicResource ErrorTextBrush}"
                            Visibility="Collapsed"
                            Margin="0,8,0,0"/>
             </StackPanel>
 
-            <Border Grid.Row="2"
-                    Background="#151C23"
-                    BorderBrush="{StaticResource PanelBorderBrush}"
+            <Border CornerRadius="0,0,8,8" Grid.Row="2"
+                    Background="{DynamicResource AppBackgroundBrush}"
+                    BorderBrush="{DynamicResource PanelBorderBrush}"
                     BorderThickness="0,1,0,0">
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Margin="0,0,18,0">
-                    <Button Content="OK"
+                    <Button Content="{services:LocalizedText Key=UiOK}"
                             Width="96"
-                            Height="34"
                             IsDefault="True"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Click="OkButton_Click"
                             Margin="0,0,8,0"/>
 
-                    <Button Content="Abbrechen"
+                    <Button Content="{services:LocalizedText Key=UiAbbrechen}"
                             Width="105"
-                            Height="34"
                             IsCancel="True"
-                            Style="{StaticResource DialogSecondaryButtonStyle}"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             Click="CancelButton_Click"/>
                 </StackPanel>
             </Border>

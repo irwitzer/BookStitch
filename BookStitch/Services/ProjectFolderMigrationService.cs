@@ -4,41 +4,136 @@ using System.Text.Json;
 
 namespace BookStitch.Services;
 
-public sealed class ProjectFolderMigrationService
+internal sealed class ProjectFolderMigrationService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private readonly Action<string, string> _copyFile;
+    public ProjectFolderMigrationService() : this((source, target) =>
+        SourceFileCopyService.CopyAtomicallyAsync(source, target, CancellationToken.None).GetAwaiter().GetResult()) { }
+    internal ProjectFolderMigrationService(Action<string, string> copyFile) => _copyFile = copyFile;
 
-    public bool MigrateIfNeeded(string projectFolder)
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly AtomicJsonStore JsonStore = new();
+
+    internal bool UpgradeLegacyLayout(string projectFolder)
     {
         if (string.IsNullOrWhiteSpace(projectFolder) || !Directory.Exists(projectFolder))
             return false;
 
+        if (!IsRecognizedBookStitchProjectFolder(projectFolder))
+            return false;
+
+        EnsureSafeTree(projectFolder);
+
+        foreach (var fileName in new[] { ProjectFolderLayout.WorkManifestFileName,
+                     ProjectFolderLayout.ExportManifestFileName, ProjectFolderLayout.LegacyAudioDiscManifestFileName })
+        foreach (var path in new[] { Path.Combine(projectFolder, fileName),
+                     Path.Combine(ProjectFolderLayout.GetSettingsFolder(projectFolder), fileName) })
+            if (File.Exists(path))
+            {
+                try { PersistentJsonSchema.Read(File.ReadAllText(path), "BookStitch project manifest", path); }
+                catch (JsonException ex) { throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable"), ex); }
+            }
+
         var changed = false;
-        try
-        {
-            ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        // Fail closed: partially published sources must not be resolved until migration succeeds.
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
 
-            changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.WorkManifestFileName);
-            changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.ExportManifestFileName);
-            changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.AudioDiscManifestFileName);
-            changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.TrackListStateFileName);
+        changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.WorkManifestFileName);
+        changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.ExportManifestFileName);
+        changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.LegacyAudioDiscManifestFileName);
+        changed |= MoveRootManifest(projectFolder, ProjectFolderLayout.TrackListStateFileName);
 
-            changed |= MoveLegacyMp3DiscFolders(projectFolder);
-            changed |= MoveLegacyAudioSources(projectFolder);
-            changed |= NormalizeMp3Manifest(projectFolder);
-            changed |= NormalizeAudioManifest(projectFolder);
-            changed |= NormalizeExportManifest(projectFolder);
-        }
-        catch (IOException)
-        {
-            // A partially locked legacy project remains readable through the compatibility resolvers.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Do not block project discovery when a legacy file is temporarily inaccessible.
-        }
-
+        changed |= MoveLegacyMp3DiscFolders(projectFolder);
+        changed |= MoveLegacyAudioSources(projectFolder);
+        changed |= NormalizeMp3Manifest(projectFolder);
+        changed |= NormalizeAudioManifest(projectFolder);
+        changed |= NormalizeExportManifest(projectFolder);
         return changed;
+    }
+
+    public static bool IsRecognizedBookStitchProjectFolder(string projectFolder)
+    {
+        if (string.IsNullOrWhiteSpace(projectFolder) || !Directory.Exists(projectFolder))
+            return false;
+
+        return HasRecognizedCurrentManifest(projectFolder) ||
+               HasRecognizedLegacyManifest(projectFolder);
+    }
+
+    private static bool HasRecognizedCurrentManifest(string projectFolder)
+    {
+        var settingsFolder = ProjectFolderLayout.GetSettingsFolder(projectFolder);
+        if (!Directory.Exists(settingsFolder))
+            return false;
+
+        return IsRecognizedWorkManifest(ProjectFolderLayout.GetWorkManifestPath(projectFolder)) ||
+               IsRecognizedMp3DiscManifest(ProjectFolderLayout.GetMp3DiscManifestPath(projectFolder)) ||
+               IsRecognizedAudioManifest(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder)) ||
+               IsRecognizedExportManifest(ProjectFolderLayout.GetExportManifestPath(projectFolder)) ||
+               IsRecognizedAudioManifest(Path.Combine(ProjectFolderLayout.GetSettingsFolder(projectFolder), ProjectFolderLayout.LegacyAudioDiscManifestFileName));
+    }
+
+    private static bool HasRecognizedLegacyManifest(string projectFolder)
+    {
+        return IsRecognizedWorkManifest(Path.Combine(projectFolder, ProjectFolderLayout.WorkManifestFileName)) ||
+               IsRecognizedExportManifest(Path.Combine(projectFolder, ProjectFolderLayout.ExportManifestFileName)) ||
+               IsRecognizedAudioManifest(Path.Combine(projectFolder, ProjectFolderLayout.LegacyAudioDiscManifestFileName));
+    }
+
+    private static bool IsRecognizedWorkManifest(string path) =>
+        IsRecognizedExportManifest(path) || IsRecognizedMp3DiscManifest(path);
+
+    private static bool IsRecognizedExportManifest(string path)
+    {
+        var root = TryReadJsonRoot(path);
+        if (root is null)
+            return false;
+
+        var element = root.Value;
+        if (!element.TryGetProperty(nameof(ExportWorkManifest.ProjectType), out var projectTypeProperty))
+            return false;
+
+        var projectType = projectTypeProperty.GetString() ?? string.Empty;
+        if (!string.Equals(projectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(projectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(projectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return element.TryGetProperty(nameof(ExportWorkManifest.Tracks), out _) ||
+               element.TryGetProperty(nameof(ExportWorkManifest.Export), out _) ||
+               element.TryGetProperty(nameof(ExportWorkManifest.State), out _);
+    }
+
+    private static bool IsRecognizedMp3DiscManifest(string path)
+    {
+        var root = TryReadJsonRoot(path);
+        if (root is null)
+            return false;
+
+        var element = root.Value;
+        if (!element.TryGetProperty(nameof(Mp3DiscProjectManifest.ProjectType), out var projectTypeProperty))
+            return false;
+
+        var projectType = projectTypeProperty.GetString() ?? string.Empty;
+        if (!projectType.Contains("Mp3", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return element.TryGetProperty(nameof(Mp3DiscProjectManifest.ImportedDiscs), out _) ||
+               element.TryGetProperty(nameof(Mp3DiscProjectManifest.TotalDiscs), out _);
+    }
+
+    private static bool IsRecognizedAudioManifest(string path)
+    {
+        var root = TryReadJsonRoot(path);
+        if (root is null)
+            return false;
+
+        var element = root.Value;
+        return element.TryGetProperty(nameof(AudioDiscProjectManifest.Discs), out _) ||
+               element.TryGetProperty(nameof(AudioDiscProjectManifest.DiscIdentity), out _) ||
+               element.TryGetProperty(nameof(AudioDiscProjectManifest.WorkingFormat), out _);
     }
 
     private static bool MoveRootManifest(string projectFolder, string fileName)
@@ -54,17 +149,15 @@ public sealed class ProjectFolderMigrationService
         }
         else
         {
-            var legacyWrite = File.GetLastWriteTimeUtc(legacy);
-            var targetWrite = File.GetLastWriteTimeUtc(target);
-            if (legacyWrite > targetWrite)
-                File.Move(legacy, target, overwrite: true);
-            else
-                File.Delete(legacy);
+            if (!FilesHaveSameContent(legacy, target))
+                throw new ProjectUpgradeConflictException($"Legacy-Manifest steht im Konflikt mit der aktuellen Projektdatei: {target}");
+
+            File.Delete(legacy);
         }
         return true;
     }
 
-    private static bool MoveLegacyMp3DiscFolders(string projectFolder)
+    private bool MoveLegacyMp3DiscFolders(string projectFolder)
     {
         var changed = false;
         foreach (var folder in Directory.EnumerateDirectories(projectFolder, "CD *", SearchOption.TopDirectoryOnly))
@@ -83,7 +176,7 @@ public sealed class ProjectFolderMigrationService
         return changed;
     }
 
-    private static bool MoveLegacyAudioSources(string projectFolder)
+    private bool MoveLegacyAudioSources(string projectFolder)
     {
         var legacyRipped = Path.Combine(projectFolder, "ripped");
         if (!Directory.Exists(legacyRipped))
@@ -93,7 +186,9 @@ public sealed class ProjectFolderMigrationService
         if (audioManifest is null)
             return MergeDirectory(legacyRipped, ProjectFolderLayout.GetOriginalsFolder(projectFolder));
 
+        EnsureSafeTree(legacyRipped);
         var changed = false;
+        var publishedSources = new List<string>();
         foreach (var track in audioManifest.Discs.SelectMany(disc => disc.Tracks))
         {
             var source = ResolveAudioSourcePath(projectFolder, legacyRipped, track);
@@ -105,11 +200,13 @@ public sealed class ProjectFolderMigrationService
             var target = Path.Combine(targetFolder, track.FileName);
             if (!PathsEqual(source, target))
             {
-                MoveFile(source, target);
+                PublishFile(source, target);
+                publishedSources.Add(source);
                 changed = true;
             }
         }
 
+        foreach (var source in publishedSources) File.Delete(source);
         if (Directory.Exists(legacyRipped))
             changed |= MergeDirectory(legacyRipped, ProjectFolderLayout.GetOriginalsFolder(projectFolder));
         return changed;
@@ -117,7 +214,8 @@ public sealed class ProjectFolderMigrationService
 
     private static bool NormalizeMp3Manifest(string projectFolder)
     {
-        var path = ProjectFolderLayout.ResolveWorkManifestPath(projectFolder);
+        var path = ProjectFolderLayout.ResolveMp3DiscManifestPath(projectFolder);
+        if (!IsRecognizedMp3DiscManifest(path)) return false;
         var manifest = TryRead<Mp3DiscProjectManifest>(path);
         if (manifest is null ||
             string.IsNullOrWhiteSpace(manifest.ProjectType) ||
@@ -126,7 +224,7 @@ public sealed class ProjectFolderMigrationService
             return false;
         }
 
-        var changed = false;
+        var changed = !string.Equals(manifest.ProjectFolder, projectFolder, StringComparison.Ordinal);
         manifest.ProjectFolder = projectFolder;
         foreach (var disc in manifest.ImportedDiscs)
         {
@@ -146,11 +244,12 @@ public sealed class ProjectFolderMigrationService
     private static bool NormalizeAudioManifest(string projectFolder)
     {
         var path = ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder);
+        if (!IsRecognizedAudioManifest(path)) return false;
         var manifest = TryRead<AudioDiscProjectManifest>(path);
         if (manifest is null)
             return false;
 
-        var changed = false;
+        var changed = !string.Equals(manifest.ProjectFolder, projectFolder, StringComparison.Ordinal);
         manifest.ProjectFolder = projectFolder;
         foreach (var track in manifest.Discs.SelectMany(disc => disc.Tracks))
         {
@@ -158,6 +257,13 @@ public sealed class ProjectFolderMigrationService
                 ProjectFolderLayout.OriginalsFolderName,
                 $"CD {Math.Max(1, track.DiscNumber):00}",
                 track.FileName);
+            if (!File.Exists(Path.Combine(projectFolder, expected)))
+            {
+                var existing = Path.Combine(projectFolder, track.RelativePath);
+                var flatOriginal = Path.Combine(ProjectFolderLayout.GetOriginalsFolder(projectFolder), track.FileName);
+                if (File.Exists(existing)) expected = track.RelativePath;
+                else if (File.Exists(flatOriginal)) expected = Path.GetRelativePath(projectFolder, flatOriginal);
+            }
             if (!string.Equals(NormalizeRelative(track.RelativePath), NormalizeRelative(expected), StringComparison.OrdinalIgnoreCase))
             {
                 track.RelativePath = expected;
@@ -181,42 +287,46 @@ public sealed class ProjectFolderMigrationService
         var changedAny = false;
         foreach (var path in paths)
         {
-            var manifest = TryReadExportManifest(path);
-            if (manifest is null ||
-                !(string.Equals(manifest.ProjectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(manifest.ProjectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(manifest.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase)))
+            // Coordinate the entire read/modify/write, not only the final replace.
+            lock (AtomicJsonStore.ForPath(path))
             {
-                continue;
-            }
-
-            var changed = false;
-            if (!PathsEqual(manifest.ProjectWorkFolder, projectFolder))
-            {
-                manifest.ProjectWorkFolder = projectFolder;
-                changed = true;
-            }
-            var normalizedSourceFolder = MapLegacySourcePath(projectFolder, manifest.SourceFolder);
-            if (!PathsEqual(manifest.SourceFolder, normalizedSourceFolder))
-            {
-                manifest.SourceFolder = normalizedSourceFolder;
-                changed = true;
-            }
-
-            foreach (var track in manifest.Tracks)
-            {
-                var source = MapLegacySourcePath(projectFolder, track.SourcePath);
-                if (!PathsEqual(track.SourcePath, source))
+                var manifest = TryReadExportManifest(path);
+                if (manifest is null ||
+                    !(string.Equals(manifest.ProjectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(manifest.ProjectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(manifest.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase)))
                 {
-                    track.SourcePath = source;
+                    continue;
+                }
+
+                var changed = false;
+                if (!PathsEqual(manifest.ProjectWorkFolder, projectFolder))
+                {
+                    manifest.ProjectWorkFolder = projectFolder;
                     changed = true;
                 }
-            }
+                var normalizedSourceFolder = MapLegacySourcePath(projectFolder, manifest.SourceFolder);
+                if (!PathsEqual(manifest.SourceFolder, normalizedSourceFolder))
+                {
+                    manifest.SourceFolder = normalizedSourceFolder;
+                    changed = true;
+                }
 
-            if (changed)
-            {
-                Write(path, manifest);
-                changedAny = true;
+                foreach (var track in manifest.Tracks)
+                {
+                    var source = MapLegacySourcePath(projectFolder, track.SourcePath);
+                    if (!PathsEqual(track.SourcePath, source))
+                    {
+                        track.SourcePath = source;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    Write(path, manifest);
+                    changedAny = true;
+                }
             }
         }
         return changedAny;
@@ -251,15 +361,67 @@ public sealed class ProjectFolderMigrationService
             return matches.Length == 1 ? matches[0] : direct;
         }
 
-        for (var disc = 1; disc <= 999; disc++)
+        return TryMapLegacyDiscPath(projectFolder, full, out var mappedDiscPath)
+            ? mappedDiscPath
+            : full;
+    }
+
+    private static bool TryMapLegacyDiscPath(
+        string projectFolder,
+        string fullPath,
+        out string mappedPath)
+    {
+        mappedPath = string.Empty;
+
+        string relativePath;
+        try
         {
-            var legacyDisc = Path.Combine(projectFolder, $"CD {disc:00}");
-            if (!IsUnder(full, legacyDisc))
-                continue;
-            return Path.Combine(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, disc), Path.GetRelativePath(legacyDisc, full));
+            relativePath = Path.GetRelativePath(projectFolder, fullPath);
+        }
+        catch
+        {
+            return false;
         }
 
-        return full;
+        if (string.IsNullOrWhiteSpace(relativePath) ||
+            string.Equals(relativePath, ".", StringComparison.Ordinal) ||
+            Path.IsPathRooted(relativePath))
+        {
+            return false;
+        }
+
+        var separatorIndex = relativePath.IndexOf(Path.DirectorySeparatorChar);
+        if (separatorIndex < 0 &&
+            Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar)
+        {
+            separatorIndex = relativePath.IndexOf(Path.AltDirectorySeparatorChar);
+        }
+
+        var firstSegment = separatorIndex < 0
+            ? relativePath
+            : relativePath[..separatorIndex];
+
+        if (!firstSegment.StartsWith("CD ", StringComparison.OrdinalIgnoreCase) ||
+            !int.TryParse(firstSegment[3..].Trim(), out var discNumber) ||
+            discNumber is < 1 or > 999)
+        {
+            return false;
+        }
+
+        var targetFolder =
+            ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, discNumber);
+
+        if (separatorIndex < 0 ||
+            separatorIndex == relativePath.Length - 1)
+        {
+            mappedPath = targetFolder;
+            return true;
+        }
+
+        mappedPath = Path.Combine(
+            targetFolder,
+            relativePath[(separatorIndex + 1)..]);
+        return true;
     }
 
     private static string ResolveAudioSourcePath(string projectFolder, string legacyRipped, AudioDiscProjectManifestTrack track)
@@ -273,32 +435,71 @@ public sealed class ProjectFolderMigrationService
         return Path.Combine(legacyRipped, track.FileName);
     }
 
-    private static bool MergeDirectory(string source, string target)
+    private bool MergeDirectory(string source, string target)
     {
         if (!Directory.Exists(source))
             return false;
+        EnsureSafeTree(source);
+        SafeFileSystemEnumeration.EnsureNoReparseAncestors(target);
         Directory.CreateDirectory(target);
+        EnsureSafeTree(target);
         foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
             Directory.CreateDirectory(Path.Combine(target, Path.GetRelativePath(source, directory)));
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-            MoveFile(file, Path.Combine(target, Path.GetRelativePath(source, file)));
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            PublishFile(file, Path.Combine(target, Path.GetRelativePath(source, file)));
         Directory.Delete(source, recursive: true);
         return true;
     }
 
-    private static void MoveFile(string source, string target)
+    private void PublishFile(string source, string target)
     {
+        SafeFileSystemEnumeration.EnsureNoReparseAncestors(source);
+        SafeFileSystemEnumeration.EnsureNoReparseAncestors(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         if (!File.Exists(target))
         {
-            File.Move(source, target);
+            _copyFile(source, target);
             return;
         }
 
         if (new FileInfo(source).Length != new FileInfo(target).Length)
-            throw new IOException($"Zieldatei existiert mit abweichender Größe: {target}");
+            throw new ProjectUpgradeConflictException($"Zieldatei existiert mit abweichender Größe: {target}");
 
-        File.Delete(source);
+        if (!FilesHaveSameContent(source, target))
+            throw new ProjectUpgradeConflictException($"Zieldatei existiert mit abweichendem Inhalt: {target}");
+
+        // Keep legacy sources until the entire directory has been published successfully.
+    }
+
+    private static void EnsureSafeTree(string root) =>
+        SafeFileSystemEnumeration.EnsureSafeTree(root);
+
+    private static bool FilesHaveSameContent(string left, string right)
+    {
+        var leftInfo = new FileInfo(left);
+        var rightInfo = new FileInfo(right);
+        if (leftInfo.Length != rightInfo.Length)
+            return false;
+
+        const int BufferSize = 1024 * 128;
+        using var leftStream = File.OpenRead(left);
+        using var rightStream = File.OpenRead(right);
+        var leftBuffer = new byte[BufferSize];
+        var rightBuffer = new byte[BufferSize];
+
+        while (true)
+        {
+            var leftRead = leftStream.Read(leftBuffer, 0, leftBuffer.Length);
+            var rightRead = rightStream.Read(rightBuffer, 0, rightBuffer.Length);
+            if (leftRead != rightRead)
+                return false;
+
+            if (leftRead == 0)
+                return true;
+
+            if (!leftBuffer.AsSpan(0, leftRead).SequenceEqual(rightBuffer.AsSpan(0, rightRead)))
+                return false;
+        }
     }
 
 
@@ -310,6 +511,11 @@ public sealed class ProjectFolderMigrationService
                 return null;
 
             var json = File.ReadAllText(path);
+            PersistentJsonSchema.Read(
+                json,
+                "Work-/Export-Manifest",
+                path,
+                ExportWorkManifestVersions.CurrentSchemaVersion);
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             if (!root.TryGetProperty(nameof(ExportWorkManifest.Tracks), out _) &&
@@ -321,6 +527,26 @@ public sealed class ProjectFolderMigrationService
 
             return JsonSerializer.Deserialize<ExportWorkManifest>(json, JsonOptions);
         }
+        catch (PersistentJsonSchemaException)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonElement? TryReadJsonRoot(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.Clone();
+        }
         catch
         {
             return null;
@@ -331,17 +557,39 @@ public sealed class ProjectFolderMigrationService
     {
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions) : default;
+            if (!File.Exists(path))
+                return default;
+
+            var json = File.ReadAllText(path);
+            if (typeof(T) == typeof(Mp3DiscProjectManifest))
+            {
+                PersistentJsonSchema.Read(
+                    json,
+                    "MP3-CD-Projektmanifest",
+                    path,
+                    Mp3DiscManifestVersions.CurrentSchemaVersion);
+            }
+            else if (typeof(T) == typeof(AudioDiscProjectManifest))
+            {
+                PersistentJsonSchema.Read(
+                    json,
+                    "Audio-CD-Projektmanifest",
+                    path,
+                    AudioDiscProjectManifestVersions.CurrentSchemaVersion);
+            }
+
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
+        }
+        catch (PersistentJsonSchemaException)
+        {
+            throw;
         }
         catch { return default; }
     }
 
     private static void Write<T>(string path, T value)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".migration.tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(value, JsonOptions));
-        File.Move(temp, path, overwrite: true);
+        JsonStore.Save(path, value, JsonOptions);
     }
 
     private static bool IsUnder(string path, string root)

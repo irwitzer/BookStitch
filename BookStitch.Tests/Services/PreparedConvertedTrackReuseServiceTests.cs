@@ -7,6 +7,34 @@ namespace BookStitch.Tests.Services;
 
 public sealed class PreparedConvertedTrackReuseServiceTests
 {
+    [Fact]
+    public void Prepared_file_counter_counts_only_current_audio_outputs_and_leaves_originals_unchanged()
+    {
+        using var folder = new TemporaryFolder();
+        ProjectFolderLayout.EnsureProjectFolders(folder.Path);
+        var preset = ExportPreset.Parse("AAC Stereo 128 kbps");
+        var originals = ProjectFolderLayout.GetDiscOriginalsFolder(folder.Path, 1);
+        Directory.CreateDirectory(originals);
+        var converted = ProjectFolderLayout.GetConvertedPresetFolder(folder.Path, preset.GetFolderName());
+        Directory.CreateDirectory(converted);
+        foreach (var name in new[] { "current.mp3", "stale.flac", "missing.mp3", "notes.txt" })
+        {
+            var source = Path.Combine(originals, name);
+            File.WriteAllBytes(source, [1, 2, 3]);
+            File.SetLastWriteTimeUtc(source, DateTime.UtcNow.AddMinutes(-2));
+            if (name == "missing.mp3") continue;
+            var track = new TrackInfo { FilePath = source, FileName = name,
+                Extension = Path.GetExtension(source).TrimStart('.'), Codec = name.EndsWith("mp3") ? "MP3" : string.Empty,
+                ProcessingAction = ProcessingActionIds.Convert };
+            var output = ConvertedTrackPathService.GetConvertedTrackPath(converted, source, track);
+            Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+            File.WriteAllBytes(output, [4]);
+            File.SetLastWriteTimeUtc(output, DateTime.UtcNow.AddMinutes(name == "stale.flac" ? -3 : -1));
+        }
+        Assert.Equal(1, PreparedConvertedTrackReuseService.CountReusablePreparedConvertedFiles(folder.Path, preset));
+        Assert.All(Directory.EnumerateFiles(originals), source => Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(source)));
+    }
+
     [Theory]
     [InlineData(ProjectManifestTypes.Mp3DiscProject)]
     [InlineData(ProjectManifestTypes.AudioCdProject)]

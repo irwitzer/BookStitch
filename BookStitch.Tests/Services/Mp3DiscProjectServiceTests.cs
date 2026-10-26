@@ -1,6 +1,7 @@
 using BookStitch.Models;
 using BookStitch.Services;
 using BookStitch.Tests.TestHelpers;
+using System.Text.Json;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
@@ -25,7 +26,7 @@ public class Mp3DiscProjectServiceTests
             @"C:\Output",
             "{title}");
 
-        Assert.Equal("Mp3Disc", manifest.ProjectType);
+        Assert.Equal(ProjectManifestTypes.Mp3DiscProject, manifest.ProjectType);
         Assert.Equal(projectFolder, manifest.ProjectFolder);
         Assert.Equal(@"D:\", manifest.SourceFolder);
         Assert.Equal(4, manifest.TotalDiscs);
@@ -101,6 +102,10 @@ public class Mp3DiscProjectServiceTests
             @"C:\Output",
             "{author} - {title}");
 
+        var acquired = ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1);
+        System.IO.Directory.CreateDirectory(acquired);
+        for (var number = 1; number <= 12; number++)
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(acquired, $"{number:000}.mp3"), [1, 2, 3]);
         _service.MarkDiscCompleted(
             manifest,
             discNumber: 1,
@@ -143,7 +148,7 @@ public class Mp3DiscProjectServiceTests
 
 
     [Fact]
-    public void UpdateMetadataSnapshot_StoresCurrentBookMetadata()
+    public void UpdateCoverAndOutputSnapshot_PreservesLegacyBookMetadata()
     {
         using var folder = new TemporaryFolder();
         var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
@@ -157,14 +162,14 @@ public class Mp3DiscProjectServiceTests
             ".m4a",
             @"C:\Output",
             "{Autor} - {Titel}");
+        manifest.Title = "Legacy Titel";
+        manifest.Author = "Legacy Autor";
+        manifest.Album = "Legacy Album";
+        manifest.Narrator = "Legacy Sprecher";
+        manifest.Genre = "Legacy Genre";
 
-        _service.UpdateMetadataSnapshot(
+        _service.UpdateCoverAndOutputSnapshot(
             manifest,
-            title: "Wölfe und andere Tiere",
-            author: "Mantel Mantu",
-            album: "Wölfe und andere Tiere",
-            narrator: "Ute zart",
-            genre: "iBook Hörbuch",
             coverSourcePath: @"C:\Cover\source.jpg",
             processedCoverPath: @"C:\Cover\processed.jpg",
             outputFileName: "Mantel Mantu - Wölfe und andere Tiere.m4a");
@@ -181,11 +186,11 @@ public class Mp3DiscProjectServiceTests
             @"C:\Output",
             "{Autor} - {Titel}");
 
-        Assert.Equal("Wölfe und andere Tiere", reloaded.Title);
-        Assert.Equal("Mantel Mantu", reloaded.Author);
-        Assert.Equal("Wölfe und andere Tiere", reloaded.Album);
-        Assert.Equal("Ute zart", reloaded.Narrator);
-        Assert.Equal("iBook Hörbuch", reloaded.Genre);
+        Assert.Equal("Legacy Titel", reloaded.Title);
+        Assert.Equal("Legacy Autor", reloaded.Author);
+        Assert.Equal("Legacy Album", reloaded.Album);
+        Assert.Equal("Legacy Sprecher", reloaded.Narrator);
+        Assert.Equal("Legacy Genre", reloaded.Genre);
         Assert.Equal(@"C:\Cover\source.jpg", reloaded.CoverSourcePath);
         Assert.Equal(@"C:\Cover\processed.jpg", reloaded.ProcessedCoverPath);
         Assert.Equal("Mantel Mantu - Wölfe und andere Tiere.m4a", reloaded.OutputFileName);
@@ -278,14 +283,14 @@ public class Mp3DiscProjectServiceTests
     }
 
     [Fact]
-    public void LoadOrCreate_WhenManifestIsCorrupt_CreatesCleanManifest()
+    public void LoadOrCreate_WhenManifestIsCorrupt_RejectsWithoutOverwriting()
     {
         using var folder = new TemporaryFolder();
         var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
         ProjectFolderLayout.EnsureProjectFolders(projectFolder);
         System.IO.File.WriteAllText(Mp3DiscProjectService.GetManifestPath(projectFolder), "{ kaputt");
 
-        var manifest = _service.LoadOrCreate(
+        Assert.Throws<System.IO.IOException>(() => _service.LoadOrCreate(
             projectFolder,
             @"D:\",
             3,
@@ -293,13 +298,9 @@ public class Mp3DiscProjectServiceTests
             "Auto",
             ".m4a",
             @"C:\Output",
-            "{title}");
+            "{title}"));
 
-        Assert.Equal(projectFolder, manifest.ProjectFolder);
-        Assert.Equal(@"D:\", manifest.SourceFolder);
-        Assert.Equal(3, manifest.TotalDiscs);
-        Assert.Equal("AAC Stereo 128 kbps", manifest.ExportPreset);
-        Assert.Empty(manifest.ImportedDiscs);
+        Assert.Equal("{ kaputt", System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder)));
     }
 
     [Fact]
@@ -411,6 +412,26 @@ public class Mp3DiscProjectServiceTests
         var nextMissing = _service.GetNextMissingDiscNumber(manifest, totalDiscs: 2);
 
         Assert.Null(nextMissing);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void CompleteDiscImportEarly_KeepsCompletedExtensionDiscsAndRemovesOutstandingManifestEntries(int completed)
+    {
+        var manifest = new Mp3DiscProjectManifest
+        {
+            TotalDiscs = 4,
+            ImportedDiscs = Enumerable.Range(1, 4).Select(number => new Mp3DiscProjectManifestDisc
+            { DiscNumber = number, Status = number <= completed ? Mp3DiscImportStatus.Completed : "Pending",
+              Signature = "disc-" + number }).ToList()
+        };
+        var retained = manifest.ImportedDiscs.Take(completed).ToArray();
+        _service.CompleteDiscImportEarly(manifest);
+        Assert.Equal(completed, manifest.TotalDiscs);
+        Assert.Null(_service.GetNextMissingDiscNumber(manifest, manifest.TotalDiscs));
+        Assert.Equal(retained, manifest.ImportedDiscs);
+        Assert.All(manifest.ImportedDiscs, disc => Assert.Equal(Mp3DiscImportStatus.Completed, disc.Status));
     }
 
     [Theory]
@@ -673,19 +694,97 @@ public class Mp3DiscProjectServiceTests
 
         System.IO.File.WriteAllText(Mp3DiscProjectService.GetManifestPath(projectFolder), legacyJson);
 
+        Assert.Equal(ProjectUpgradeOutcome.Upgraded, new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder).Outcome);
         var manifest = _service.TryLoad(projectFolder);
 
         Assert.NotNull(manifest);
         Assert.Equal(Mp3DiscManifestVersions.Current, manifest.FormatVersion);
+        Assert.Equal(Mp3DiscManifestVersions.CurrentSchemaVersion, manifest.SchemaVersion);
         Assert.Equal(projectFolder, manifest.ProjectFolder);
         Assert.Equal(string.Empty, manifest.SourceFolder);
         Assert.Equal(string.Empty, manifest.ExportPreset);
 
         var disc = Assert.Single(manifest.ImportedDiscs);
-        Assert.Equal(Mp3DiscImportStatus.Completed, disc.Status);
+        Assert.Equal("Incomplete", disc.Status);
+        Assert.Equal(ProjectPipelineStateNames.AcquiringSources, manifest.PipelineState);
         Assert.Equal(string.Empty, disc.Signature);
         Assert.Equal(string.Empty, disc.SourcePath);
         Assert.Equal(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1), disc.LocalFolder);
+
+        var migratedJson = System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder));
+        Assert.Contains("\"schemaVersion\": 1", migratedJson);
+    }
+
+    [Fact]
+    public void TryLoad_CurrentSchemaDiscWithoutSourceFiles_BackfillsFromSourceCopyIdentity()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourceFile = WriteFile(folder, System.IO.Path.Combine("external", "Track 01.mp3"), "audio");
+        var targetFile = System.IO.Path.Combine(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1), "Track 01.mp3");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(targetFile)!);
+        System.IO.File.WriteAllText(targetFile, "audio");
+        var lastWriteUtc = new DateTime(2026, 8, 20, 12, 0, 0, DateTimeKind.Utc);
+        System.IO.File.SetLastWriteTimeUtc(sourceFile, lastWriteUtc);
+        var identity = new SourceCopyIdentityStore().RecordCopiedFile(projectFolder, sourceFile, targetFile);
+        WriteMp3DiscManifestWithoutSourceFiles(projectFolder);
+
+        var first = _service.TryLoad(projectFolder);
+        Assert.NotNull(first);
+        var sourceFileEntry = Assert.Single(first.ImportedDiscs.Single().SourceFiles);
+        var persistedJson = System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder));
+        var second = _service.TryLoad(projectFolder);
+
+        Assert.Equal(identity.SourceId, sourceFileEntry.SourceId);
+        Assert.Equal(System.IO.Path.Combine("CD 01", "Track 01.mp3"), sourceFileEntry.RelativePath);
+        Assert.NotNull(second);
+        Assert.Equal(identity.SourceId, Assert.Single(second.ImportedDiscs.Single().SourceFiles).SourceId);
+        Assert.Equal(persistedJson, System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder)));
+    }
+
+    [Fact]
+    public void TryLoad_CurrentSchemaSourceFileWithoutSourceId_UsesExportManifestEvidence()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourceId = Guid.NewGuid();
+        var sourcePath = System.IO.Path.Combine(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1), "Track 01.mp3");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(sourcePath)!);
+        System.IO.File.WriteAllText(sourcePath, "audio");
+        WriteMp3DiscManifestWithSourceFile(projectFolder, sourceId: null);
+        WriteExportManifestWithSourceId(ProjectFolderLayout.GetExportManifestPath(projectFolder), sourceId, sourcePath);
+
+        var manifest = _service.TryLoad(projectFolder);
+
+        Assert.NotNull(manifest);
+        Assert.Equal(sourceId, Assert.Single(manifest.ImportedDiscs.Single().SourceFiles).SourceId);
+    }
+
+    [Fact]
+    public void TryLoad_CurrentSchemaDiscWithoutEvidence_BackfillsFromLocalFilesAndPersistsOnce()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourcePath = System.IO.Path.Combine(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1), "Track 01.mp3");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(sourcePath)!);
+        System.IO.File.WriteAllText(sourcePath, "audio");
+        WriteMp3DiscManifestWithoutSourceFiles(projectFolder);
+
+        Assert.Equal(ProjectUpgradeOutcome.Upgraded, new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder).Outcome);
+        var first = _service.TryLoad(projectFolder);
+        Assert.NotNull(first);
+        var sourceId = Assert.Single(first.ImportedDiscs.Single().SourceFiles).SourceId;
+        var persistedJson = System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder));
+
+        var second = _service.TryLoad(projectFolder);
+
+        Assert.Equal(Guid.Empty, sourceId);
+        Assert.NotNull(second);
+        Assert.Equal(sourceId, Assert.Single(second.ImportedDiscs.Single().SourceFiles).SourceId);
+        Assert.Equal(persistedJson, System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder)));
     }
 
     [Fact]
@@ -704,6 +803,122 @@ public class Mp3DiscProjectServiceTests
 
         var json = System.IO.File.ReadAllText(Mp3DiscProjectService.GetManifestPath(projectFolder));
         Assert.Contains($"\"FormatVersion\": \"{Mp3DiscManifestVersions.Current}\"", json);
+        Assert.Contains("\"schemaVersion\": 1", json);
     }
 
+    [Fact]
+    public void TryLoad_UnsupportedSchema_RejectsAndLeavesFileUnchanged()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = System.IO.Path.Combine(folder.Path, "DiscProject");
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var manifestPath = Mp3DiscProjectService.GetManifestPath(projectFolder);
+        var json = """
+        {
+          "schemaVersion": 99,
+          "FormatVersion": "2",
+          "ProjectType": "Mp3Disc",
+          "ProjectFolder": "old-path",
+          "TotalDiscs": 1,
+          "ImportedDiscs": []
+        }
+        """;
+        System.IO.File.WriteAllText(manifestPath, json);
+
+        Assert.Throws<PersistentJsonSchemaException>(() => _service.TryLoad(projectFolder));
+        Assert.Equal(json, System.IO.File.ReadAllText(manifestPath));
+    }
+
+    private static string WriteFile(TemporaryFolder folder, string relativePath, string content)
+    {
+        var fullPath = System.IO.Path.Combine(folder.Path, relativePath);
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
+        System.IO.File.WriteAllText(fullPath, content);
+        return fullPath;
+    }
+
+    private static void WriteMp3DiscManifestWithoutSourceFiles(string projectFolder)
+    {
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{Mp3DiscManifestVersions.Current}}",
+          "ProjectType": "Mp3Disc",
+          "ProjectFolder": "{{JsonEncodedText.Encode(projectFolder)}}",
+          "TotalDiscs": 1,
+          "ImportedDiscs": [
+            {
+              "DiscNumber": 1,
+              "Status": "Completed",
+              "LocalFolder": "{{JsonEncodedText.Encode(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1))}}",
+              "FileCount": 1,
+              "CopiedFiles": 1
+            }
+          ]
+        }
+        """;
+        System.IO.File.WriteAllText(Mp3DiscProjectService.GetManifestPath(projectFolder), json);
+    }
+
+    private static void WriteMp3DiscManifestWithSourceFile(string projectFolder, Guid? sourceId)
+    {
+        var sourceIdLine = sourceId.HasValue
+            ? $"""
+                              "SourceId": "{sourceId.Value}",
+              """
+            : string.Empty;
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{Mp3DiscManifestVersions.Current}}",
+          "ProjectType": "Mp3Disc",
+          "ProjectFolder": "{{JsonEncodedText.Encode(projectFolder)}}",
+          "TotalDiscs": 1,
+          "ImportedDiscs": [
+            {
+              "DiscNumber": 1,
+              "Status": "Completed",
+              "LocalFolder": "{{JsonEncodedText.Encode(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1))}}",
+              "FileCount": 1,
+              "CopiedFiles": 1,
+              "SourceFiles": [
+                {
+        {{sourceIdLine}}          "RelativePath": "CD 01\\Track 01.mp3",
+                  "SourceFileName": "Track 01.mp3"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+        System.IO.File.WriteAllText(Mp3DiscProjectService.GetManifestPath(projectFolder), json);
+    }
+
+    private static void WriteExportManifestWithSourceId(string path, Guid sourceId, string sourcePath)
+    {
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "Mp3DiscProject",
+          "ProjectId": "export-id",
+          "State": {
+            "Status": "ReviewBeforeMerge",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": [
+            {
+              "SourceId": "{{sourceId}}",
+              "TrackIndex": 1,
+              "SourcePath": "{{JsonEncodedText.Encode(sourcePath)}}",
+              "SourceFileName": "Track 01.mp3",
+              "Preset": "AAC Stereo 192 kbps",
+              "Action": "Konvertieren",
+              "Status": "Pending"
+            }
+          ]
+        }
+        """;
+        System.IO.File.WriteAllText(path, json);
+    }
 }

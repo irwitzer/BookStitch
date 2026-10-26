@@ -20,50 +20,21 @@ public sealed class FocusSettingsServiceTests
     [Fact]
     public void Off_DisablesAttentionForEveryEvent()
     {
-        foreach (var notificationEvent in Enum.GetValues<NotificationEvent>())
-            Assert.False(FocusSettingsService.GetAttentionPlan(FocusProfile.Off, notificationEvent).IsEnabled);
+        Assert.False(FocusSettingsService.GetAttentionPlan(FocusProfile.Off).IsEnabled);
     }
 
     [Theory]
-    [InlineData(NotificationEvent.DiscChangeRequired, 10, false)]
-    [InlineData(NotificationEvent.UserActionRequired, 5, false)]
-    [InlineData(NotificationEvent.Warning, 5, false)]
-    [InlineData(NotificationEvent.Error, 5, true)]
-    [InlineData(NotificationEvent.ProjectCompleted, 0, false)]
-    [InlineData(NotificationEvent.Information, 0, false)]
+    [InlineData(FocusProfile.Standard, 5, false)]
+    [InlineData(FocusProfile.Foreground, 10, true)]
     public void Standard_ReturnsExpectedAttentionPlan(
-        NotificationEvent notificationEvent,
+        FocusProfile profile,
         int expectedFlashCount,
         bool expectedForeground)
     {
-        var plan = FocusSettingsService.GetAttentionPlan(FocusProfile.Standard, notificationEvent);
+        var plan = FocusSettingsService.GetAttentionPlan(profile);
 
         Assert.Equal(expectedFlashCount, plan.FlashCount);
         Assert.Equal(expectedForeground, plan.BringToForeground);
         Assert.Equal(expectedForeground, plan.UseTemporaryTopmost);
-    }
-
-    [Theory]
-    [InlineData(NotificationEvent.DiscChangeRequired, 10)]
-    [InlineData(NotificationEvent.UserActionRequired, 5)]
-    [InlineData(NotificationEvent.Warning, 5)]
-    [InlineData(NotificationEvent.Error, 5)]
-    public void Foreground_BringsEveryActionEventToForeground(
-        NotificationEvent notificationEvent,
-        int expectedFlashCount)
-    {
-        var plan = FocusSettingsService.GetAttentionPlan(FocusProfile.Foreground, notificationEvent);
-
-        Assert.Equal(expectedFlashCount, plan.FlashCount);
-        Assert.True(plan.BringToForeground);
-        Assert.True(plan.UseTemporaryTopmost);
-    }
-
-    [Theory]
-    [InlineData(NotificationEvent.ProjectCompleted)]
-    [InlineData(NotificationEvent.Information)]
-    public void Foreground_IgnoresNonActionEvents(NotificationEvent notificationEvent)
-    {
-        Assert.False(FocusSettingsService.GetAttentionPlan(FocusProfile.Foreground, notificationEvent).IsEnabled);
     }
 }

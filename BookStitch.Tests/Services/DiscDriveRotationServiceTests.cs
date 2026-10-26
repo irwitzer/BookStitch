@@ -9,6 +9,22 @@ public sealed class DiscDriveRotationServiceTests
     private readonly DiscDriveRotationService _service = new();
 
     [Fact]
+    public void BuildRound_ExplicitStartUsesSelectedDriveThenConfiguredCyclicOrder()
+    {
+        var configured = new[] { Item(@"C:\", 2), Item(@"A:\", 0), Item(@"B:\", 1) };
+        Assert.Equal(new[] { @"B:\", @"C:\", @"A:\" },
+            _service.BuildRound(configured, @"B:\", startWithSelectedDrive: true));
+        Assert.Equal(new[] { @"C:\", @"A:\", @"B:\" }, _service.BuildRound(configured, @"B:\"));
+    }
+
+    [Fact]
+    public void BuildRound_ExplicitStartDoesNotLoseSelectedUnconfiguredDrive()
+    {
+        Assert.Equal(new[] { @"Z:\", @"B:\", @"A:\" },
+            _service.BuildRound([Item(@"B:\", 0), Item(@"A:\", 1)], @"Z:\", true));
+    }
+
+    [Fact]
     public void BuildRound_StartsAfterLastProcessedDriveAndWrapsAround()
     {
         var round = _service.BuildRound(

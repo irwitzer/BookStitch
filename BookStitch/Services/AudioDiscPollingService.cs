@@ -21,16 +21,34 @@ public sealed class AudioDiscPollingService
         _discDriveService = discDriveService;
     }
 
+    public Task<AudioDiscPollingResult> CheckRequiredDiscAsync(
+        string expectedDiscIdentity,
+        int discNumber,
+        int totalDiscs,
+        string? preferredDriveRoot = null,
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<string>? driveRoots = null,
+        Func<string, string>? driveLabelFormatter = null, Action<string>? checkingDrive = null) =>
+        _discDriveService.MeasureOperationAsync(
+            string.Empty,
+            "drive.audio-analysis",
+            () => CheckRequiredDisc(expectedDiscIdentity, discNumber, totalDiscs, preferredDriveRoot, driveRoots, driveLabelFormatter, checkingDrive),
+            cancellationToken);
+
     public AudioDiscPollingResult CheckRequiredDisc(
         string expectedDiscIdentity,
         int discNumber,
         int totalDiscs,
-        string? preferredDriveRoot = null)
+        string? preferredDriveRoot = null,
+        IReadOnlyList<string>? driveRoots = null,
+        Func<string, string>? driveLabelFormatter = null, Action<string>? checkingDrive = null)
     {
         AudioDiscPollingResult? preferredDriveProblem = null;
 
-        foreach (var drive in _discDriveService.GetCdDrives().Where(item => item.IsReady))
+        foreach (var drive in OrderRequiredDiscDrives(_discDriveService.GetCdDrives(), driveRoots).Where(item => item.IsReady))
         {
+            DiscDriveOperationService.CurrentCancellationToken.ThrowIfCancellationRequested();
+            checkingDrive?.Invoke(drive.RootPath);
             var readResult = _audioDiscReaderService.ReadDisc(drive.RootPath);
             var isPreferredDrive = !string.IsNullOrWhiteSpace(preferredDriveRoot) &&
                 string.Equals(
@@ -44,13 +62,13 @@ public sealed class AudioDiscPollingService
                 {
                     var ejectedWrongType = _discDriveService.TryEjectDisc(drive.RootPath);
                     preferredDriveProblem ??= Create(false, null, drive,
-                        FormatUnsupportedDiscMessage(ejectedWrongType, discNumber, totalDiscs),
-                        ejectedWrongType
-                            ? $"Warte auf Audio-CD {discNumber}: falscher Datenträgertyp erkannt und ausgeworfen."
-                            : $"Warte auf Audio-CD {discNumber}: falscher Datenträgertyp erkannt, manuelles Auswerfen nötig.",
-                        ejectedWrongType
-                            ? $"Bitte Audio-CD {discNumber} einlegen. Falscher Datenträger wurde ausgeworfen."
-                            : $"Bitte Audio-CD {discNumber} einlegen. Falschen Datenträger bitte auswerfen.",
+                        readResult.IsMixedModeUnsupported ? readResult.ErrorMessage : FormatUnsupportedDiscMessage(ejectedWrongType, discNumber, totalDiscs),
+                        LocalizationText.Format(
+                            ejectedWrongType ? "Disc.Polling.Audio.Unsupported.Ejected.Status" : "Disc.Polling.Audio.Unsupported.ManualEject.Status",
+                            discNumber),
+                        LocalizationText.Format(
+                            ejectedWrongType ? "Disc.Polling.Audio.Unsupported.Ejected.Progress" : "Disc.Polling.Audio.Unsupported.ManualEject.Progress",
+                            discNumber),
                         DiscPollingDisplayState.Unsupported);
                 }
 
@@ -64,42 +82,69 @@ public sealed class AudioDiscPollingService
                     var ejectedWrongDisc = _discDriveService.TryEjectDisc(drive.RootPath);
                     preferredDriveProblem ??= Create(false, readResult.Disc, drive,
                         FormatWrongRequiredDiscMessage(ejectedWrongDisc, discNumber, totalDiscs),
-                        ejectedWrongDisc
-                            ? $"Warte auf Audio-CD {discNumber}: falsche Audio-CD erkannt und ausgeworfen."
-                            : $"Warte auf Audio-CD {discNumber}: falsche Audio-CD erkannt, manuelles Auswerfen nötig.",
-                        ejectedWrongDisc
-                            ? $"Bitte Audio-CD {discNumber} einlegen. Falsche Audio-CD wurde ausgeworfen."
-                            : $"Bitte Audio-CD {discNumber} einlegen. Falsche Audio-CD bitte auswerfen.",
+                        LocalizationText.Format(
+                            ejectedWrongDisc ? "Disc.Polling.Audio.WrongRequired.Ejected.Status" : "Disc.Polling.Audio.WrongRequired.ManualEject.Status",
+                            discNumber),
+                        LocalizationText.Format(
+                            ejectedWrongDisc ? "Disc.Polling.Audio.WrongRequired.Ejected.Progress" : "Disc.Polling.Audio.WrongRequired.ManualEject.Progress",
+                            discNumber),
                         DiscPollingDisplayState.Unsupported);
                 }
 
                 continue;
             }
 
+            var label = driveLabelFormatter?.Invoke(drive.RootPath) ?? drive.DriveLetter;
             return Create(true, readResult.Disc, drive,
-                $"Audio-CD {discNumber} von {totalDiscs} wurde in Laufwerk {drive.DriveLetter} erkannt.",
-                $"Audio-CD {discNumber} von {totalDiscs} erkannt. Ripping startet …",
-                $"Benötigte Audio-CD in Laufwerk {drive.DriveLetter} erkannt.");
+                LocalizationText.Format("Disc.Polling.Audio.Required.Ready.Dialog", discNumber, totalDiscs, label),
+                LocalizationText.Format("Disc.Polling.Audio.Ready.Status", discNumber, totalDiscs),
+                LocalizationText.Format("Disc.Polling.Audio.Required.Ready.Progress", label));
         }
 
         return preferredDriveProblem ?? Create(false, null, null,
-            $"Bitte Audio-CD {discNumber} von {totalDiscs} in eines der optischen Laufwerke einlegen.\n\nBookStitch erkennt die benötigte Disc automatisch und setzt anschließend fort.",
-            $"Warte auf Audio-CD {discNumber} von {totalDiscs} …",
-            $"Bitte Audio-CD {discNumber} einlegen. Alle optischen Laufwerke werden geprüft …");
+            LocalizationText.Format("Disc.Polling.Audio.Required.Waiting.Dialog", discNumber, totalDiscs),
+            LocalizationText.Format("Disc.Polling.Audio.Waiting.Status", discNumber, totalDiscs),
+            LocalizationText.Format("Disc.Polling.Audio.Required.Waiting.Progress", discNumber));
     }
+
+    public static IReadOnlyList<DiscDriveInfo> OrderRequiredDiscDrives(
+        IReadOnlyList<DiscDriveInfo> drives, IReadOnlyList<string>? driveRoots)
+    {
+        if (driveRoots is null)
+            return drives;
+        return driveRoots.Select(DiscDriveConfigurationService.NormalizeRootPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(root => drives.FirstOrDefault(drive => string.Equals(
+                DiscDriveConfigurationService.NormalizeRootPath(drive.RootPath), root, StringComparison.OrdinalIgnoreCase)))
+            .Where(drive => drive is not null).Select(drive => drive!).ToArray();
+    }
+
+    public Task<AudioDiscPollingResult> CheckNextDiscAsync(
+        string sourceFolder,
+        int discNumber,
+        int totalDiscs,
+        ISet<string> importedDiscIdentities,
+        CancellationToken cancellationToken = default,
+        bool acceptDuplicate = false) =>
+        _discDriveService.MeasureOperationAsync(
+            sourceFolder,
+            "drive.audio-analysis",
+            () => CheckNextDisc(sourceFolder, discNumber, totalDiscs, importedDiscIdentities, acceptDuplicate),
+            cancellationToken);
 
     public AudioDiscPollingResult CheckNextDisc(
         string sourceFolder,
         int discNumber,
         int totalDiscs,
-        ISet<string> importedDiscIdentities)
+        ISet<string> importedDiscIdentities,
+        bool acceptDuplicate = false)
     {
         if (!_discDriveService.IsDiscSourceReady(sourceFolder))
         {
             return Create(false, null, null,
-                $"Bitte Audio-CD {discNumber} von {totalDiscs} einlegen.\n\nBookStitch erkennt die eingelegte Disc automatisch und setzt anschließend fort.",
-                $"Warte auf Audio-CD {discNumber}: Laufwerk noch nicht bereit.",
-                $"Bitte Audio-CD {discNumber} einlegen. Laufwerk wird geprüft …");
+                LocalizationText.Format("Disc.Polling.Audio.SourceNotReady.Dialog", discNumber, totalDiscs),
+                LocalizationText.Format("Disc.Polling.Audio.SourceNotReady.Status", discNumber),
+                LocalizationText.Format("Disc.Polling.Audio.SourceNotReady.Progress", discNumber));
         }
 
         var selectedMediaKind = _discDriveService.GetMediaKindForPath(sourceFolder);
@@ -108,17 +153,17 @@ public sealed class AudioDiscPollingService
             var ejectedWrongType = _discDriveService.TryEjectDisc(sourceFolder);
             return Create(false, null, null,
                 FormatUnsupportedDiscMessage(ejectedWrongType, discNumber, totalDiscs),
-                ejectedWrongType
-                    ? $"Warte auf Audio-CD {discNumber}: falscher Datenträgertyp erkannt und ausgeworfen."
-                    : $"Warte auf Audio-CD {discNumber}: falscher Datenträgertyp erkannt, manuelles Auswerfen nötig.",
-                ejectedWrongType
-                    ? $"Bitte Audio-CD {discNumber} einlegen. Falscher Datenträger wurde ausgeworfen."
-                    : $"Bitte Audio-CD {discNumber} einlegen. Falschen Datenträger bitte auswerfen.",
+                LocalizationText.Format(
+                    ejectedWrongType ? "Disc.Polling.Audio.Unsupported.Ejected.Status" : "Disc.Polling.Audio.Unsupported.ManualEject.Status",
+                    discNumber),
+                LocalizationText.Format(
+                    ejectedWrongType ? "Disc.Polling.Audio.Unsupported.Ejected.Progress" : "Disc.Polling.Audio.Unsupported.ManualEject.Progress",
+                    discNumber),
                 DiscPollingDisplayState.Unsupported);
         }
 
         var readResult = _audioDiscReaderService.ReadDisc(sourceFolder);
-        var duplicateDisc = readResult.Disc is not null && importedDiscIdentities.Contains(readResult.Disc.DiscIdentity);
+        var duplicateDisc = !acceptDuplicate && readResult.Disc is not null && importedDiscIdentities.Contains(readResult.Disc.DiscIdentity);
         var ejected = duplicateDisc && _discDriveService.TryEjectDisc(sourceFolder);
 
         DiscDriveInfo? driveInfo = null;
@@ -137,28 +182,21 @@ public sealed class AudioDiscPollingService
             totalDiscs,
             importedDiscIdentities,
             ejected,
-            driveInfo);
+            driveInfo,
+            acceptDuplicate);
     }
 
-    internal static string FormatUnsupportedDiscMessage(bool ejectedWrongType, int discNumber, int totalDiscs)
-    {
-        var ejectText = ejectedWrongType
-            ? "Die CD wurde wieder ausgeworfen."
-            : "Bitte wirf die CD manuell aus.";
+    internal static string FormatUnsupportedDiscMessage(bool ejectedWrongType, int discNumber, int totalDiscs) =>
+        LocalizationText.Format(
+            ejectedWrongType ? "Disc.Polling.Audio.Unsupported.Ejected.Dialog" : "Disc.Polling.Audio.Unsupported.ManualEject.Dialog",
+            discNumber,
+            totalDiscs);
 
-        return $"Keine Audio-CD erkannt. / {ejectText}\n\n" +
-               $"Bitte Audio-CD {discNumber} von {totalDiscs} einlegen. BookStitch prüft automatisch weiter.";
-    }
-
-    internal static string FormatWrongRequiredDiscMessage(bool ejectedWrongDisc, int discNumber, int totalDiscs)
-    {
-        var ejectText = ejectedWrongDisc
-            ? "Die falsche Audio-CD wurde wieder ausgeworfen."
-            : "Bitte wirf die falsche Audio-CD manuell aus.";
-
-        return $"Das ist nicht die benötigte Audio-CD. {ejectText}\n\n" +
-               $"Bitte Audio-CD {discNumber} von {totalDiscs} einlegen. BookStitch prüft automatisch weiter.";
-    }
+    internal static string FormatWrongRequiredDiscMessage(bool ejectedWrongDisc, int discNumber, int totalDiscs) =>
+        LocalizationText.Format(
+            ejectedWrongDisc ? "Disc.Polling.Audio.WrongRequired.Ejected.Dialog" : "Disc.Polling.Audio.WrongRequired.ManualEject.Dialog",
+            discNumber,
+            totalDiscs);
 
     public static bool IsClearlyNotAudioDisc(DiscMediaKind mediaKind) =>
         mediaKind is DiscMediaKind.Mp3Disc or DiscMediaKind.DataDisc;
@@ -169,39 +207,45 @@ public sealed class AudioDiscPollingService
         int totalDiscs,
         ISet<string> importedDiscIdentities,
         bool duplicateDiscWasEjected,
-        DiscDriveInfo? driveInfo = null)
+        DiscDriveInfo? driveInfo = null,
+        bool acceptDuplicate = false)
     {
         ArgumentNullException.ThrowIfNull(readResult);
         ArgumentNullException.ThrowIfNull(importedDiscIdentities);
 
+        if (readResult.IsMixedModeUnsupported)
+            return Create(false, null, driveInfo, readResult.ErrorMessage, readResult.ErrorMessage,
+                readResult.ErrorMessage, DiscPollingDisplayState.Unsupported);
+
         if (!readResult.IsAudioDisc || readResult.Disc is null)
         {
             return Create(false, null, null,
-                $"Bitte Audio-CD {discNumber} von {totalDiscs} einlegen.\n\nNoch keine lesbare Audio-CD erkannt. BookStitch prüft automatisch weiter.",
-                $"Warte auf Audio-CD {discNumber} von {totalDiscs} …",
-                $"Bitte Audio-CD {discNumber} einlegen. Automatische Erkennung läuft …");
+                LocalizationText.Format("Disc.Polling.Audio.NoReadableDisc.Dialog", discNumber, totalDiscs),
+                LocalizationText.Format("Disc.Polling.Audio.Waiting.Status", discNumber, totalDiscs),
+                LocalizationText.Format("Disc.Polling.Audio.NoReadableDisc.Progress", discNumber));
         }
 
         var disc = readResult.Disc;
-        if (importedDiscIdentities.Contains(disc.DiscIdentity))
+        if (importedDiscIdentities.Contains(disc.DiscIdentity) && !acceptDuplicate)
         {
             return Create(false, disc, null,
-                "Diese Audio-CD wurde bereits aufgenommen. " +
-                (duplicateDiscWasEjected ? "Die Audio-CD wurde wieder ausgeworfen." : "Bitte wirf die Audio-CD manuell aus.") +
-                $"\n\nBitte Audio-CD {discNumber} von {totalDiscs} einlegen. BookStitch prüft automatisch weiter.",
-                duplicateDiscWasEjected
-                    ? $"Warte auf Audio-CD {discNumber}: bekannte Disc erkannt und ausgeworfen."
-                    : $"Warte auf Audio-CD {discNumber}: bekannte Disc erkannt, manuelles Auswerfen nötig.",
-                duplicateDiscWasEjected
-                    ? $"Bitte Audio-CD {discNumber} einlegen. Bekannte Disc wurde ausgeworfen."
-                    : $"Bitte Audio-CD {discNumber} einlegen. Bekannte Disc bitte auswerfen.",
+                LocalizationText.Format(
+                    duplicateDiscWasEjected ? "Disc.Polling.Audio.Duplicate.Ejected.Dialog" : "Disc.Polling.Audio.Duplicate.ManualEject.Dialog",
+                    discNumber,
+                    totalDiscs),
+                LocalizationText.Format(
+                    duplicateDiscWasEjected ? "Disc.Polling.Audio.Duplicate.Ejected.Status" : "Disc.Polling.Audio.Duplicate.ManualEject.Status",
+                    discNumber),
+                LocalizationText.Format(
+                    duplicateDiscWasEjected ? "Disc.Polling.Audio.Duplicate.Ejected.Progress" : "Disc.Polling.Audio.Duplicate.ManualEject.Progress",
+                    discNumber),
                 DiscPollingDisplayState.Duplicate);
         }
 
         return Create(true, disc, driveInfo,
-            $"Neue Audio-CD erkannt. Disc {discNumber} von {totalDiscs} wird vorbereitet …",
-            $"Audio-CD {discNumber} von {totalDiscs} erkannt. Ripping startet …",
-            $"Audio-CD {discNumber} erkannt. Ripping startet …",
+            LocalizationText.Format("Disc.Polling.Audio.Next.Ready.Dialog", discNumber, totalDiscs),
+            LocalizationText.Format("Disc.Polling.Audio.Ready.Status", discNumber, totalDiscs),
+            LocalizationText.Format("Disc.Polling.Audio.Next.Ready.Progress", discNumber),
             DiscPollingDisplayState.Ready);
     }
 

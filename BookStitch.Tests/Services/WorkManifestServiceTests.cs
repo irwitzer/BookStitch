@@ -1,13 +1,159 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using BookStitch.Tests.TestHelpers;
+using System.Text.Json;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
 
 public class WorkManifestServiceTests
 {
+    [Fact]
+    public void Diagnostics_measure_actual_reads_and_serialized_saves_without_allowing_stale_writes()
+    {
+        using var folder = new TemporaryFolder();
+        var trace = new PerformanceTraceService(true);
+        trace.TryStartSession(new());
+        var service = new WorkManifestService(trace);
+        var path = Path.Combine(folder.Path, "manifest.json");
+        var owner = service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        service.Save(path, owner);
+        var firstBytes = File.ReadAllBytes(path);
+        var stale = service.LoadOrCreate(path, folder.Path, folder.Path, owner.SelectedPreset);
+        service.ReadOnly(path);
+        service.Save(path, owner);
+        Assert.Throws<IOException>(() => service.Save(path, stale));
+        Assert.Empty(Directory.EnumerateFiles(folder.Path, "*.tmp"));
+        var aggregates = trace.CompleteSession(PerformanceOutcome.Success)!.Operations
+            .ToDictionary(item => item.Name, item => item.Metrics.ToDictionary(metric => metric.Name, metric => metric.Value));
+        Assert.Equal(2, aggregates["manifest.load"]["Count"]);
+        Assert.Equal(2, aggregates["manifest.read"]["Count"]);
+        Assert.Equal(firstBytes.Length * 2, aggregates["manifest.read"]["Bytes"]);
+        Assert.Equal(3, aggregates["manifest.save"]["Count"]); // Includes the rejected attempt.
+        Assert.Equal(2, aggregates["manifest.save.atomic-store"]["CommittedWrites"]);
+        Assert.Equal(firstBytes.Length + File.ReadAllBytes(path).Length, aggregates["manifest.save.atomic-store"]["SerializedBytes"]);
+        Assert.True(aggregates["manifest.save.prepare"]["SumDuration"] >= 0);
+        Assert.True(aggregates["manifest.save.atomic-store"]["MaxDuration"] >= aggregates["manifest.save.atomic-store"]["MeanDuration"]);
+    }
+
     private readonly WorkManifestService _service = new();
+
+    [Fact]
+    public async Task Migration_read_modify_write_waits_for_the_current_manifest_commit()
+    {
+        using var folder = new TemporaryFolder();
+        ProjectFolderLayout.EnsureProjectFolders(folder.Path);
+        var path = ProjectFolderLayout.GetWorkManifestPath(folder.Path);
+        var owner = _service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        owner.ProjectWorkFolder = "legacy-project-folder";
+        _service.Save(path, owner);
+        var normalize = typeof(ProjectFolderMigrationService).GetMethod("NormalizeExportManifest",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        using var started = new ManualResetEventSlim();
+        Task migration;
+        lock (AtomicJsonStore.ForPath(path))
+        {
+            migration = Task.Run(() => { started.Set(); normalize.Invoke(null, [folder.Path]); });
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+            Thread.Sleep(30);
+            Assert.False(migration.IsCompleted);
+            owner.Metadata.Title = "newer checkpoint";
+            _service.Save(path, owner);
+        }
+        await migration.WaitAsync(TimeSpan.FromSeconds(5));
+        var saved = _service.ReadOnly(path);
+        Assert.Equal("newer checkpoint", saved.Metadata.Title);
+        Assert.Equal(folder.Path, saved.ProjectWorkFolder);
+        Assert.Throws<IOException>(() => _service.Save(path, owner));
+    }
+
+    [Fact]
+    public void Windows_case_alias_uses_the_same_owner_revision_and_rejects_a_stale_copy()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        using var folder = new TemporaryFolder();
+        var path = Path.Combine(folder.Path, "project.json");
+        var owner = _service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        _service.Save(path, owner);
+        var stale = _service.LoadOrCreate(path.ToUpperInvariant(), folder.Path, folder.Path, owner.SelectedPreset);
+        owner.Metadata.Title = "newer";
+        _service.Save(path.ToUpperInvariant(), owner);
+        Assert.Throws<IOException>(() => _service.Save(path, stale));
+        Assert.Equal("newer", _service.ReadOnly(path).Metadata.Title);
+    }
+
+    [Fact]
+    public async Task Independent_concurrent_writers_cannot_overwrite_a_newer_manifest()
+    {
+        using var folder = new TemporaryFolder();
+        var path = Path.Combine(folder.Path, "project.json");
+        var initial = _service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        _service.Save(path, initial);
+        var first = _service.LoadOrCreate(path, folder.Path, folder.Path, initial.SelectedPreset);
+        var stale = new WorkManifestService().LoadOrCreate(path, folder.Path, folder.Path, initial.SelectedPreset);
+        first.Metadata.Title = "newer";
+        stale.Metadata.Title = "older";
+        await Task.Run(() => _service.Save(path, first));
+        var bytes = File.ReadAllBytes(path);
+        await Assert.ThrowsAsync<IOException>(() => Task.Run(() => new WorkManifestService().Save(path, stale)));
+        Assert.Equal(bytes, File.ReadAllBytes(path));
+        Assert.Equal("newer", _service.ReadOnly(path).Metadata.Title);
+    }
+
+    [Fact]
+    public async Task Shared_owner_parallel_saves_are_serialized_and_valid()
+    {
+        using var folder = new TemporaryFolder();
+        var path = Path.Combine(folder.Path, "project.json");
+        var owner = _service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        await Task.WhenAll(Enumerable.Range(0, 30).Select(_ => Task.Run(() => new WorkManifestService().Save(path, owner))));
+        Assert.Equal(owner.ProjectId, _service.ReadOnly(path).ProjectId);
+        Assert.Empty(Directory.EnumerateFiles(folder.Path, "*.tmp"));
+    }
+
+    [Fact]
+    public void Transactional_restore_invalidates_an_old_manifest_owner()
+    {
+        using var folder = new TemporaryFolder();
+        var path = Path.Combine(folder.Path, "project.json");
+        var owner = _service.LoadOrCreate(path, folder.Path, folder.Path, "AAC Mono 64 kbps");
+        _service.Save(path, owner);
+        var original = File.ReadAllBytes(path);
+        new AtomicJsonStore().RestoreBytes(path, original);
+        Assert.Throws<IOException>(() => _service.Save(path, owner));
+        Assert.Equal(original, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public void Mp3ImportCachePreparation_KeepsImportManifestIntactAndReloadsSeparateExportState()
+    {
+        using var folder = new TemporaryFolder();
+        var projectService = new Mp3DiscProjectService();
+        var import = projectService.LoadOrCreate(
+            folder.Path, folder.Path, 3, "AAC Stereo 192 kbps", "Auto", ".m4a",
+            System.IO.Path.Combine(folder.Path, "output"), "{Autor} - {Titel}");
+        projectService.Save(import);
+        var importPath = ProjectFolderLayout.ResolveMp3DiscManifestPath(folder.Path);
+        var importBytes = System.IO.File.ReadAllBytes(importPath);
+        var exportPath = ProjectFolderLayout.ResolveExportManifestPath(folder.Path);
+
+        var export = _service.LoadOrCreate(
+            exportPath, ProjectManifestTypes.Mp3DiscProject, folder.Path,
+            ProjectFolderLayout.GetOriginalsFolder(folder.Path), import.ExportPreset);
+        Assert.Empty(export.Tracks);
+        export.State.Status = ProjectManifestStatuses.AcquiringSources;
+        _service.Save(exportPath, export);
+
+        var reloaded = _service.LoadOrCreate(
+            ProjectFolderLayout.ResolveExportManifestPath(folder.Path),
+            ProjectManifestTypes.Mp3DiscProject, folder.Path,
+            ProjectFolderLayout.GetOriginalsFolder(folder.Path), import.ExportPreset);
+
+        Assert.Equal(export.ProjectId, reloaded.ProjectId);
+        Assert.Equal(ProjectManifestStatuses.AcquiringSources, reloaded.State.Status);
+        Assert.Equal(importBytes, System.IO.File.ReadAllBytes(importPath));
+        Assert.Equal(3, projectService.TryLoad(folder.Path)!.TotalDiscs);
+    }
 
     [Fact]
     public void LoadOrCreate_WhenManifestIsMissing_CreatesNewFolderProjectManifest()
@@ -50,23 +196,20 @@ public class WorkManifestServiceTests
     }
 
     [Fact]
-    public void LoadOrCreate_WhenManifestIsCorrupt_CreatesNewManifest()
+    public void LoadOrCreate_WhenManifestIsCorrupt_RejectsWithoutOverwriting()
     {
         using var folder = new TemporaryFolder();
 
         var manifestPath = System.IO.Path.Combine(folder.Path, "project.json");
         System.IO.File.WriteAllText(manifestPath, "{ kaputt");
 
-        var manifest = _service.LoadOrCreate(
+        Assert.Throws<System.IO.IOException>(() => _service.LoadOrCreate(
             manifestPath,
             folder.Path,
             @"C:\Source",
-            "AAC Stereo 192 kbps");
+            "AAC Stereo 192 kbps"));
 
-        Assert.Equal(folder.Path, manifest.ProjectWorkFolder);
-        Assert.Equal(@"C:\Source", manifest.SourceFolder);
-        Assert.Equal("AAC Stereo 192 kbps", manifest.SelectedPreset);
-        Assert.Empty(manifest.Tracks);
+        Assert.Equal("{ kaputt", System.IO.File.ReadAllText(manifestPath));
     }
 
     [Fact]
@@ -131,25 +274,30 @@ public class WorkManifestServiceTests
     }
 
     [Fact]
-    public void UpdateBookMetadata_StoresMetadata()
+    public void UpdateCoverMetadata_LeavesLegacyScalarMetadataUntouched()
     {
-        var manifest = new ExportWorkManifest();
+        var manifest = new ExportWorkManifest
+        {
+            Metadata = new ExportManifestBookMetadata
+            {
+                Title = "Legacy Titel",
+                Author = "Legacy Autor",
+                Album = "Legacy Album",
+                Narrator = "Legacy Sprecher",
+                Genre = "Legacy Genre"
+            }
+        };
 
-        _service.UpdateBookMetadata(
+        _service.UpdateCoverMetadata(
             manifest,
-            "Titel",
-            "Autor",
-            "Album",
-            "Sprecher",
-            "Genre",
             @"C:\Cover.jpg",
             @"C:\Work\cover.jpg");
 
-        Assert.Equal("Titel", manifest.Metadata.Title);
-        Assert.Equal("Autor", manifest.Metadata.Author);
-        Assert.Equal("Album", manifest.Metadata.Album);
-        Assert.Equal("Sprecher", manifest.Metadata.Narrator);
-        Assert.Equal("Genre", manifest.Metadata.Genre);
+        Assert.Equal("Legacy Titel", manifest.Metadata.Title);
+        Assert.Equal("Legacy Autor", manifest.Metadata.Author);
+        Assert.Equal("Legacy Album", manifest.Metadata.Album);
+        Assert.Equal("Legacy Sprecher", manifest.Metadata.Narrator);
+        Assert.Equal("Legacy Genre", manifest.Metadata.Genre);
         Assert.Equal(@"C:\Cover.jpg", manifest.Metadata.CoverSourcePath);
         Assert.Equal(@"C:\Work\cover.jpg", manifest.Metadata.ProcessedCoverPath);
     }
@@ -295,9 +443,35 @@ public class WorkManifestServiceTests
         Assert.Equal(".mp3", entry.SourceExtension);
     }
 
+    [Fact]
+    public void UpdateTrack_PreservesTrackSourceIdInManifestEntry()
+    {
+        using var folder = new TemporaryFolder();
+
+        var source = WriteFile(folder, "Track 01.mp3", "source");
+        var converted = WriteFile(folder, "Track 01.m4a", "converted");
+        var sourceId = Guid.NewGuid();
+        var manifest = new ExportWorkManifest();
+
+        _service.UpdateTrack(
+            manifest,
+            index: 0,
+            new TrackInfo
+            {
+                SourceId = sourceId,
+                FileName = "Track 01.mp3",
+                ProcessingAction = "Konvertieren"
+            },
+            source,
+            converted,
+            ExportPreset.Parse("AAC Stereo 192 kbps"));
+
+        Assert.Equal(sourceId, Assert.Single(manifest.Tracks).SourceId);
+    }
+
 
     [Fact]
-    public void UpdateTrack_ReplacesExistingEntryForSameSourcePresetAndAction()
+    public void UpdateTrack_ReplacesExistingEntryWithoutMirroringChapterPresentation()
     {
         using var folder = new TemporaryFolder();
 
@@ -344,8 +518,8 @@ public class WorkManifestServiceTests
         Assert.Equal("MP3", entry.SourceCodec);
         Assert.Equal(".mp3", entry.SourceExtension);
         Assert.Equal("00:01", entry.Duration);
-        Assert.Equal("Kapitel 1", entry.ChapterTitle);
-        Assert.Equal("Konvertieren", entry.Action);
+        Assert.Equal(string.Empty, entry.ChapterTitle);
+        Assert.Equal(ProcessingActionIds.Convert, entry.Action);
         Assert.Equal("AAC Stereo 192 kbps", entry.Preset);
         Assert.Equal(ProjectManifestTrackStatuses.Converted, entry.Status);
         Assert.Equal(1, manifest.State.LastCompletedTrackIndex);
@@ -795,6 +969,7 @@ public class WorkManifestServiceTests
             "AAC Stereo 192 kbps");
 
         Assert.Equal(ExportWorkManifestVersions.Current, manifest.FormatVersion);
+        Assert.Equal(ExportWorkManifestVersions.CurrentSchemaVersion, manifest.SchemaVersion);
         Assert.Equal("legacy-id", manifest.ProjectId);
         Assert.NotNull(manifest.Export);
         Assert.NotNull(manifest.Metadata);
@@ -803,29 +978,295 @@ public class WorkManifestServiceTests
         Assert.Empty(manifest.Discs);
         Assert.Empty(manifest.Tracks);
         Assert.Empty(manifest.History);
+
+        var migratedJson = System.IO.File.ReadAllText(manifestPath);
+        Assert.Contains("\"schemaVersion\": 1", migratedJson);
+    }
+
+    [Fact]
+    public void LoadOrCreate_CurrentSchemaManifest_LoadsNormally()
+    {
+        using var folder = new TemporaryFolder();
+        var manifestPath = System.IO.Path.Combine(folder.Path, "project.json");
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "FolderProject",
+          "ProjectId": "current-id",
+          "State": {
+            "Status": "ReviewBeforeMerge",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": []
+        }
+        """;
+        System.IO.File.WriteAllText(manifestPath, json);
+
+        var manifest = _service.LoadOrCreate(
+            manifestPath,
+            folder.Path,
+            @"C:\Source",
+            "AAC Stereo 192 kbps");
+
+        Assert.Equal(ExportWorkManifestVersions.CurrentSchemaVersion, manifest.SchemaVersion);
+        Assert.Equal("current-id", manifest.ProjectId);
+    }
+
+    [Fact]
+    public void LoadOrCreate_CurrentSchemaTrackWithoutSourceId_BackfillsAndPersistsOnce()
+    {
+        using var folder = new TemporaryFolder();
+        var manifestPath = System.IO.Path.Combine(folder.Path, "project.json");
+        var sourcePath = System.IO.Path.Combine(folder.Path, "source.mp3");
+        var convertedPath = System.IO.Path.Combine(folder.Path, "converted.m4a");
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "FolderProject",
+          "ProjectId": "current-id",
+          "State": {
+            "Status": "ReviewBeforeMerge",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": [
+            {
+              "TrackIndex": 1,
+              "SourcePath": "{{JsonEncodedText.Encode(sourcePath)}}",
+              "SourceFileName": "source.mp3",
+              "ConvertedPath": "{{JsonEncodedText.Encode(convertedPath)}}",
+              "Preset": "AAC Stereo 192 kbps",
+              "Action": "Konvertieren",
+              "Status": "Pending"
+            }
+          ]
+        }
+        """;
+        System.IO.File.WriteAllText(manifestPath, json);
+
+        var first = _service.LoadOrCreate(
+            manifestPath,
+            folder.Path,
+            folder.Path,
+            "AAC Stereo 192 kbps");
+        var sourceId = Assert.Single(first.Tracks).SourceId;
+        var persistedJson = System.IO.File.ReadAllText(manifestPath);
+
+        Assert.Equal(ProcessingActionIds.Convert, Assert.Single(first.Tracks).Action);
+        Assert.Contains("\"Action\": \"Convert\"", persistedJson, StringComparison.Ordinal);
+
+        var second = _service.LoadOrCreate(
+            manifestPath,
+            folder.Path,
+            folder.Path,
+            "AAC Stereo 192 kbps");
+
+        Assert.NotEqual(Guid.Empty, sourceId);
+        Assert.Equal(sourceId, Assert.Single(second.Tracks).SourceId);
+        Assert.Contains(sourceId.ToString(), persistedJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(persistedJson, System.IO.File.ReadAllText(manifestPath));
+    }
+
+    [Fact]
+    public void LoadOrCreate_TrackWithoutSourceId_UsesSourceCopyIdentityEvidence()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = folder.Path;
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourceFile = WriteFile(folder, System.IO.Path.Combine("external", "source.mp3"), "audio");
+        var targetFile = System.IO.Path.Combine(ProjectFolderLayout.GetOriginalsFolder(projectFolder), "source.mp3");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(targetFile)!);
+        System.IO.File.WriteAllText(targetFile, "audio");
+        var lastWriteUtc = new DateTime(2026, 8, 20, 10, 0, 0, DateTimeKind.Utc);
+        System.IO.File.SetLastWriteTimeUtc(sourceFile, lastWriteUtc);
+        var identity = new SourceCopyIdentityStore().RecordCopiedFile(projectFolder, sourceFile, targetFile);
+        var manifestPath = System.IO.Path.Combine(projectFolder, "project.json");
+
+        WriteExportManifestWithoutSourceId(
+            manifestPath,
+            targetFile,
+            "source.mp3",
+            SourceSizeBytes: new System.IO.FileInfo(sourceFile).Length,
+            SourceLastWriteUtcTicks: lastWriteUtc.Ticks);
+
+        var manifest = _service.LoadOrCreate(
+            manifestPath,
+            projectFolder,
+            ProjectFolderLayout.GetOriginalsFolder(projectFolder),
+            "AAC Stereo 192 kbps");
+
+        Assert.Equal(identity.SourceId, Assert.Single(manifest.Tracks).SourceId);
+    }
+
+    [Fact]
+    public void LoadOrCreate_TrackWithoutSourceId_UsesMp3DiscManifestEvidence()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = folder.Path;
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourceId = Guid.NewGuid();
+        var sourcePath = System.IO.Path.Combine(ProjectFolderLayout.GetOriginalsFolder(projectFolder), "CD 01", "Track 01.mp3");
+        var exportManifestPath = ProjectFolderLayout.GetExportManifestPath(projectFolder);
+        var mp3Manifest = new Mp3DiscProjectManifest
+        {
+            ProjectType = ProjectManifestTypes.Mp3DiscProject,
+            ProjectFolder = projectFolder,
+            ImportedDiscs =
+            [
+                new Mp3DiscProjectManifestDisc
+                {
+                    DiscNumber = 1,
+                    SourceFiles =
+                    [
+                        new Mp3DiscProjectManifestSourceFile
+                        {
+                            SourceId = sourceId,
+                            RelativePath = System.IO.Path.Combine("CD 01", "Track 01.mp3"),
+                            SourceFileName = "Track 01.mp3"
+                        }
+                    ]
+                }
+            ]
+        };
+        WriteJson(ProjectFolderLayout.GetWorkManifestPath(projectFolder), mp3Manifest);
+        WriteExportManifestWithoutSourceId(exportManifestPath, sourcePath, "Track 01.mp3");
+
+        var manifest = _service.LoadOrCreate(
+            exportManifestPath,
+            ProjectManifestTypes.Mp3DiscProject,
+            projectFolder,
+            ProjectFolderLayout.GetOriginalsFolder(projectFolder),
+            "AAC Stereo 192 kbps");
+
+        Assert.Equal(sourceId, Assert.Single(manifest.Tracks).SourceId);
+    }
+
+    [Fact]
+    public void LoadOrCreate_TrackWithoutSourceId_UsesAudioDiscManifestEvidence()
+    {
+        using var folder = new TemporaryFolder();
+        var projectFolder = folder.Path;
+        ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+        var sourceId = Guid.NewGuid();
+        var relativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "CD 01", "001.flac");
+        var sourcePath = System.IO.Path.Combine(projectFolder, relativePath);
+        var exportManifestPath = ProjectFolderLayout.GetWorkManifestPath(projectFolder);
+        var audioManifest = new AudioDiscProjectManifest
+        {
+            ProjectFolder = projectFolder,
+            Discs =
+            [
+                new AudioDiscProjectManifestDisc
+                {
+                    DiscNumber = 1,
+                    Tracks =
+                    [
+                        new AudioDiscProjectManifestTrack
+                        {
+                            SourceId = sourceId,
+                            GlobalIndex = 1,
+                            DiscNumber = 1,
+                            TrackNumber = 1,
+                            FileName = "001.flac",
+                            RelativePath = relativePath
+                        }
+                    ]
+                }
+            ]
+        };
+        WriteJson(ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder), audioManifest);
+        WriteExportManifestWithoutSourceId(exportManifestPath, sourcePath, "001.flac");
+
+        var manifest = _service.LoadOrCreate(
+            exportManifestPath,
+            ProjectManifestTypes.AudioCdProject,
+            projectFolder,
+            ProjectFolderLayout.GetOriginalsFolder(projectFolder),
+            "AAC Stereo 192 kbps");
+
+        Assert.Equal(sourceId, Assert.Single(manifest.Tracks).SourceId);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(99)]
+    public void LoadOrCreate_UnsupportedSchema_RejectsAndLeavesFileUnchanged(int schemaVersion)
+    {
+        using var folder = new TemporaryFolder();
+        var manifestPath = System.IO.Path.Combine(folder.Path, "project.json");
+        var json = $$"""
+        {
+          "schemaVersion": {{schemaVersion}},
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "FolderProject",
+          "ProjectId": "future-id",
+          "State": {
+            "Status": "Preparing",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": []
+        }
+        """;
+        System.IO.File.WriteAllText(manifestPath, json);
+
+        Assert.Throws<PersistentJsonSchemaException>(() => _service.LoadOrCreate(
+            manifestPath,
+            folder.Path,
+            @"C:\Source",
+            "AAC Stereo 192 kbps"));
+        Assert.Equal(json, System.IO.File.ReadAllText(manifestPath));
     }
 
 
     [Fact]
-    public void ManualMergeReview_IsRememberedPerPreset()
+    public void ConversionAndExportCompletion_DoNotPersistMergePermission()
     {
         var manifest = new ExportWorkManifest();
-
-        _service.MarkManualMergeReviewCompleted(manifest, "AAC Stereo 128 kbps");
-
-        Assert.True(_service.HasCompletedManualMergeReview(manifest, "AAC Stereo 128 kbps"));
-        Assert.False(_service.HasCompletedManualMergeReview(manifest, "AAC Mono 64 kbps"));
+        _service.MarkConversionCompleted(manifest);
+        _service.MarkExportCompleted(manifest);
+        Assert.Empty(manifest.State.ManualMergeReviewCompletedPresets);
     }
 
-    [Fact]
-    public void MarkConversionCompleted_RemembersReviewedPresetWithoutDuplicates()
+    private static void WriteExportManifestWithoutSourceId(
+        string manifestPath,
+        string sourcePath,
+        string sourceFileName,
+        long SourceSizeBytes = 0,
+        long SourceLastWriteUtcTicks = 0)
     {
-        var manifest = new ExportWorkManifest();
+        var json = $$"""
+        {
+          "schemaVersion": 1,
+          "FormatVersion": "{{ExportWorkManifestVersions.Current}}",
+          "ProjectType": "FolderProject",
+          "ProjectId": "legacy-id",
+          "State": {
+            "Status": "ReviewBeforeMerge",
+            "ManualMergeReviewCompletedPresets": []
+          },
+          "Tracks": [
+            {
+              "TrackIndex": 1,
+              "SourcePath": "{{JsonEncodedText.Encode(sourcePath)}}",
+              "SourceFileName": "{{JsonEncodedText.Encode(sourceFileName)}}",
+              "SourceSizeBytes": {{SourceSizeBytes}},
+              "SourceLastWriteUtcTicks": {{SourceLastWriteUtcTicks}},
+              "Preset": "AAC Stereo 192 kbps",
+              "Action": "Konvertieren",
+              "Status": "Pending"
+            }
+          ]
+        }
+        """;
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(manifestPath)!);
+        System.IO.File.WriteAllText(manifestPath, json);
+    }
 
-        _service.MarkConversionCompleted(manifest, "AAC Stereo 96 kbps");
-        _service.MarkConversionCompleted(manifest, "AAC Stereo 96 kbps");
-
-        Assert.Single(manifest.State.ManualMergeReviewCompletedPresets);
-        Assert.Equal("AAC Stereo 96 kbps", manifest.State.ManualMergeReviewCompletedPresets[0]);
+    private static void WriteJson<T>(string path, T value)
+    {
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+        var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+        System.IO.File.WriteAllText(path, json);
     }
 }

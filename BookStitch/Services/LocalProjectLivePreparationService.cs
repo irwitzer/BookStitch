@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.ExceptionServices;
 
 namespace BookStitch.Services;
 
@@ -6,7 +7,8 @@ public sealed record LocalProjectLivePreparationRequest(
     string SourceFolder,
     IReadOnlyCollection<string> SourceFiles,
     string ProjectFolder,
-    int ParallelJobs);
+    int ParallelJobs,
+    Func<Task>? WaitForPreparedChildrenAsync = null);
 
 public sealed record LocalProjectLivePreparationProgress(
     int CopiedFiles,
@@ -41,6 +43,9 @@ public sealed class LocalProjectLivePreparationService
         ArgumentNullException.ThrowIfNull(prepareCopiedFileAsync);
 
         var parallelJobs = Math.Clamp(request.ParallelJobs, 1, 40);
+        using var workerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var workerToken = workerCancellation.Token;
+        Exception? preparationException = null;
         using var semaphore = new SemaphoreSlim(parallelJobs, parallelJobs);
         var preparationTasks = new List<Task>();
         var preparedFiles = 0;
@@ -93,9 +98,9 @@ public sealed class LocalProjectLivePreparationService
 
             try
             {
-                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await semaphore.WaitAsync(workerToken).ConfigureAwait(false);
                 semaphoreEntered = true;
-                cancellationToken.ThrowIfCancellationRequested();
+                workerToken.ThrowIfCancellationRequested();
 
                 var activeFileName = Path.GetFileName(copiedFile.TargetFile);
                 var sourcePath = Path.GetFullPath(copiedFile.SourceFile);
@@ -124,8 +129,8 @@ public sealed class LocalProjectLivePreparationService
                     Report(activeFileName);
                 });
 
-                await prepareCopiedFileAsync(copiedFile, preparationProgress, cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
+                await prepareCopiedFileAsync(copiedFile, preparationProgress, workerToken).ConfigureAwait(false);
+                workerToken.ThrowIfCancellationRequested();
                 Interlocked.Increment(ref preparedFiles);
                 if (activeTrackNumber is int completedTrackNumber)
                 {
@@ -134,9 +139,17 @@ public sealed class LocalProjectLivePreparationService
                 }
                 Report(Path.GetFileName(copiedFile.TargetFile));
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (workerToken.IsCancellationRequested)
             {
                 // Ein kontrollierter Benutzerabbruch ist kein Vorbereitungsfehler.
+            }
+            catch (Exception error)
+            {
+                lock (syncRoot) preparationException ??= error;
+                // A failed critical checkpoint must stop acquisition and sibling workers,
+                // then settle children before publishing the original controlled failure.
+                try { await workerCancellation.CancelAsync().ConfigureAwait(false); }
+                catch (Exception cancelError) { System.Diagnostics.Trace.TraceWarning("Preparation cancellation failed: {0}", cancelError); }
             }
             finally
             {
@@ -159,22 +172,66 @@ public sealed class LocalProjectLivePreparationService
             }
         }
 
-        var importResult = await _importService.CopySourcesAsync(
-            request.SourceFolder,
-            request.SourceFiles,
-            request.ProjectFolder,
-            progress: null,
-            copiedFileProgress,
-            cancellationToken).ConfigureAwait(false);
+        LocalProjectImportResult? importResult = null;
+        Exception? importException = null;
+
+        try
+        {
+            importResult = await _importService.CopySourcesAsync(
+                request.SourceFolder,
+                request.SourceFiles,
+                request.ProjectFolder,
+                progress: null,
+                copiedFileProgress,
+                workerToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            importException = ex;
+        }
 
         Task[] tasks;
         lock (syncRoot)
             tasks = preparationTasks.ToArray();
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch when (importException is not null)
+        {
+            // Preserve the original import failure after preparation producers settle.
+        }
+        finally
+        {
+            if (request.WaitForPreparedChildrenAsync is not null)
+                await request.WaitForPreparedChildrenAsync().ConfigureAwait(false);
+        }
+
+        if (preparationException is not null && (importException is null or OperationCanceledException))
+            ExceptionDispatchInfo.Capture(preparationException).Throw();
+
+        if (importException is not null)
+        {
+            if (importException is OperationCanceledException && cancellationToken.IsCancellationRequested)
+            {
+                return new LocalProjectLivePreparationResult(
+                    new LocalProjectImportResult(
+                        request.SourceFolder,
+                        request.ProjectFolder,
+                        Path.Combine(request.ProjectFolder, LocalProjectImportService.OriginalsFolderName),
+                        totalFiles,
+                        Volatile.Read(ref copiedFiles),
+                        WasCanceled: true),
+                    Volatile.Read(ref preparedFiles),
+                    WasCanceled: true);
+            }
+
+            ExceptionDispatchInfo.Capture(importException).Throw();
+        }
 
         return new LocalProjectLivePreparationResult(
-            importResult,
+            importResult!,
             Volatile.Read(ref preparedFiles),
             cancellationToken.IsCancellationRequested);
     }

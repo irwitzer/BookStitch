@@ -80,24 +80,32 @@ public class Mp3DiscPreparationServiceTests
     {
         var service = new Mp3DiscPreparationService();
         var importedFile = System.IO.Path.Combine("D:\\BookStitch", "Project", "CD 03", fileName);
+        var sourceId = Guid.NewGuid();
         var copiedFile = new DiscCopiedFile(
             DiscNumber: 3,
             TotalDiscs: 5,
             CopiedFiles: 7,
             TotalFiles: 12,
             SourceFile: System.IO.Path.Combine("E:\\", fileName),
-            ImportedFile: importedFile);
+            ImportedFile: importedFile,
+            SourceIdentity: new SourceFileCopyIdentity(
+                System.IO.Path.Combine("originals", "CD 03", fileName),
+                fileName,
+                SourceSizeBytes: 123,
+                SourceLastWriteUtcTicks: 456,
+                SourceId: sourceId));
 
         var result = service.BuildLiveConversionTrack(copiedFile);
 
         Assert.Equal(7, result.Index);
+        Assert.Equal(sourceId, result.SourceId);
         Assert.Equal(3, result.DiscNumber);
         Assert.Equal(7, result.TrackNumber);
         Assert.Equal(importedFile, result.FilePath);
         Assert.Equal(fileName, result.FileName);
         Assert.Equal(expectedExtension, result.Extension);
         Assert.Equal(expectedCodec, result.Codec);
-        Assert.Equal("Konvertieren", result.ProcessingAction);
+        Assert.Equal(ProcessingActionIds.Convert, result.ProcessingAction);
     }
 
     private static TrackInfo CreateTrack(string relativeFolder, string fileName, int trackNumber)

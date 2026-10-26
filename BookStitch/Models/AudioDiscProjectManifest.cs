@@ -3,6 +3,7 @@ namespace BookStitch.Models;
 public static class AudioDiscProjectManifestVersions
 {
     public const string Current = "4";
+    public const int CurrentSchemaVersion = 1;
 }
 
 public static class AudioDiscRawReadAddressingVersions
@@ -47,9 +48,17 @@ public static class AudioDiscTrackStatus
 
 public sealed class AudioDiscProjectManifest
 {
+    public int ProjectFormatVersion { get; set; }
+    public string ProjectId { get; set; } = "";
+    public ProjectHealth Health { get; set; } = new();
+    public bool IsStoppedForResume { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; set; } = AudioDiscProjectManifestVersions.CurrentSchemaVersion;
+
     public string FormatVersion { get; set; } = AudioDiscProjectManifestVersions.Current;
     public string ProjectType { get; set; } = ProjectManifestTypes.AudioCdProject;
     public string ProjectFolder { get; set; } = "";
+    public int TargetSampleRateHz { get; set; } = 44100;
     public string PipelineState { get; set; } = ProjectPipelineStateNames.Preparing;
     public string Status { get; set; } = AudioDiscProjectStatus.AwaitingRip;
     public string SourceDriveRoot { get; set; } = "";
@@ -107,6 +116,7 @@ public sealed class AudioDiscProjectManifestDisc
 
 public sealed class AudioDiscProjectManifestTrack
 {
+    public Guid SourceId { get; set; }
     public int GlobalIndex { get; set; }
     public int DiscNumber { get; set; }
     public int TrackNumber { get; set; }
@@ -120,6 +130,7 @@ public sealed class AudioDiscProjectManifestTrack
     public string ChapterTitle { get; set; } = "";
     public string Status { get; set; } = AudioDiscTrackStatus.Pending;
     public DateTime? CompletedUtc { get; set; }
+    public string? ContentSha256 { get; set; }
     public long? OutputSizeBytes { get; set; }
     public string ErrorMessage { get; set; } = "";
 }

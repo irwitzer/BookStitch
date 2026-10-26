@@ -7,20 +7,28 @@ namespace BookStitch.Tests.Services;
 public sealed class TrackExclusionTests
 {
     [Fact]
-    public void Renumber_SkipsExcludedTracksAndKeepsActiveChaptersContinuous()
+    public void ChapterModeEngine_SkipsExcludedTracksAndKeepsActiveChaptersContinuous()
     {
-        var service = new TrackListActionService();
         var tracks = new List<TrackInfo>
         {
-            new() { ChapterTitle = "001 Titel" },
-            new() { ChapterTitle = "002 Titel", IsExcluded = true },
-            new() { ChapterTitle = "003 Titel" }
+            new() { SourceId = Guid.NewGuid(), ChapterTitle = "001 Titel", DurationTicks = TimeSpan.FromSeconds(1).Ticks },
+            new() { SourceId = Guid.NewGuid(), ChapterTitle = "002 Titel", IsExcluded = true, DurationTicks = TimeSpan.FromSeconds(1).Ticks },
+            new() { SourceId = Guid.NewGuid(), ChapterTitle = "003 Titel", DurationTicks = TimeSpan.FromSeconds(1).Ticks }
         };
-        service.Renumber(tracks);
+        var result = new ChapterModeEngineService().Apply(new ChapterAutoEngineRequest(
+            tracks,
+            ProjectManifestTypes.FolderProject,
+            "exclude-test",
+            string.Empty,
+            new ChapterCanonicalMetadataSnapshot(1, "", MetadataOrigin.None, "", MetadataOrigin.None),
+            new ChapterSettings { Mode = ChapterSettingsService.ModeAuto, NumberingStyle = ChapterNumberingStyle.Plain.ToString() },
+            LegacyUseLeadingZeros: false));
+
         Assert.Equal(1, tracks[0].Index);
         Assert.Equal(0, tracks[1].Index);
         Assert.Equal(2, tracks[2].Index);
-        Assert.Equal("2 Titel", tracks[2].ChapterTitle);
+        Assert.Equal("2 Kapitel", tracks[2].ChapterTitle);
+        Assert.Equal(["1 Kapitel", "2 Kapitel"], result.RenderedTimeline.Select(chapter => chapter.Title));
     }
 
     [Fact]

@@ -1,0 +1,309 @@
+﻿<UserControl x:Class="BookStitch.Controls.ConceptMetadataFieldControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls"
+             Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/BookStitch;component/Themes/ConceptDialogStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="0,0,0,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Style="{DynamicResource ConceptFieldChromeHeaderStyle}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="HeaderContentColumn" Width="29*"/>
+                <ColumnDefinition x:Name="HeaderContextColumn" Width="11*"/>
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding Label}" Style="{DynamicResource ConceptFieldChromeLabelStyle}"/>
+                <Button x:Name="MinimalEditorToggleButton"
+                        Grid.Column="1"
+                        Margin="4,0,0,0"
+                        Click="MinimalEditorToggleButton_Click"
+                        Style="{DynamicResource ConceptMinimalEditorToggleButtonStyle}">
+                    <TextBlock>
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="+"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMinimalEditorOpen, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True">
+                                        <Setter Property="Text" Value="−"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Button>
+                <TextBlock x:Name="OriginTextBlock"
+                           Grid.Column="2"
+                           Text="{Binding OriginLabel}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource ConceptFieldChromeOriginTextStyle}">
+                            <Setter Property="Visibility"
+                                    Value="{Binding ShowOriginText, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}, Converter={StaticResource BoolToVisibility}}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <ContentPresenter Grid.Column="3"
+                                  Margin="5,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Content="{Binding HeaderLabelAccessory, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}"/>
+                <controls:InfoPoint x:Name="FieldInfoPoint" Grid.Column="4"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding HasInfo, Converter={StaticResource BoolToVisibility}}"/>
+                <ContentPresenter Grid.Column="6"
+                                  Margin="0,0,8,0"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  Content="{Binding HeaderAccessory, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}"/>
+                <ToggleButton Grid.Column="7" Margin="0,0,8,0" HorizontalAlignment="Right"
+                              Style="{DynamicResource ConceptMetadataLockToggleStyle}"
+                              Visibility="{Binding IsLockable, Converter={StaticResource BoolToVisibility}}"
+                              IsChecked="{Binding IsLocked, Mode=TwoWay}"
+                              AutomationProperties.Name="{Binding LockToggleAutomationName}"/>
+                <ToggleButton x:Name="OutputToggle" Grid.Column="8" HorizontalAlignment="Right"
+                              Style="{DynamicResource ConceptOutputChipToggleStyle}"
+                              IsEnabled="{Binding CanToggleOutput}"
+                              IsChecked="{Binding IsOutputEnabled, Mode=TwoWay}"
+                              AutomationProperties.Name="{Binding OutputToggleAutomationName}"/>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="EditorContentColumn" Width="29*"/>
+                <ColumnDefinition x:Name="EditorContextColumn" Width="11*"/>
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0" Visibility="{Binding Visibility, ElementName=EditorColumnHost}">
+            <Border Height="27" Style="{DynamicResource ConceptRoundedInputBorderStyle}">
+                <Border x:Name="EditorColumnHost">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="{Binding IsEditorVisible, Converter={StaticResource BoolToVisibility}}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal"/>
+                                        <Condition Binding="{Binding IsMinimalEditorOpen, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True"/>
+                                        <Condition Binding="{Binding IsEditorVisible}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                                <DataTrigger Binding="{Binding FieldBinding.IsActive, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                <ComboBox x:Name="EditorComboBox"
+                          ItemsSource="{Binding Candidates}"
+                          ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}"
+                          IsEditable="True"
+                          IsTextSearchEnabled="False"
+                          controls:CandidateComboBoxInteraction.IsEnabled="True"
+                          controls:CandidateComboBoxInteraction.MaxInputLength="{Binding MaxInputLength}"
+                          TextSearch.TextPath="DisplayValue"
+                          StaysOpenOnEdit="True"
+                          IsEnabled="{Binding CanEditValues}"
+                          AutomationProperties.Name="{Binding EditorAutomationName}"
+                          Text="{Binding Draft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          PreviewKeyDown="EditorComboBox_PreviewKeyDown"
+                          SelectionChanged="EditorComboBox_SelectionChanged"
+                          Style="{DynamicResource ConceptComboBoxStyle}">
+                    <ComboBox.ItemContainerStyle>
+                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource ConceptCandidateComboBoxItemStyle}">
+                            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Candidate_PreviewMouseLeftButtonUp"/>
+                        </Style>
+                    </ComboBox.ItemContainerStyle>
+                </ComboBox>
+                </Border>
+            </Border>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="ValueAreaHost" Grid.Row="2">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="MinHeight" Value="0"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal">
+                            <Setter Property="MinHeight" Value="27"/>
+                        </DataTrigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal"/>
+                                <Condition Binding="{Binding IsMinimalEditorOpen, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True"/>
+                                <Condition Binding="{Binding IsSingle}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="MinHeight" Value="0"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="ValueContentColumn" Width="29*"/>
+                <ColumnDefinition x:Name="ValueContextColumn" Width="11*"/>
+            </Grid.ColumnDefinitions>
+            <ItemsControl x:Name="ValueBadges"
+                          Grid.Column="0"
+                          ItemsSource="{Binding Values}"
+                          HorizontalAlignment="Stretch"
+                          AutomationProperties.Name="{Binding ValuesAutomationName}"
+                          AllowDrop="True"
+                          PreviewMouseLeftButtonDown="ValueBadges_PreviewMouseLeftButtonDown"
+                          PreviewMouseLeftButtonUp="ValueBadges_PreviewMouseLeftButtonUp"
+                          PreviewMouseMove="ValueBadges_PreviewMouseMove"
+                          DragOver="ValueBadges_DragOver"
+                          Drop="ValueBadges_Drop">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Style>
+                    <Style TargetType="ItemsControl">
+                        <Setter Property="Margin" Value="0,8,0,0"/>
+                        <Style.Triggers>
+                            <Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+                            <DataTrigger Binding="{Binding IsOutputEnabled}" Value="False">
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Opacity" Value="0.62"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding FieldBinding.IsActive, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal">
+                                <Setter Property="Margin" Value="0"/>
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal"/>
+                                    <Condition Binding="{Binding IsMinimalEditorOpen, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True"/>
+                                    <Condition Binding="{Binding IsSingle}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Margin" Value="0,8,0,0"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal"/>
+                                    <Condition Binding="{Binding IsMinimalEditorOpen, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True"/>
+                                    <Condition Binding="{Binding IsSingle}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ItemsControl.Style>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,6,6" HorizontalAlignment="Left" Cursor="Arrow"
+                                MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                MouseLeftButtonDown="Badge_MouseLeftButtonDown"
+                                Style="{DynamicResource ConceptValueBadgeStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding Value}"
+                                           Style="{DynamicResource ConceptValueBadgeTextStyle}"
+                                           VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsLocked, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <Button Click="EditValue_Click"
+                                            Style="{DynamicResource ConceptValueBadgeEditButtonStyle}"
+                                            Visibility="{Binding DataContext.IsEditControlVisible, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Converter={StaticResource BoolToVisibility}}"
+                                            IsEnabled="{Binding DataContext.CanEditValues, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                            AutomationProperties.Name="{Binding DataContext.EditAutomationName, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"/>
+                                    <Button Click="RemoveValue_Click"
+                                            Visibility="{Binding DataContext.IsRemoveControlVisible, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Converter={StaticResource BoolToVisibility}}"
+                                            IsEnabled="{Binding DataContext.CanRemoveValues, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                            AutomationProperties.Name="{Binding DataContext.RemoveAutomationName, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                            Style="{DynamicResource ConceptValueBadgeRemoveButtonStyle}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl x:Name="ReadOnlyProjectionValues" Grid.Column="0"
+                          ItemsSource="{Binding FieldBinding.ProjectedValues, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}"
+                          HorizontalAlignment="Stretch"
+                          AutomationProperties.Name="{DynamicResource MetadataReadOnlyDerivedValuesAutomation}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Style>
+                    <Style TargetType="ItemsControl">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Setter Property="Margin" Value="0,8,0,0"/>
+                        <Setter Property="Opacity" Value="1"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsOutputEnabled, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="False">
+                                <Setter Property="Opacity" Value="0.62"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding PresentationMode, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="Minimal">
+                                <Setter Property="Margin" Value="0"/>
+                            </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding FieldBinding.IsActive, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptMetadataFieldControl}}}" Value="True"/>
+                                    <Condition Binding="{Binding HasItems, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ItemsControl.Style>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,6,6"
+                                HorizontalAlignment="Left"
+                                Style="{DynamicResource ConceptReadOnlyDerivedValueBadgeStyle}">
+                            <TextBlock Text="{Binding Value}"
+                                       Style="{DynamicResource ConceptReadOnlyDerivedValueBadgeTextStyle}"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+    </Grid>
+</UserControl>

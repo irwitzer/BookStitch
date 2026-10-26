@@ -7,14 +7,14 @@ namespace BookStitch.Services;
 /// Alternative Boxed-Darstellung des CD-Wartedialogs. Die Disc-Fachlogik bleibt
 /// in den vorhandenen Pollingservices; diese Klasse übernimmt ausschließlich die
 /// bewährte Timer-, Fortsetzungs- und Dialogablaufsteuerung für das neue Fenster.
-/// Der Legacy-Fallback muss parallel erhalten bleiben.
+/// Alle Dialog-Einstiegspunkte verwenden diese gemeinsame Darstellung.
 /// </summary>
 public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
 {
     public async Task<DiscWaitDialogOutcome> WaitForDiscAsync(
         Window owner,
         DiscWaitDialogRequest request,
-        Func<CancellationToken, Task<DiscPollingResult>> checkDiscAsync,
+        Func<DiscWaitCheckRequest, CancellationToken, Task<DiscPollingResult>> checkDiscAsync,
         Action<string> setStatusText,
         Action<string> setProgressText,
         CancellationToken token)
@@ -23,8 +23,8 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(checkDiscAsync);
 
-        var mediaName = string.IsNullOrWhiteSpace(request.MediaName) ? "Disc" : request.MediaName.Trim();
-        var dialogTitle = $"{mediaName} {request.DiscNumber} von {request.TotalDiscs} einlegen";
+        var mediaName = DiscWaitPresentation.MediaName(request.MediaName);
+        var dialogTitle = DiscWaitPresentation.InsertTitle(mediaName, request.DiscNumber, request.TotalDiscs);
         var headingText = dialogTitle;
         var driveDisplayName = request.DriveDisplayName?.Trim() ?? string.Empty;
         var userDeferred = false;
@@ -39,11 +39,11 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
             driveDisplayName,
             headingText,
             request.InitialInstruction,
-            request.HintText)
+            request.HintText,
+            request.CanCompleteImport)
         {
             Owner = owner
         };
-
         var pollTimer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -51,23 +51,25 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
 
         async Task CheckAsync(bool manualCheck)
         {
-            if (isChecking || token.IsCancellationRequested || userDeferred || !dialog.IsVisible)
+            if (isChecking || resultSource.Task.IsCompleted || token.IsCancellationRequested || userDeferred || !dialog.IsVisible)
                 return;
 
             isChecking = true;
             if (manualCheck)
             {
                 dialog.IsManualCheckEnabled = false;
-                dialog.SetStatusText($"{mediaName} {request.DiscNumber} von {request.TotalDiscs} wird geprüft …");
-                setProgressText($"{mediaName} {request.DiscNumber} wird geprüft …");
+                dialog.SetStatusText(DiscWaitPresentation.Checking(mediaName, request.DiscNumber, request.TotalDiscs));
+                setProgressText(DiscWaitPresentation.CheckingProgress(mediaName, request.DiscNumber));
             }
 
-            setStatusText($"Warte auf {mediaName} {request.DiscNumber} von {request.TotalDiscs} …");
+            setStatusText(DiscWaitPresentation.Waiting(mediaName, request.DiscNumber, request.TotalDiscs));
 
             try
             {
-                var result = await checkDiscAsync(token);
-                if (userDeferred || !dialog.IsVisible)
+                var result = await checkDiscAsync(
+                    new DiscWaitCheckRequest(dialog.AcceptNextDuplicate),
+                    token);
+                if (resultSource.Task.IsCompleted || token.IsCancellationRequested || userDeferred || !dialog.IsVisible)
                     return;
 
                 var keepActionableNoticeVisible =
@@ -91,7 +93,9 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
                 if (result.CanImport)
                 {
                     closeByCode = true;
-                    resultSource.TrySetResult(DiscWaitDialogOutcome.Ready);
+                    resultSource.TrySetResult(dialog.AcceptNextDuplicate
+                        ? DiscWaitDialogOutcome.ReadyWithDuplicateOverride
+                        : DiscWaitDialogOutcome.Ready);
                     pollTimer.Stop();
                     dialog.Close();
                 }
@@ -106,12 +110,12 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
             }
             catch (Exception ex)
             {
+                if (resultSource.Task.IsCompleted || !dialog.IsVisible)
+                    return;
                 dialog.SetStatusText(
-                    $"{mediaName} {request.DiscNumber} von {request.TotalDiscs} konnte gerade nicht gelesen werden.\n\n" +
-                    "BookStitch prüft gleich automatisch weiter. Du kannst auch auf „Fortfahren“ klicken.\n\n" +
-                    ex.Message);
-                setStatusText($"Warte auf {mediaName} {request.DiscNumber}: Laufwerk noch nicht bereit.");
-                setProgressText("Automatische Erkennung läuft …");
+                    DiscWaitPresentation.ReadFailure(mediaName, request.DiscNumber, request.TotalDiscs, LocalizationText.Get("Disc.Wait.Continue"), ex.Message));
+                setStatusText(DiscWaitPresentation.DriveNotReady(mediaName, request.DiscNumber));
+                setProgressText(LocalizationText.Get("Disc.Wait.AutomaticDetection"));
             }
             finally
             {
@@ -130,6 +134,13 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
             pollTimer.Stop();
             dialog.Close();
         };
+        dialog.CompleteImportRequested += (_, _) =>
+        {
+            closeByCode = true;
+            resultSource.TrySetResult(DiscWaitDialogOutcome.ImportCompleted);
+            pollTimer.Stop();
+            dialog.Close();
+        };
         dialog.Closed += (_, _) =>
         {
             pollTimer.Stop();
@@ -138,8 +149,8 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
         };
         dialog.Loaded += async (_, _) =>
         {
-            setStatusText($"Warte auf {mediaName} {request.DiscNumber} von {request.TotalDiscs} …");
-            setProgressText("Automatische Erkennung läuft …");
+            setStatusText(DiscWaitPresentation.Waiting(mediaName, request.DiscNumber, request.TotalDiscs));
+            setProgressText(LocalizationText.Get("Disc.Wait.AutomaticDetection"));
             pollTimer.Start();
             try
             {
@@ -162,7 +173,14 @@ public sealed class BoxedDiscWaitDialogService : IDiscWaitDialogService
                     dialog.Close();
             }));
 
-        dialog.ShowDialog();
-        return await resultSource.Task;
+        try
+        {
+            dialog.ShowDialog();
+            return await resultSource.Task;
+        }
+        finally
+        {
+            pollTimer.Stop();
+        }
     }
 }

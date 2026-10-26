@@ -40,23 +40,33 @@ public sealed class ConvertedTrackPreparationPlanService
         IReadOnlyList<TrackInfo> tracks,
         string currentFolderPath,
         string convertedFolder,
-        ExportPreset preset)
+        ExportPreset preset,
+        CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(tracks);
         ArgumentNullException.ThrowIfNull(preset);
+
+        var paths = ConvertedTrackPathService.GetConvertedTrackPaths(convertedFolder, currentFolderPath, tracks);
+        var targets = tracks.Select((track, index) =>
+        {
+            var source = TrackPathService.GetTrackPath(currentFolderPath, track);
+            return (Source: System.IO.Path.GetFullPath(source), Target: paths[index],
+                Action: AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction));
+        }).ToArray();
+        if (targets.Select(item => item.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length)
+            throw new InvalidOperationException(LocalizationText.Get("Export.CacheCollision"));
 
         var items = new List<ConvertedTrackPreparationPlanItem>(tracks.Count);
         var manifestChanged = false;
 
         for (var index = 0; index < tracks.Count; index++)
         {
+            token.ThrowIfCancellationRequested();
             var track = tracks[index];
-            var sourcePath = TrackPathService.GetTrackPath(currentFolderPath, track);
-            var convertedPath = ConvertedTrackPathService.GetConvertedTrackPath(
-                convertedFolder,
-                sourcePath,
-                track);
+            var canonical = targets[index];
+            var sourcePath = canonical.Source;
+            var convertedPath = canonical.Target;
 
             var reconciliation = _convertedTrackReconciliationService.ReconcileTrack(
                 manifest,
@@ -65,7 +75,7 @@ public sealed class ConvertedTrackPreparationPlanService
                 track,
                 sourcePath,
                 convertedPath,
-                preset);
+                preset, token);
 
             manifestChanged |= reconciliation.ManifestChanged;
 

@@ -2,192 +2,25 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dialog="clr-namespace:BookStitch.Dialog"
-        Title="Projekte"
-        Icon="/Assets/Icons/BookStitchAppIcon-Simplified-multisize.ico"
-        Width="760"
+        xmlns:controls="clr-namespace:BookStitch.Controls"
+        xmlns:services="clr-namespace:BookStitch.Services"
+        Title="{services:LocalizedText Key=UiProjekte}"
+        Icon="/BookStitch;component/Assets/Icons/icon/BookStitch-Icon-OpenBook.ico"
+        Width="820"
         Height="560"
-        MinWidth="680"
-        MinHeight="460"
-        ResizeMode="CanResizeWithGrip"
-        WindowStyle="None"
+        MinWidth="700"
+        MinHeight="500"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Background="#101820"
-        Foreground="White"
+        Foreground="{DynamicResource MainTextBrush}"
         FontFamily="Segoe UI"
         KeyboardNavigation.TabNavigation="Cycle"
-        PreviewKeyDown="Window_PreviewKeyDown">
+        PreviewKeyDown="Window_PreviewKeyDown"
+        Style="{StaticResource LargeResizableWindowStyle}">
 
-    <Window.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/Themes/DarkTheme.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
 
-            <DataTemplate x:Key="ProjectTypeIconTemplate">
-                <Grid Width="28" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
-                    <TextBlock x:Name="FolderIcon" Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="{StaticResource AccentSoftBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                    <Grid x:Name="Mp3DiscIcon" Visibility="Collapsed">
-                        <Ellipse Width="21" Height="21" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="1.4"/>
-                        <Ellipse Width="5" Height="5" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="1.2"/>
-                        <TextBlock Text="MP3" FontSize="6" FontWeight="Bold" Foreground="{StaticResource AccentSoftBrush}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,-2"/>
-                    </Grid>
-                    <Grid x:Name="AudioDiscIcon" Visibility="Collapsed">
-                        <Ellipse Width="21" Height="21" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="1.4"/>
-                        <Ellipse Width="5" Height="5" Stroke="{StaticResource AccentSoftBrush}" StrokeThickness="1.2"/>
-                        <TextBlock Text="♪" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentSoftBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-1,-3"/>
-                    </Grid>
-                </Grid>
-                <DataTemplate.Triggers>
-                    <DataTrigger Binding="{Binding ProjectType}" Value="FolderProject">
-                        <Setter TargetName="FolderIcon" Property="Visibility" Value="Visible"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding ProjectType}" Value="Mp3DiscProject">
-                        <Setter TargetName="Mp3DiscIcon" Property="Visibility" Value="Visible"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding ProjectType}" Value="Mp3Disc">
-                        <Setter TargetName="Mp3DiscIcon" Property="Visibility" Value="Visible"/>
-                    </DataTrigger>
-                    <DataTrigger Binding="{Binding ProjectType}" Value="AudioCdProject">
-                        <Setter TargetName="AudioDiscIcon" Property="Visibility" Value="Visible"/>
-                    </DataTrigger>
-                </DataTemplate.Triggers>
-            </DataTemplate>
 
-            <Style x:Key="ProjectPrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="ButtonBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="9"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter x:Name="ContentPresenter"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
-                                </Trigger>
-                                <Trigger Property="IsKeyboardFocused" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource AccentHoverBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#0F5F63"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#0F5F63"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Cursor" Value="Arrow"/>
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource DisabledButtonTextBrush}"/>
-                                    <Setter TargetName="ContentPresenter" Property="Opacity" Value="0.82"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="ProjectSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="ButtonBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="9"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter x:Name="ContentPresenter"
-                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#2A3A45"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </Trigger>
-                                <Trigger Property="IsKeyboardFocused" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#2A3A45"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentSoftBrush}"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#18262D"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Cursor" Value="Arrow"/>
-                                    <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource DisabledButtonBackgroundBrush}"/>
-                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource DisabledButtonBorderBrush}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource DisabledButtonTextBrush}"/>
-                                    <Setter TargetName="ContentPresenter" Property="Opacity" Value="0.82"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="ProjectDeleteButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                <Setter Property="Foreground" Value="#D58B91"/>
-                <Setter Property="BorderBrush" Value="#7B3D45"/>
-                <Setter Property="Background" Value="#211719"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="DangerBorder"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="9"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="DangerBorder" Property="Background" Value="#2C1A1D"/>
-                                    <Setter TargetName="DangerBorder" Property="BorderBrush" Value="#A3545D"/>
-                                    <Setter Property="Foreground" Value="#E3A0A6"/>
-                                </Trigger>
-                                <Trigger Property="IsKeyboardFocused" Value="True">
-                                    <Setter TargetName="DangerBorder" Property="Background" Value="#2C1A1D"/>
-                                    <Setter TargetName="DangerBorder" Property="BorderBrush" Value="#A3545D"/>
-                                    <Setter Property="Foreground" Value="#E3A0A6"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="DangerBorder" Property="Background" Value="#351C20"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Opacity" Value="0.55"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-                <Setter Property="ToolTipService.ShowDuration" Value="12000"/>
-            </Style>
-        </ResourceDictionary>
-    </Window.Resources>
-
-    <Border Background="{StaticResource PanelBackgroundBrush}"
-            BorderBrush="{StaticResource PanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="18">
-        <Grid>
+    <Grid Margin="18">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -195,39 +28,15 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    Margin="-18,-18,-18,16"
-                    Padding="18,18,18,0"
-                    Background="Transparent"
-                    dialog:DialogWindowBehavior.IsDragRegion="True">
-                <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                    <TextBlock Text="Projekt öffnen"
-                               FontSize="20"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource AccentSoftBrush}"/>
-                    <TextBlock Text="Wähle ein vorhandenes Arbeitsprojekt aus. BookStitch liest dafür zuerst nur die Projektdateien im Projektordner."
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               Margin="0,6,0,0"/>
-                </StackPanel>
-
-                <Button Grid.Column="1"
-                        Content="×"
-                        Width="34"
-                        Height="30"
-                        VerticalAlignment="Top"
-                        Style="{StaticResource DialogCloseButtonStyle}"
-                        ToolTip="Schließen"
-                        IsTabStop="False"
-                        Click="Close_Click"/>
-                </Grid>
-            </Border>
+        <controls:LargeResizableWindowHeader Grid.Row="0"
+                                             Margin="-18,-18,-18,16"
+                                             Padding="18,0"
+                                             CloseRequested="Close_Click">
+            <controls:LargeResizableWindowHeader.TitleContent>
+                <TextBlock Text="{services:LocalizedText Key=UiProjektFortsetzen}"
+                           Style="{StaticResource LargeResizableWindowHeaderTitleTextStyle}"/>
+            </controls:LargeResizableWindowHeader.TitleContent>
+        </controls:LargeResizableWindowHeader>
 
             <Grid Grid.Row="1" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
@@ -237,89 +46,150 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0"
-                           Text="Projekt:"
+                           Text="{services:LocalizedText Key=UiProjekt}"
                            VerticalAlignment="Center"
                            FontWeight="SemiBold"
-                           Foreground="{StaticResource MainTextBrush}"
+                           Foreground="{DynamicResource MainTextBrush}"
                            Margin="0,0,10,0"/>
 
                 <ComboBox x:Name="ProjectsComboBox"
                           TabIndex="3"
                           Grid.Column="1"
                           Height="32"
-                          Style="{StaticResource DarkComboBoxStyle}"
+                          Style="{StaticResource AppearanceComboBoxStyle}"
                           ItemsSource="{Binding Projects}"
                           SelectedItem="{Binding SelectedProject, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                          IsEnabled="{Binding HasProjects}"
+                          ItemTemplate="{StaticResource ProjectTypeListItemTemplate}"
+                          IsEnabled="{Binding CanSelectProjects}"
                           DropDownOpened="ProjectsComboBox_DropDownOpened">
                 </ComboBox>
 
                 <Button x:Name="RefreshProjectsButton"
                         Grid.Column="2"
-                        Content="Aktualisieren"
+                        Content="{services:LocalizedText Key=UiAktualisieren}"
                         TabIndex="4"
                         MinWidth="115"
-                        Height="32"
-                        Style="{StaticResource ProjectSecondaryButtonStyle}"
-                        FocusVisualStyle="{x:Null}"
-                        GotKeyboardFocus="ProjectActionButton_GotKeyboardFocus"
-                        LostKeyboardFocus="ProjectActionButton_LostKeyboardFocus"
+                        Style="{StaticResource SecondaryCompactButtonStyle}"
+                        IsEnabled="{Binding CanRefreshProjects}"
                         Click="Refresh_Click"
                         Margin="10,0,0,0"/>
             </Grid>
 
             <Border Grid.Row="2"
-                    Background="{StaticResource InputBackgroundBrush}"
-                    BorderBrush="{StaticResource InputBorderBrush}"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{DynamicResource InputBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="6"
                     Padding="12"
                     MinHeight="210"
                     Margin="0,0,0,16">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                <Grid x:Name="ProjectInfoPanel">
+                    <ScrollViewer x:Name="ProjectInfoScrollViewer"
+                                  Margin="0,0,-6,0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  HorizontalContentAlignment="Stretch"
+                                  CanContentScroll="False"
+                                  controls:SmoothMouseWheelScrollBehavior.IsEnabled="True"
+                                  controls:SmoothMouseWheelScrollBehavior.DurationMilliseconds="120"
+                                  controls:SmoothMouseWheelScrollBehavior.Step="24">
+                        <ScrollViewer.Resources>
+                            <Style TargetType="{x:Type ScrollBar}"
+                                   BasedOn="{StaticResource AppearanceRoundedScrollBarStyle}"/>
+                        </ScrollViewer.Resources>
 
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-                        <ContentControl Content="{Binding SelectedProject}" ContentTemplate="{StaticResource ProjectTypeIconTemplate}"/>
-                        <TextBlock Text="{Binding ProjectHeaderTitle}"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentSoftBrush}"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <Grid>
+                        <Grid x:Name="ProjectInfoScrollableContent" Margin="0,56,8,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="0"
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+<TextBlock Text="{Binding SelectedProject.HealthMessage}" TextWrapping="Wrap" Margin="0,0,0,6">
+ <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+ <Style.Triggers><DataTrigger Binding="{Binding SelectedProject.HealthStatus}" Value="Damaged"><Setter Property="Foreground" Value="{DynamicResource ErrorTextBrush}"/></DataTrigger></Style.Triggers>
+ </Style></TextBlock.Style></TextBlock>
+ <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
                                        Text="{Binding ProjectDetails}"
                                        TextWrapping="Wrap"
-                                       Foreground="{StaticResource MainTextBrush}"/>
+                                       Foreground="{DynamicResource MainTextBrush}"/>
+</StackPanel>
 
-                            <Border Grid.Column="1"
-                                    Width="170"
-                                    Height="170"
-                                    Margin="18,0,10,0"
+                            <Border Grid.Row="0"
+                                    Grid.Column="1"
+                                    Width="220"
+                                    Height="220"
+                                    Margin="18,0,4,0"
                                     VerticalAlignment="Top"
-                                    Background="#0D151C"
-                                    BorderBrush="{StaticResource AccentBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="7">
+                                    Style="{StaticResource CoverDisplayBorderStyle}">
                                 <Image Source="{Binding ProjectCoverSource}"
-                                       Stretch="Uniform"
-                                       Margin="4"
-                                       SnapsToDevicePixels="True"
-                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                       Style="{StaticResource CoverDisplayImageStyle}"/>
                             </Border>
+
+                            <StackPanel Grid.Row="1"
+                                        Grid.Column="0"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,14,0,0"
+                                        HorizontalAlignment="Stretch">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedProject}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+
+                                <TextBlock TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MainTextBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedProject.OutputFolder}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{services:LocalizedText Key=UiAusgabe}" FontWeight="SemiBold"/>
+                                    <Run Text=" "/>
+                                    <Run Text="{Binding SelectedProject.OutputFolder}"/>
+                                </TextBlock>
+
+                                <TextBlock TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MainTextBrush}">
+                                    <Run Text="{services:LocalizedText Key=UiProjektordner2}" FontWeight="SemiBold"/>
+                                    <Run Text=" "/>
+                                    <Run Text="{Binding SelectedProject.ProjectFolderDisplay, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Grid>
                     </ScrollViewer>
+
+                    <controls:FadeHeader x:Name="ProjectInfoHeaderOverlay"
+                                         Style="{StaticResource AppearanceFadeHeaderStyle}"
+                                         HeaderHeight="32"
+                                         FadeHeight="24"
+                                         Margin="0,0,18,0"
+                                         VerticalAlignment="Top"
+                                         Panel.ZIndex="1">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Content="{Binding SelectedProject}" ContentTemplate="{StaticResource ProjectTypeIconTemplate}"/>
+                            <TextBlock Text="{Binding ProjectHeaderTitle}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentForegroundBrush}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </controls:FadeHeader>
                 </Grid>
             </Border>
 
@@ -332,47 +202,37 @@
 
                 <Button x:Name="DeleteProjectButton"
                         Grid.Column="0"
-                        Content="Projekt löschen"
+                        Content="{services:LocalizedText Key=UiProjektLoeschen}"
                         TabIndex="2"
                         MinWidth="120"
-                        Height="34"
-                        Style="{StaticResource ProjectDeleteButtonStyle}"
+                        Style="{StaticResource QuietDangerButtonStyle}"
                         IsEnabled="{Binding HasSelectedProject}"
-                        ToolTip="Ausgewähltes Projekt einschließlich aller Projektdateien endgültig löschen."
-                        FocusVisualStyle="{x:Null}"
-                        GotKeyboardFocus="ProjectActionButton_GotKeyboardFocus"
-                        LostKeyboardFocus="ProjectActionButton_LostKeyboardFocus"
                         Click="DeleteProject_Click"/>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="{services:LocalizedText Key=Resume.Project.OpenFolder}" IsEnabled="{Binding HasSelectedProject}"
+                             Click="OpenSelectedProjectFolder_Click" Margin="0,0,8,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedProject.ShowProjectFolder}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+                    <Button x:Name="RebuildProjectButton" Content="{services:LocalizedText Key=Integrity.Rebuild}" Click="RebuildProject_Click" Margin="0,0,8,0">
+                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedProject.CanRebuild}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                    </Button>
                     <Button x:Name="LoadProjectButton"
-                            Content="Projekt laden"
+                            Content="{services:LocalizedText Key=UiProjektLaden}"
                             TabIndex="0"
                             MinWidth="120"
-                            Height="34"
-                            Style="{StaticResource ProjectPrimaryButtonStyle}"
+                            Style="{StaticResource PrimaryButtonStyle}"
                             IsEnabled="{Binding CanLoadSelectedProject}"
                             IsDefault="True"
-                            ToolTip="Projektzustand ins Hauptfenster laden."
-                            FocusVisualStyle="{x:Null}"
-                            GotKeyboardFocus="ProjectActionButton_GotKeyboardFocus"
-                            LostKeyboardFocus="ProjectActionButton_LostKeyboardFocus"
                             Click="LoadProject_Click"
                             Margin="0,0,8,0"/>
 
                     <Button x:Name="CloseProjectDialogButton"
-                            Content="Schließen"
+                            Content="{services:LocalizedText Key=UiSchliessen}"
                             TabIndex="1"
                             MinWidth="100"
-                            Height="34"
-                            Style="{StaticResource ProjectSecondaryButtonStyle}"
-                            FocusVisualStyle="{x:Null}"
-                            GotKeyboardFocus="ProjectActionButton_GotKeyboardFocus"
-                            LostKeyboardFocus="ProjectActionButton_LostKeyboardFocus"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             IsCancel="True"
                             Click="Close_Click"/>
                 </StackPanel>
             </Grid>
-        </Grid>
-    </Border>
+    </Grid>
 </Window>

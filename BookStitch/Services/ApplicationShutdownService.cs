@@ -1,4 +1,4 @@
-namespace BookStitch.Services;
+﻿namespace BookStitch.Services;
 
 public enum ApplicationActivity
 {
@@ -14,8 +14,15 @@ public sealed record ApplicationShutdownPrompt(
     string Message,
     string ProgressText);
 
+public enum ProjectCloseIntent { Save, DeleteNewProject, RollbackRun, DiscardMerge }
+
 public sealed class ApplicationShutdownService
 {
+    internal static ProjectCloseIntent ResolveProjectCloseIntent(bool isNewPreparation, bool isExtension, bool isReconversion, bool isMerge = false) =>
+        isMerge ? ProjectCloseIntent.DiscardMerge :
+        isExtension || isReconversion ? ProjectCloseIntent.RollbackRun :
+        isNewPreparation ? ProjectCloseIntent.DeleteNewProject : ProjectCloseIntent.Save;
+
     public ApplicationActivity GetActiveActivity(
         bool isDiscImporting,
         bool isAudioDiscProcessing,
@@ -56,32 +63,29 @@ public sealed class ApplicationShutdownService
         return activity switch
         {
             ApplicationActivity.Mp3DiscImport => new ApplicationShutdownPrompt(
-                "MP3-CD-Import läuft noch",
-                "Möchtest du den Import kontrolliert abbrechen und BookStitch schließen?\n\n" +
-                "Bereits vollständig kopierte und vorbereitete Dateien bleiben erhalten.",
-                "MP3-CD-Import wird beendet …"),
+                LocalizationText.Get("Shutdown.Mp3Import.Heading"),
+                LocalizationText.Get("Shutdown.Mp3Import.Message"),
+                LocalizationText.Get("Shutdown.Mp3Import.Progress")),
 
             ApplicationActivity.AudioDiscProcessing => new ApplicationShutdownPrompt(
-                "Audio-CD-Verarbeitung läuft noch",
-                "Möchtest du das Rippen und die begleitende Konvertierung kontrolliert abbrechen und BookStitch schließen?\n\n" +
-                "Bereits vollständig gerippte und konvertierte Dateien bleiben erhalten.",
-                "Audio-CD-Verarbeitung wird beendet …"),
+                LocalizationText.Get("Shutdown.AudioDisc.Heading"),
+                LocalizationText.Get("Shutdown.AudioDisc.Message"),
+                LocalizationText.Get("Shutdown.AudioDisc.Progress")),
 
             ApplicationActivity.Export => new ApplicationShutdownPrompt(
-                "Export läuft noch",
-                "Möchtest du den Export kontrolliert abbrechen und BookStitch schließen?\n\n" +
-                "Bereits vorbereitete Projektdateien bleiben erhalten.",
-                "Export wird beendet …"),
+                LocalizationText.Get("Shutdown.Export.Heading"),
+                LocalizationText.Get("Shutdown.Export.Message"),
+                LocalizationText.Get("Shutdown.Export.Progress")),
 
             ApplicationActivity.BackgroundWork => new ApplicationShutdownPrompt(
-                "Vorgang läuft noch",
-                "BookStitch arbeitet gerade noch. Möchtest du den Vorgang beenden und BookStitch schließen?",
-                "Vorgang wird beendet …"),
+                LocalizationText.Get("Shutdown.Background.Heading"),
+                LocalizationText.Get("Shutdown.Background.Message"),
+                LocalizationText.Get("Shutdown.Background.Progress")),
 
             _ => new ApplicationShutdownPrompt(
-                "BookStitch schließen",
-                "Möchtest du BookStitch schließen?",
-                "BookStitch wird beendet …")
+                LocalizationText.Get("Shutdown.Normal.Heading"),
+                LocalizationText.Get("Shutdown.Normal.Message"),
+                LocalizationText.Get("Shutdown.Normal.Progress"))
         };
     }
 

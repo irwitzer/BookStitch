@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 
 using BookStitch.Models;
 using BookStitch.Services;
@@ -9,6 +9,40 @@ namespace BookStitch.Tests.Services;
 
 public sealed class AudioDiscLiveConversionManifestSessionTests
 {
+    [Theory]
+    [InlineData("Failed")]
+    [InlineData("Canceled")]
+    [InlineData("SessionCanceled")]
+    public void Start_is_memory_only_but_failure_and_cancel_boundaries_persist_non_reusable_state(string boundary)
+    {
+        using var folder = new TemporaryFolder();
+        var trace = new PerformanceTraceService(true);
+        trace.TryStartSession(new());
+        var store = new WorkManifestService(trace);
+        var preset = ExportPreset.Parse("AAC Stereo 128 kbps");
+        var session = new AudioDiscLiveConversionManifestSession(store, CreateAudioManifest(folder.Path), preset);
+        var source = Path.Combine(folder.Path, "track.flac");
+        var target = Path.Combine(folder.Path, "track.m4a");
+        File.WriteAllText(source, "original");
+        File.WriteAllText(target, "unfinished audio");
+        var preparation = new AudioDiscLiveConversionPreparation(new TrackInfo
+        {
+            Index = 0, SourceId = Guid.NewGuid(), FilePath = source, FileName = "track.flac",
+            ProcessingAction = ProcessingActionIds.Convert
+        }, source, target);
+        var before = File.ReadAllBytes(session.ManifestPath);
+        session.MarkTrackStarted(preparation);
+        Assert.Equal(before, File.ReadAllBytes(session.ManifestPath));
+        if (boundary == "Failed") session.MarkTrackFailed(preparation, "conversion failed");
+        else if (boundary == "Canceled") session.MarkTrackCanceled(preparation);
+        else session.MarkSessionCanceled("pause boundary");
+        var entry = Assert.Single(store.ReadOnly(session.ManifestPath).Tracks);
+        Assert.Equal(boundary == "SessionCanceled" ? ProjectManifestTrackStatuses.Converting : boundary, entry.Status);
+        Assert.False(WorkManifestService.IsReusableConvertedManifestEntry(entry, preset.DisplayName));
+        var saves = trace.CompleteSession(PerformanceOutcome.Success)!.Operations.Single(operation => operation.Name == "manifest.save");
+        Assert.Equal(2, saves.Metrics.Single(metric => metric.Name == "Count").Value);
+    }
+
     [Fact]
     public void Constructor_CreatesProjectManifestBeforeFirstLiveConversion()
     {
@@ -22,7 +56,7 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
             audioManifest,
             preset);
 
-        Assert.Equal(ProjectFolderLayout.GetWorkManifestPath(folder.Path), session.ManifestPath);
+        Assert.Equal(ProjectFolderLayout.GetExportManifestPath(folder.Path), session.ManifestPath);
         Assert.True(File.Exists(session.ManifestPath));
 
         var manifest = workManifestService.LoadOrCreate(
@@ -36,9 +70,68 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
         Assert.Equal(ProjectManifestStatuses.AcquiringSources, manifest.State.Status);
         Assert.True(manifest.Resume.CanResume);
         Assert.Equal(preset.DisplayName, manifest.SelectedPreset);
-        Assert.Equal("Live Title", manifest.Metadata.Title);
-        Assert.Equal("Live Author", manifest.Metadata.Author);
+        Assert.Equal("", manifest.Metadata.Title);
+        Assert.Equal("", manifest.Metadata.Author);
         Assert.Equal("Live Author - Live Title.m4a", manifest.Export.OutputFileName);
+    }
+
+    [Fact]
+    public void Constructor_WhenProjectMetadataStoreExists_UsesStoreInsteadOfAudioDiscManifestMetadata()
+    {
+        using var folder = new TemporaryFolder();
+        var audioManifest = CreateAudioManifest(folder.Path);
+        audioManifest.Title = "Legacy Title";
+        audioManifest.Author = "Legacy Author";
+        audioManifest.Album = "Legacy Album";
+        audioManifest.Narrator = "Legacy Narrator";
+        audioManifest.Genre = "Legacy Genre";
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, "Store Title", MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(ProjectMetadataField.Authors, ["Store Author"], MetadataOrigin.User);
+        metadata.SetValue(ProjectMetadataField.Album, "Store Album", MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(ProjectMetadataField.Narrators, ["Store Narrator"], MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(ProjectMetadataField.Genres, ["Store Genre"], MetadataOrigin.User);
+        new ProjectMetadataStore().Save(folder.Path, metadata);
+        var preset = ExportPreset.Parse("AAC Stereo 128 kbps");
+        var workManifestService = new WorkManifestService();
+
+        var session = new AudioDiscLiveConversionManifestSession(
+            workManifestService,
+            audioManifest,
+            preset);
+        var manifest = Load(workManifestService, session.ManifestPath, folder.Path, preset);
+
+        Assert.Equal("", manifest.Metadata.Title);
+        Assert.Equal("", manifest.Metadata.Author);
+        Assert.Equal("", manifest.Metadata.Album);
+        Assert.Equal("", manifest.Metadata.Narrator);
+        Assert.Equal("", manifest.Metadata.Genre);
+        Assert.Equal("Store Author - Store Title.m4a", manifest.Export.OutputFileName);
+    }
+
+    [Fact]
+    public void Constructor_WhenProjectMetadataStoreIsMissing_MigratesAudioDiscManifestOnce()
+    {
+        using var folder = new TemporaryFolder();
+        var audioManifest = CreateAudioManifest(folder.Path);
+        var preset = ExportPreset.Parse("AAC Stereo 128 kbps");
+        var workManifestService = new WorkManifestService();
+
+        _ = new AudioDiscLiveConversionManifestSession(
+            workManifestService,
+            audioManifest,
+            preset);
+        var metadataPath = ProjectFolderLayout.GetProjectMetadataPath(folder.Path);
+        var firstJson = File.ReadAllText(metadataPath);
+        _ = new AudioDiscLiveConversionManifestSession(
+            workManifestService,
+            audioManifest,
+            preset);
+        var stored = new ProjectMetadataStore().LoadOrCreate(folder.Path);
+
+        Assert.Equal("Live Title", stored.GetValue<string>(ProjectMetadataField.Title).Value);
+        Assert.Equal(MetadataOrigin.LegacyMigrated, stored.GetValue<string>(ProjectMetadataField.Title).Origin);
+        Assert.Equal(firstJson, File.ReadAllText(metadataPath));
     }
 
     [Fact]
@@ -48,7 +141,7 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
         var audioManifest = CreateAudioManifest(folder.Path);
         var preset = ExportPreset.Parse("AAC Stereo 128 kbps");
         var workManifestService = new WorkManifestService();
-        var manifestPath = ProjectFolderLayout.GetWorkManifestPath(folder.Path);
+        var manifestPath = ProjectFolderLayout.GetExportManifestPath(folder.Path);
         var existing = workManifestService.LoadOrCreate(
             manifestPath,
             ProjectManifestTypes.AudioCdProject,
@@ -104,10 +197,11 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
             sourcePath,
             convertedPath);
 
+        var beforeStart = File.ReadAllBytes(session.ManifestPath);
         session.MarkTrackStarted(preparation);
         var started = Load(workManifestService, session.ManifestPath, folder.Path, preset);
-        Assert.Single(started.Tracks);
-        Assert.Equal(ProjectManifestTrackStatuses.Converting, started.Tracks[0].Status);
+        Assert.Equal(beforeStart, File.ReadAllBytes(session.ManifestPath));
+        Assert.Empty(started.Tracks);
 
         File.WriteAllBytes(convertedPath, [4, 5, 6, 7]);
         session.MarkTrackCompleted(preparation);
@@ -213,6 +307,7 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
         Directory.CreateDirectory(Path.GetDirectoryName(convertedPath)!);
         File.WriteAllBytes(convertedPath, [4, 5, 6, 7]);
 
+        session.MarkTrackCompleted(new AudioDiscLiveConversionPreparation(track, sourcePath, convertedPath));
         var reused = session.ReconcileTrack(new AudioDiscLiveConversionPreparation(
             track,
             sourcePath,
@@ -249,11 +344,6 @@ public sealed class AudioDiscLiveConversionManifestSessionTests
         string projectFolder,
         ExportPreset preset)
     {
-        return service.LoadOrCreate(
-            manifestPath,
-            ProjectManifestTypes.AudioCdProject,
-            projectFolder,
-            Path.Combine(projectFolder, "ripped"),
-            preset.DisplayName);
+        return service.ReadOnly(manifestPath);
     }
 }

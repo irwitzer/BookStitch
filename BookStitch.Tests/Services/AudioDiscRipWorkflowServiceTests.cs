@@ -8,6 +8,46 @@ namespace BookStitch.Tests.Services;
 
 public sealed class AudioDiscRipWorkflowServiceTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task RunAsync_Resumes_when_the_next_disc_has_no_identity_and_preserves_completed_discs(int completedDiscs)
+    {
+        var manifest = CreateManifest(totalDiscs: 2);
+        foreach (var disc in manifest.Discs.Take(completedDiscs))
+        {
+            disc.Status = AudioDiscStatus.Completed;
+            disc.Tracks[0].Status = AudioDiscTrackStatus.Ripped;
+        }
+        var pending = manifest.Discs.Skip(completedDiscs).ToArray();
+        manifest.Discs = manifest.Discs.Take(completedDiscs).ToList();
+        var polled = new List<int>();
+        var ripped = new List<int>();
+        var request = CreateRequest(manifest,
+            ripDiscAsync: (disc, _, _) =>
+            {
+                ripped.Add(disc.DiscNumber);
+                disc.Tracks[0].Status = AudioDiscTrackStatus.Ripped;
+                return Task.FromResult(AudioDiscRipResult.Success(1));
+            }) with
+        {
+            WaitForNextDiscAsync = (number, _) =>
+            {
+                polled.Add(number);
+                var disc = pending.Single(d => d.DiscNumber == number);
+                manifest.Discs.Add(disc);
+                return Task.FromResult<AudioDiscProjectManifestDisc?>(disc);
+            },
+            WaitForRequiredDiscAsync = (_, _) => throw new InvalidOperationException("Unknown next disc must not use a saved identity.")
+        };
+        var result = await CreateService().RunAsync(request);
+        Assert.True(result.Succeeded);
+        Assert.Equal(pending.Select(d => d.DiscNumber), polled);
+        Assert.Equal(polled, ripped);
+        Assert.Equal(2, manifest.Discs.Count);
+        Assert.All(manifest.Discs, disc => Assert.Equal(AudioDiscStatus.Completed, disc.Status));
+    }
+
     [Fact]
     public async Task RunAsync_CompletesDiscAndWaitsForLiveConversions()
     {
@@ -47,10 +87,10 @@ public sealed class AudioDiscRipWorkflowServiceTests
 
         var result = await service.RunAsync(CreateRequest(
             manifest,
-            tryEjectDisc: disc =>
+            tryEjectDiscAsync: (disc, _) =>
             {
                 ejectedDiscNumbers.Add(disc.DiscNumber);
-                return true;
+                return Task.FromResult(true);
             },
             discChangeRequired: (_, _) => discChangeRequested = true));
 
@@ -69,10 +109,10 @@ public sealed class AudioDiscRipWorkflowServiceTests
 
         var result = await service.RunAsync(CreateRequest(
             manifest,
-            tryEjectDisc: disc =>
+            tryEjectDiscAsync: (disc, _) =>
             {
                 ejectedDiscNumbers.Add(disc.DiscNumber);
-                return true;
+                return Task.FromResult(true);
             },
             discChangeRequired: (disc, _) => discChangeDiscNumbers.Add(disc.DiscNumber)));
 
@@ -120,6 +160,31 @@ public sealed class AudioDiscRipWorkflowServiceTests
         Assert.Equal(AudioDiscStatus.Pending, manifest.Discs[0].Status);
         Assert.False(liveConversionCanceled);
         Assert.Equal(0, saveCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_WaitsForRequiredDiscBeforeStartingRip()
+    {
+        var manifest = CreateManifest();
+        var order = new List<string>();
+        var service = CreateService();
+
+        var result = await service.RunAsync(CreateRequest(
+            manifest,
+            waitForRequiredDiscAsync: (_, _) =>
+            {
+                order.Add("disc-ready");
+                return Task.FromResult<AudioDiscPollingResult?>(CreatePollingResult());
+            },
+            ripDiscAsync: (disc, _, _) =>
+            {
+                order.Add("rip-started");
+                disc.Tracks[0].Status = AudioDiscTrackStatus.Ripped;
+                return Task.FromResult(AudioDiscRipResult.Success(1));
+            }));
+
+        Assert.Equal(AudioDiscRipWorkflowOutcome.Completed, result.Outcome);
+        Assert.Equal(["disc-ready", "rip-started"], order);
     }
 
     [Fact]
@@ -184,7 +249,7 @@ public sealed class AudioDiscRipWorkflowServiceTests
         Func<AudioDiscProjectManifestDisc, IProgress<AudioDiscRipProgress>, CancellationToken, Task<AudioDiscRipResult>>? ripDiscAsync = null,
         Func<AudioDiscProjectManifestDisc, CancellationToken, Task<AudioDiscPollingResult?>>? waitForRequiredDiscAsync = null,
         Func<AudioDiscProjectManifestDisc, CancellationToken, Task<bool>>? confirmAvailableAsync = null,
-        Func<AudioDiscProjectManifestDisc, bool>? tryEjectDisc = null,
+        Func<AudioDiscProjectManifestDisc, CancellationToken, Task<bool>>? tryEjectDiscAsync = null,
         Func<Task>? waitForLiveConversionsAsync = null,
         Action? saveSnapshot = null,
         Action<string>? markCanceled = null,
@@ -203,7 +268,7 @@ public sealed class AudioDiscRipWorkflowServiceTests
                 disc.Tracks[0].Status = AudioDiscTrackStatus.Ripped;
                 return Task.FromResult(AudioDiscRipResult.Success(1));
             }),
-            tryEjectDisc ?? (_ => true),
+            tryEjectDiscAsync ?? ((_, _) => Task.FromResult(true)),
             () => Task.CompletedTask,
             waitForLiveConversionsAsync ?? (() => Task.CompletedTask),
             saveSnapshot ?? (() => { }),

@@ -19,7 +19,8 @@ public sealed class AudioDiscWorkflowStatusAdapter
         bool isPaused = false,
         bool currentDiscFinished = false,
         bool allDiscsFinished = false,
-        bool isExtension = false)
+        bool isExtension = false,
+        string? driveDisplayName = null)
     {
         var safeCurrentTotal = Math.Max(0, totalCurrentDisc);
         var safeProjectTotal = Math.Max(0, totalProject);
@@ -54,7 +55,8 @@ public sealed class AudioDiscWorkflowStatusAdapter
                 Percent: ripPercent,
                 WorkingFormat: workingFormat,
                 CurrentSourceFinished: currentDiscFinished,
-                AllSourcesFinished: allDiscsFinished),
+                AllSourcesFinished: allDiscsFinished,
+                DriveDisplayName: driveDisplayName),
             ConversionProgress = new ConversionActivityProgress(
                 safeConverted,
                 safeProjectTotal,

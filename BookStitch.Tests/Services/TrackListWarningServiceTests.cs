@@ -9,6 +9,25 @@ public class TrackListWarningServiceTests
     private readonly TrackListWarningService _service = new();
 
     [Fact]
+    public void Apply_ExtremeSourceNumberFollowedByLowerNumberPreservesOrderWarning()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { Index = 1, TrackNumber = int.MaxValue - 1 },
+            new() { Index = 2, TrackNumber = int.MaxValue },
+            new() { Index = 3, TrackNumber = 1 }
+        };
+        var originalOrder = tracks.ToArray();
+
+        _service.Apply(tracks);
+
+        Assert.Contains(TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder), tracks[2].ChapterWarningText);
+        Assert.DoesNotContain(TrackWarningPresentation.Format(TrackWarningCodes.MissingChapter), tracks[2].ChapterWarningText);
+        Assert.Equal(originalOrder, tracks);
+        Assert.Equal([1, 2, 3], tracks.Select(track => track.Index));
+    }
+
+    [Fact]
     public void Apply_MapsInvalidAudioToShortFileWarning()
     {
         var tracks = new List<TrackInfo>
@@ -20,7 +39,7 @@ public class TrackListWarningServiceTests
 
         Assert.True(changed);
         Assert.Equal("Keine gültige Audiodatei", tracks[0].FileWarningText);
-        Assert.Equal("⛔ Keine gültige Audiodatei", tracks[0].DisplayFileWarning);
+        Assert.Equal("Keine gültige Audiodatei", tracks[0].DisplayFileWarning);
     }
 
     [Fact]
@@ -37,6 +56,35 @@ public class TrackListWarningServiceTests
         Assert.Equal("Quelldatei leer", tracks[0].FileWarningText);
         Assert.Equal("Kapitel doppelt", tracks[0].ChapterWarningText);
         Assert.Equal("Kapitel doppelt", tracks[1].ChapterWarningText);
+    }
+
+    [Fact]
+    public void Apply_ReassignsTagMetadataMessagesToChapterWarnings()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { TrackNumber = 1, Warning = "Kein Tag-Titel; Tags konnten nicht gelesen werden" }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.Equal(string.Empty, tracks[0].FileWarningText);
+        Assert.Equal("Kein Tag-Titel · Tags konnten nicht gelesen werden", tracks[0].ChapterWarningText);
+        Assert.Equal(string.Empty, tracks[0].DisplayHintWarning);
+    }
+
+    [Fact]
+    public void Apply_PreservesMultipleChapterWarningsOnOneTrack()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { TrackNumber = 1 },
+            new() { TrackNumber = 3, Warning = "Doppelter Kapitelname" }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.Equal("Doppelter Kapitelname · Kapitel fehlt", tracks[1].ChapterWarningText);
     }
 
     [Fact]
@@ -99,6 +147,118 @@ public class TrackListWarningServiceTests
         _service.Apply(tracks);
 
         Assert.Equal("Kapitel fehlt", tracks[2].ChapterWarningText);
+    }
+
+    [Fact]
+    public void Apply_MarksPossibleMissingDiscForInternalDiscGap()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { DiscNumber = 1, TrackNumber = 1, ChapterTitle = "CD 1 Track 1" },
+            new() { DiscNumber = 2, TrackNumber = 1, ChapterTitle = "CD 2 Track 1" },
+            new() { DiscNumber = 4, TrackNumber = 1, ChapterTitle = "CD 4 Track 1", AutomaticOrderPosition = 3 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.Equal(new[] { "", "", "Disc 3 fehlt möglicherweise" }, tracks.Select(track => track.ChapterWarningText));
+    }
+
+    [Fact]
+    public void Apply_DoesNotMarkDiscInventoryGapWhenDiscSequenceIsComplete()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { DiscNumber = 1, TrackNumber = 1 },
+            new() { DiscNumber = 2, TrackNumber = 1 },
+            new() { DiscNumber = 3, TrackNumber = 1 },
+            new() { DiscNumber = 4, TrackNumber = 1 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.All(tracks, track => Assert.Equal("", track.ChapterWarningText));
+    }
+
+    [Fact]
+    public void Apply_DoesNotMarkMissingEarlierDiscsWhenPartialDiscSetStartsAtThree()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { DiscNumber = 3, TrackNumber = 1 },
+            new() { DiscNumber = 4, TrackNumber = 1 },
+            new() { DiscNumber = 5, TrackNumber = 1 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.All(tracks, track => Assert.Equal("", track.ChapterWarningText));
+    }
+
+    [Fact]
+    public void Apply_MarksPossibleMissingDiscRangeForMultipleInternalDiscGaps()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { DiscNumber = 1, TrackNumber = 1 },
+            new() { DiscNumber = 2, TrackNumber = 1 },
+            new() { DiscNumber = 5, TrackNumber = 1 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.Equal("Disc 3-4 fehlen möglicherweise", tracks[2].ChapterWarningText);
+    }
+
+    [Fact]
+    public void Apply_DoesNotTreatNonConsecutiveSourceNumbersAsMissingChapters()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { TrackNumber = 10 },
+            new() { TrackNumber = 20 },
+            new() { TrackNumber = 30 },
+            new() { TrackNumber = 40 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.All(tracks, track => Assert.Equal("", track.ChapterWarningText));
+    }
+
+    [Fact]
+    public void Apply_DoesNotMarkInventoryGapForExcludedExistingTrack()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { TrackNumber = 1 },
+            new() { TrackNumber = 2 },
+            new() { TrackNumber = 3, IsExcluded = true },
+            new() { TrackNumber = 4 },
+            new() { TrackNumber = 5 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.All(tracks, track => Assert.Equal("", track.ChapterWarningText));
+    }
+
+    [Fact]
+    public void Apply_CurrentOrderWarningsRemainWhenAllSourceTracksExistButOrderIsWrong()
+    {
+        var tracks = new List<TrackInfo>
+        {
+            new() { TrackNumber = 1, AutomaticOrderPosition = 1 },
+            new() { TrackNumber = 5, AutomaticOrderPosition = 5 },
+            new() { TrackNumber = 2, AutomaticOrderPosition = 2 },
+            new() { TrackNumber = 4, AutomaticOrderPosition = 4 },
+            new() { TrackNumber = 3, AutomaticOrderPosition = 3 }
+        };
+
+        _service.Apply(tracks);
+
+        Assert.Contains(tracks, track => track.ChapterWarningText == "Sortierung prüfen");
+        Assert.DoesNotContain(tracks, track => track.ChapterWarningText.Contains("möglicherweise", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -228,13 +388,4 @@ public class TrackListWarningServiceTests
         Assert.Equal(new[] { "", "", "", "", "Kapitel fehlt" }, tracks.Select(track => track.ChapterWarningText));
     }
 
-    [Fact]
-    public void TrackInfo_DisplayOutputSizeMb_UsesOneDecimalWithUnitOrDash()
-    {
-        var track = new TrackInfo { ConvertedSizeAvailable = true, ConvertedSizeMb = 12.44 };
-        var missing = new TrackInfo();
-
-        Assert.Equal("12.4 MB", track.DisplayOutputSizeMb);
-        Assert.Equal("–", missing.DisplayOutputSizeMb);
-    }
 }

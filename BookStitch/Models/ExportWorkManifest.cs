@@ -3,10 +3,14 @@
 public static class ExportWorkManifestVersions
 {
     public const string Current = "3";
+    public const int CurrentSchemaVersion = 1;
 }
 
 public sealed class ExportWorkManifest
 {
+    [System.Text.Json.Serialization.JsonPropertyName("schemaVersion")]
+    public int SchemaVersion { get; set; } = ExportWorkManifestVersions.CurrentSchemaVersion;
+
     public string FormatVersion { get; set; } = ExportWorkManifestVersions.Current;
     public string ProjectType { get; set; } = ProjectManifestTypes.FolderProject;
     public string ProjectId { get; set; } = "";
@@ -114,11 +118,13 @@ public sealed class ExportManifestState
     public DateTime? CancelRequestedUtc { get; set; }
     public DateTime? LastErrorUtc { get; set; }
     public string LastErrorSummary { get; set; } = "";
+    // Legacy progress metadata only; never use this as merge authorization.
     public List<string> ManualMergeReviewCompletedPresets { get; set; } = [];
 }
 
 public sealed class ExportManifestResume
 {
+    public bool MergePaused { get; set; }
     public bool CanResume { get; set; }
     public string Reason { get; set; } = "";
     public DateTime? LastCleanupUtc { get; set; }
@@ -139,6 +145,7 @@ public sealed class ExportWorkManifestDisc
 
 public sealed class ExportWorkManifestTrack
 {
+    public Guid SourceId { get; set; }
     public int TrackIndex { get; set; }
     public string SourcePath { get; set; } = "";
     public string SourceFileName { get; set; } = "";
@@ -155,6 +162,12 @@ public sealed class ExportWorkManifestTrack
     public string ConvertedPath { get; set; } = "";
     public long ConvertedSizeBytes { get; set; }
     public long ConvertedLastWriteUtcTicks { get; set; }
+    // Identity of this occurrence/preset artifact. Empty only for pending or legacy entries.
+    public Guid PreparationId { get; set; }
+    // Version 1 separates repeated list entries; TargetSampleRateHz binds the artifact to its rate.
+    public int TargetSampleRateHz { get; set; } = 44100;
+    public int PreparationVersion { get; set; }
+    public ConvertedAacTiming? AacTiming { get; set; }
     public DateTime? StartedUtc { get; set; }
     public DateTime? CompletedUtc { get; set; } = DateTime.UtcNow;
     public string LastError { get; set; } = "";

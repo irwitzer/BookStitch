@@ -11,7 +11,7 @@ public sealed record DiscSourceAnalysis(
     bool HasCdaFiles,
     bool IsCdDrive)
 {
-    public bool IsSupportedDataDisc => SupportedAudioFiles.Count > 0;
+    public bool IsSupportedDataDisc => SupportedAudioFiles.Count > 0 && !HasCdaFiles;
     public bool IsProbablyAudioCd => !IsSupportedDataDisc && (HasCdaFiles || IsCdDrive);
 }
 
@@ -49,7 +49,8 @@ public sealed record DiscCopiedFile(
     int CopiedFiles,
     int TotalFiles,
     string SourceFile,
-    string ImportedFile);
+    string ImportedFile,
+    SourceFileCopyIdentity? SourceIdentity = null);
 
 public sealed record DiscImportResult(
     string SourceFolder,
@@ -58,21 +59,14 @@ public sealed record DiscImportResult(
     int DiscNumber,
     int TotalDiscs,
     int CopiedFiles,
-    bool WasCanceled = false);
+    bool WasCanceled = false,
+    IReadOnlyList<SourceFileCopyIdentity>? ImportedFiles = null);
 
 public sealed class Mp3DiscImportService
 {
-    private static readonly HashSet<string> SupportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3",
-        ".aac",
-        ".m4a",
-        ".m4b",
-        ".wav",
-        ".flac"
-    };
+    private readonly SourceCopyIdentityStore _sourceCopyIdentityStore = new();
 
-    public DiscSourceAnalysis AnalyzeSource(string sourceFolder)
+    public DiscSourceAnalysis AnalyzeSource(string sourceFolder, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sourceFolder) || !Directory.Exists(sourceFolder))
         {
@@ -83,9 +77,9 @@ public sealed class Mp3DiscImportService
                 IsCdDrive: false);
         }
 
-        var files = EnumerateFilesSafe(sourceFolder).ToList();
+        var files = SafeFileSystemEnumeration.EnumerateFiles(sourceFolder, cancellationToken).ToList();
         var audioFiles = files
-            .Where(file => SupportedAudioExtensions.Contains(Path.GetExtension(file)))
+            .Where(file => AudioInputFormatCatalog.IsDataDiscImportExtension(Path.GetExtension(file)))
             .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -266,143 +260,131 @@ public sealed class Mp3DiscImportService
         int totalDiscs,
         IProgress<DiscCopyProgress>? progress,
         IProgress<DiscCopiedFile>? copiedFileProgress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null)
     {
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
-            var analysis = AnalyzeSource(sourceFolder);
-            if (!analysis.IsSupportedDataDisc)
-                throw new InvalidOperationException("Auf der ausgewählten Quelle wurden keine unterstützten Audiodateien gefunden.");
-
-            ProjectFolderLayout.EnsureProjectFolders(projectFolder);
-
             var discFolder = ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, discNumber);
-            Directory.CreateDirectory(discFolder);
-
-            var files = analysis.SupportedAudioFiles.ToList();
             var copiedFiles = 0;
-
-            for (var index = 0; index < files.Count; index++)
+            var readStarted = false;
+            try
             {
-                if (cancellationToken.IsCancellationRequested)
+                var analysis = AnalyzeSource(sourceFolder, cancellationToken);
+                if (!analysis.IsSupportedDataDisc)
+                    throw new InvalidOperationException("Auf der ausgewählten Quelle wurden keine unterstützten Audiodateien gefunden.");
+
+                ProjectFolderLayout.EnsureProjectFolders(projectFolder);
+
+                Directory.CreateDirectory(discFolder);
+
+                var files = analysis.SupportedAudioFiles.ToList();
+
+                for (var index = 0; index < files.Count; index++)
                 {
-                    return new DiscImportResult(
-                        sourceFolder,
-                        discFolder,
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return new DiscImportResult(
+                            sourceFolder,
+                            discFolder,
+                            projectFolder,
+                            discNumber,
+                            totalDiscs,
+                            copiedFiles,
+                            ImportedFiles: null,
+                            WasCanceled: true);
+                    }
+
+                    var sourceFile = files[index];
+                    var relativePath = GetRelativePathSafe(sourceFolder, sourceFile);
+                    var targetFile = Path.Combine(discFolder, relativePath);
+                    var targetDirectory = Path.GetDirectoryName(targetFile);
+
+                    if (!string.IsNullOrWhiteSpace(targetDirectory))
+                        Directory.CreateDirectory(targetDirectory);
+
+                    string? contentSha256 = null;
+                    var copiedNow = !_sourceCopyIdentityStore.CanReuseExistingCopy(
                         projectFolder,
-                        discNumber,
-                        totalDiscs,
-                        copiedFiles,
-                        WasCanceled: true);
-                }
-
-                var sourceFile = files[index];
-                var relativePath = GetRelativePathSafe(sourceFolder, sourceFile);
-                var targetFile = Path.Combine(discFolder, relativePath);
-                var targetDirectory = Path.GetDirectoryName(targetFile);
-
-                if (!string.IsNullOrWhiteSpace(targetDirectory))
-                    Directory.CreateDirectory(targetDirectory);
-
-                var copiedNow = !IsCompleteExistingCopy(sourceFile, targetFile);
-                if (copiedNow)
-                {
-                    var copyingPath = targetFile + ".copying";
-                    try
+                        sourceFile,
+                        targetFile, cancellationToken);
+                    if (copiedNow)
                     {
-                        if (File.Exists(copyingPath))
-                            File.Delete(copyingPath);
-
-                        File.Copy(sourceFile, copyingPath, overwrite: true);
-                        File.Move(copyingPath, targetFile, overwrite: true);
+                        contentSha256 = await SourceFileCopyService.CopyAtomicallyAsync(
+                            sourceFile, targetFile, cancellationToken, () =>
+                            {
+                                if (readStarted) return;
+                                readStarted = true;
+                                sourceReadStarted?.Invoke(sourceFolder);
+                            }).ConfigureAwait(false);
                     }
-                    finally
-                    {
-                        if (File.Exists(copyingPath))
-                            File.Delete(copyingPath);
-                    }
-                }
 
-                copiedFiles = index + 1;
+                    var normalizedRelativePath = Mp3DiscSourceIdentityPlanner.NormalizeRelativePath(relativePath);
+                    var plannedSourceId = Guid.Empty;
+                    plannedSourceIdsByRelativePath?.TryGetValue(normalizedRelativePath, out plannedSourceId);
+                    var sourceIdentity = _sourceCopyIdentityStore.RecordCopiedFile(
+                        projectFolder,
+                        sourceFile,
+                        targetFile,
+                        plannedSourceId,
+                        contentSha256, cancellationToken);
 
-                progress?.Report(new DiscCopyProgress(
-                    copiedFiles,
-                    files.Count,
-                    Path.GetFileName(sourceFile)));
+                    copiedFiles = index + 1;
 
-                // Live conversion must only be queued for files that were actually copied.
-                // Existing complete project originals already have their persisted conversion state;
-                // reporting them here would generate a second hash-based output in a working copy.
-                if (copiedNow)
-                {
-                    copiedFileProgress?.Report(new DiscCopiedFile(
-                        discNumber,
-                        totalDiscs,
+                    progress?.Report(new DiscCopyProgress(
                         copiedFiles,
                         files.Count,
-                        sourceFile,
-                        targetFile));
-                }
-            }
+                        Path.GetFileName(sourceFile)));
 
-            return new DiscImportResult(
-                sourceFolder,
-                discFolder,
-                projectFolder,
-                discNumber,
-                totalDiscs,
-                copiedFiles);
+                    // Live conversion must only be queued for files that were actually copied.
+                    // Existing complete project originals already have their persisted conversion state;
+                    // reporting them here would generate a second hash-based output in a working copy.
+                    if (copiedNow)
+                    {
+                        copiedFileProgress?.Report(new DiscCopiedFile(
+                            discNumber,
+                            totalDiscs,
+                            copiedFiles,
+                            files.Count,
+                            sourceFile,
+                            targetFile,
+                            sourceIdentity));
+                    }
+                }
+
+                return new DiscImportResult(
+                    sourceFolder,
+                    discFolder,
+                    projectFolder,
+                    discNumber,
+                    totalDiscs,
+                    copiedFiles,
+                    ImportedFiles: _sourceCopyIdentityStore.Load(projectFolder)
+                        .Where(identity => IsIdentityUnderDiscFolder(projectFolder, discFolder, identity))
+                        .ToList());
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return new DiscImportResult(sourceFolder, discFolder, projectFolder, discNumber,
+                    totalDiscs, copiedFiles, WasCanceled: true);
+            }
         });
     }
 
-    private static bool IsCompleteExistingCopy(string sourceFile, string targetFile)
+    private static bool IsIdentityUnderDiscFolder(
+        string projectFolder,
+        string discFolder,
+        SourceFileCopyIdentity identity)
     {
-        if (!File.Exists(targetFile))
-            return false;
-
         try
         {
-            return new FileInfo(sourceFile).Length == new FileInfo(targetFile).Length;
+            var fullPath = Path.GetFullPath(Path.Combine(projectFolder, identity.TargetRelativePath));
+            var fullDiscFolder = Path.GetFullPath(discFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return fullPath.StartsWith(fullDiscFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
             return false;
-        }
-    }
-
-    private static void ClearReadOnlyAttributes(string folder)
-    {
-        foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
-        {
-            try
-            {
-                File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
-            }
-            catch
-            {
-                // Wenn einzelne Attribute nicht geändert werden können, versucht das Löschen danach trotzdem weiter.
-            }
-        }
-
-        foreach (var directory in Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories))
-        {
-            try
-            {
-                File.SetAttributes(directory, File.GetAttributes(directory) & ~FileAttributes.ReadOnly);
-            }
-            catch
-            {
-                // Attributbereinigung ist nur Best Effort.
-            }
-        }
-
-        try
-        {
-            File.SetAttributes(folder, File.GetAttributes(folder) & ~FileAttributes.ReadOnly);
-        }
-        catch
-        {
-            // Attributbereinigung ist nur Best Effort.
         }
     }
 
@@ -476,16 +458,11 @@ public sealed class Mp3DiscImportService
 
     private static string CreateProjectFolder(string sourceFolder, string mp3DiscProjectsFolder)
     {
-        var projectsRoot = Path.GetFullPath(mp3DiscProjectsFolder);
-        Directory.CreateDirectory(projectsRoot);
-
         var sourceName = GetSourceDisplayName(sourceFolder);
-        var safeName = MakeSafeFileName(sourceName);
-        if (string.IsNullOrWhiteSpace(safeName))
-            safeName = "MP3-CD";
-
-        var folderName = safeName + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        return Path.Combine(projectsRoot, folderName);
+        return new ProjectFolderNameService().CreateUniqueProjectFolder(
+            mp3DiscProjectsFolder,
+            sourceName,
+            "MP3-CD");
     }
 
     private static string GetSourceDisplayName(string sourceFolder)
@@ -508,13 +485,6 @@ public sealed class Mp3DiscImportService
 
         var name = new DirectoryInfo(sourceFolder).Name;
         return string.IsNullOrWhiteSpace(name) ? "MP3-CD" : name;
-    }
-
-    private static string MakeSafeFileName(string value)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var cleaned = new string(value.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray()).Trim();
-        return string.Join("_", cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private static string GetRelativePathSafe(string baseFolder, string filePath)
@@ -546,40 +516,4 @@ public sealed class Mp3DiscImportService
         }
     }
 
-    private static IEnumerable<string> EnumerateFilesSafe(string folder)
-    {
-        var pending = new Stack<string>();
-        pending.Push(folder);
-
-        while (pending.Count > 0)
-        {
-            var current = pending.Pop();
-
-            IEnumerable<string> files;
-            try
-            {
-                files = Directory.EnumerateFiles(current);
-            }
-            catch
-            {
-                files = Array.Empty<string>();
-            }
-
-            foreach (var file in files)
-                yield return file;
-
-            IEnumerable<string> directories;
-            try
-            {
-                directories = Directory.EnumerateDirectories(current);
-            }
-            catch
-            {
-                directories = Array.Empty<string>();
-            }
-
-            foreach (var directory in directories)
-                pending.Push(directory);
-        }
-    }
 }

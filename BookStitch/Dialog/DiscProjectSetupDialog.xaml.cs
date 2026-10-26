@@ -1,143 +1,315 @@
-using BookStitch.Models;
+﻿using BookStitch.Models;
+using BookStitch.Controls;
 using BookStitch.Services;
 using Microsoft.Win32;
 using System.IO;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace BookStitch.Dialog;
 
-public sealed record DiscProjectSetupResult(
-    int TotalDiscs,
-    string SelectedExportPreset,
-    string ParallelJobs,
-    string OutputExtension,
-    string OutputFolder,
-    string BookTitle,
-    string Album,
-    string Author,
-    string Narrator,
-    string Genre,
-    string FileNameTemplate,
-    string CoverSourcePath,
-    string ProcessedCoverPath,
-    bool AutoMergeAfterConversion);
-
-public partial class DiscProjectSetupDialog : Window
+public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
 {
+    public DiscCountInputState DiscCountState { get; private set; } = null!;
+    public TextBox DiscCountTextBox => DiscCountPanel.Input;
     private readonly int _minimumDiscs;
     private readonly int _maximumDiscs;
     private readonly IReadOnlyList<string> _exportPresets;
     private readonly int? _maxSourceBitrateKbps;
     private readonly ProjectSetupDialogRequest _request;
+    private readonly ProjectSetupModeProfile _modeProfile;
     private readonly Func<Window, ProjectSetupDialogGlobalSettings>? _openAdvancedSettings;
-    private readonly Action<bool>? _setAlbumLink;
     private readonly Action<bool>? _setAutoMerge;
     private readonly Action<string>? _setOutputExtension;
+    private readonly Action<string>? _setOutputFolder;
     private readonly Action<string>? _setFileNameTemplate;
     private readonly Action<string>? _setLastCoverFolder;
-    private readonly Action<string, string>? _previewCoverChanged;
-    private bool _keepAlbumLinkedToTitle;
-    private bool _isSynchronizingTitleAndAlbum;
+    private readonly Func<int> _getCoverWarningThresholdPixels;
+    private readonly Action<int> _setCoverWarningThresholdPixels;
+    private readonly Action<int>? _discCountChanged;
+    private readonly GlobalSettingsManager? _settingsManager;
+    private readonly Func<bool> _shouldWarnDiscCount;
+    private readonly Action<bool>? _setAlwaysWarnDiscCount;
+    private readonly ProjectMetadataState _metadataState;
+    private ProjectMetadata _observedCanonicalMetadata = null!;
+    private readonly MetadataPreferences _metadataPreferences;
+    private readonly Action<MetadataPreferences> _metadataPreferencesChanged;
+    private readonly Func<IReadOnlyList<SourceMetadataSnapshot>> _sourceSnapshotsProvider;
+    private readonly Func<IReadOnlyList<MetadataFieldDecisionDiagnostic>> _metadataFieldDecisionsProvider;
+    private readonly Action<ProjectMetadata> _saveMetadata;
+    private readonly Action<Window>? _openMetadataDialog;
+    private readonly Func<FinalAudioTagData>? _compatibilityPreviewProvider;
+    private readonly Func<bool>? _compatibilityDescriptionEnabledProvider;
+    private readonly Action<bool>? _compatibilityDescriptionEnabledChanged;
+    private readonly MetadataNormalizationService _metadataNormalization = new();
+    private readonly ConceptCandidateSessionService _candidateSession;
+    private readonly SourceMetadataAlternativeService _candidateService = new();
+    private readonly ConceptMetadataFieldComposition _metadataFields;
+    private readonly ConceptSeriesFieldState _seriesFieldState;
+    private readonly ConceptMetadataFieldViewModel _descriptionField;
+    private readonly ConceptDescriptionFieldState _descriptionFieldState;
+    private readonly ConceptMetadataFieldViewModel _isbnField;
+    private readonly ConceptSpecialMetadataFieldState _abridgedStatusFieldState;
+    private readonly ConceptSpecialMetadataFieldState _workTypeFieldState;
+    private readonly ConceptSpecialMetadataFieldState _yearFieldState;
+    private readonly ConceptMinimalPresentationScope _minimalPresentationScope = new();
+    private IReadOnlyList<string> _genres;
+    private readonly Func<AppearanceMode> _getAppearanceMode;
+    private readonly Func<int> _getProjectSetupPageAnimationMilliseconds;
+    private bool _metadataRefreshQueued;
     private bool _isInitializing;
     private string _lastAcceptedPreset = "";
+    private string _outputFolder = "";
     private readonly CoverImageService _coverImageService = new();
+    private readonly CoverPickerService _coverPickerService;
     private readonly string _coverWorkFolder;
     private string _selectedCoverSourcePath = "";
     private string _processedCoverPath = "";
+    private bool _isCoverDialogOpen;
+    private bool _setupDraftExitApproved;
+    private int _currentSetupPage;
+    private bool _isSetupPageAnimating;
+
+    internal int CurrentSetupPage => _currentSetupPage;
+    internal bool IsSetupPageAnimating => _isSetupPageAnimating;
 
     public DiscProjectSetupResult Result { get; private set; } = new(
         1, "", "Auto", ".m4a", "", "", "", "", "", "Audiobook", "{Autor} - {Titel}", "", "", false);
 
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public event Action<string>? AcceptedPresetChanged;
+
+    public string CompatibilityFieldLabel => LocalizationText.Get("Metadata.Search.CompatibilityField");
+
+    public string CompatibilityFieldText =>
+        _compatibilityPreviewProvider is null
+            ? string.Empty
+            : CompatibilityDescriptionRenderer.Render(_compatibilityPreviewProvider());
+
+    public bool IsCompatibilityDescriptionEnabled
+    {
+        get => _compatibilityDescriptionEnabledProvider?.Invoke() ?? false;
+        set
+        {
+            if (value == IsCompatibilityDescriptionEnabled)
+                return;
+
+            _compatibilityDescriptionEnabledChanged?.Invoke(value);
+            OnPropertyChanged(nameof(IsCompatibilityDescriptionEnabled));
+        }
+    }
+
     public DiscProjectSetupDialog(
         ProjectSetupDialogRequest request,
+        AppearanceMode appearanceMode,
         Func<Window, ProjectSetupDialogGlobalSettings>? openAdvancedSettings = null,
-        Action<bool>? setAlbumLink = null,
         Action<bool>? setAutoMerge = null,
         Action<string>? setOutputExtension = null,
+        Action<string>? setOutputFolder = null,
         Action<string>? setFileNameTemplate = null,
         Action<string>? setLastCoverFolder = null,
-        Action<string, string>? previewCoverChanged = null)
+        Func<int>? getCoverWarningThresholdPixels = null,
+        CoverPickerService? coverPickerService = null,
+        Action<int>? discCountChanged = null,
+        ProjectMetadataState? metadataState = null,
+        MetadataPreferences? metadataPreferences = null,
+        Action<MetadataPreferences>? metadataPreferencesChanged = null,
+        Func<IReadOnlyList<SourceMetadataSnapshot>>? sourceSnapshotsProvider = null,
+        Func<IReadOnlyList<MetadataFieldDecisionDiagnostic>>? metadataFieldDecisionsProvider = null,
+        Action<ProjectMetadata>? saveMetadata = null,
+        Action<Window>? openMetadataDialog = null,
+        Func<FinalAudioTagData>? compatibilityPreviewProvider = null,
+        Func<bool>? compatibilityDescriptionEnabledProvider = null,
+        Action<bool>? compatibilityDescriptionEnabledChanged = null,
+        Func<AppearanceMode>? getAppearanceMode = null,
+        Func<int>? getProjectSetupPageAnimationMilliseconds = null,
+        Func<bool>? shouldWarnDiscCount = null,
+        Action<bool>? setAlwaysWarnDiscCount = null,
+        Action<int>? setCoverWarningThresholdPixels = null,
+        GlobalSettingsManager? settingsManager = null)
     {
         InitializeComponent();
 
         _request = request;
+        _settingsManager=settingsManager;
+        _setCoverWarningThresholdPixels = setCoverWarningThresholdPixels ?? (_ => { });
+        _shouldWarnDiscCount = shouldWarnDiscCount ?? (() => true);
+        _setAlwaysWarnDiscCount = setAlwaysWarnDiscCount;
+        _modeProfile = ProjectSetupModeProfile.FromSourceKind(request.SourceKind);
         _openAdvancedSettings = openAdvancedSettings;
-        _setAlbumLink = setAlbumLink;
         _setAutoMerge = setAutoMerge;
         _setOutputExtension = setOutputExtension;
+        _setOutputFolder = setOutputFolder;
         _setFileNameTemplate = setFileNameTemplate;
         _setLastCoverFolder = setLastCoverFolder;
-        _previewCoverChanged = previewCoverChanged;
+        _getCoverWarningThresholdPixels = getCoverWarningThresholdPixels
+            ?? (() => CoverWarningSettingsService.DefaultThresholdPixels);
+        _coverPickerService = coverPickerService ?? new CoverPickerService(
+            new AppSettings { LastCoverFolder = request.LastCoverFolder },
+            () => { },
+            () => null);
+        _discCountChanged = discCountChanged;
+        _getAppearanceMode = getAppearanceMode ?? (() => appearanceMode);
+        _getProjectSetupPageAnimationMilliseconds = getProjectSetupPageAnimationMilliseconds
+            ?? (() => AnimationTimingSettingsService.ProjectSetupPageDefaultMilliseconds);
+        _metadataState = metadataState ?? CreateMetadataState(request);
+        _metadataPreferences = metadataPreferences ?? new MetadataPreferences();
+        MetadataPreferencesService.Normalize(_metadataPreferences);
+        _metadataPreferencesChanged = metadataPreferencesChanged ?? (_ => { });
+        _sourceSnapshotsProvider = sourceSnapshotsProvider ?? (() => []);
+        _metadataFieldDecisionsProvider = metadataFieldDecisionsProvider ?? (() => []);
+        _saveMetadata = saveMetadata ?? (_ => { });
+        _openMetadataDialog = openMetadataDialog;
+        _compatibilityPreviewProvider = compatibilityPreviewProvider;
+        _compatibilityDescriptionEnabledProvider = compatibilityDescriptionEnabledProvider;
+        _compatibilityDescriptionEnabledChanged = compatibilityDescriptionEnabledChanged;
+        _genres = _settingsManager is not null ? GenreListService.GetGenres(_settingsManager.Current)
+            : request.GenreOptions ?? GenreListService.GetGenres(request.UsePrivateGenreList);
+        _candidateSession = new ConceptCandidateSessionService(
+            _metadataNormalization,
+            new ScalarCandidatePresentationService(_metadataNormalization));
+        _metadataFields = new ConceptMetadataFieldComposition(
+            () => _metadataState.CanonicalMetadata,
+            _metadataPreferences,
+            _metadataNormalization,
+            metadata => _saveMetadata(metadata),
+            preferences => _metadataPreferencesChanged(preferences),
+            candidateRefreshRequested: _ => QueueMetadataFieldRefresh(),
+            candidateValueCommitted: (field, value) =>
+            {
+                _candidateSession.RetainUserValue(field, value);
+                QueueMetadataFieldRefresh();
+            },
+            titleAlbumBindingChanged: OnTitleAlbumBindingChanged);
+        _seriesFieldState = new ConceptSeriesFieldState(
+            _metadataState,
+            _metadataPreferences,
+            _metadataNormalization,
+            _saveMetadata,
+            _metadataPreferencesChanged,
+            QueueMetadataFieldRefresh);
+        _descriptionField = new ConceptMetadataFieldViewModel(
+            () => _metadataState.CanonicalMetadata,
+            _metadataPreferences,
+            _metadataNormalization,
+            ProjectMetadataField.Description,
+            ConceptMetadataGroupCatalog.Description.Descriptor,
+            _saveMetadata,
+            _metadataPreferencesChanged,
+            isMultiline: true);
+        _descriptionFieldState = new ConceptDescriptionFieldState(
+            _metadataState,
+            _descriptionField,
+            _saveMetadata);
+        _isbnField = new ConceptMetadataFieldViewModel(
+            () => _metadataState.CanonicalMetadata,
+            _metadataPreferences,
+            _metadataNormalization,
+            ProjectMetadataField.ISBN,
+            ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ISBN),
+            _saveMetadata,
+            _metadataPreferencesChanged,
+            candidateRefreshRequested: _ => QueueMetadataFieldRefresh(),
+            candidateValueCommitted: (field, value) =>
+            {
+                _candidateSession.RetainUserValue(field, value);
+                QueueMetadataFieldRefresh();
+            });
+        _abridgedStatusFieldState = CreateSpecialFieldState(ProjectMetadataField.AbridgedStatus);
+        _workTypeFieldState = CreateSpecialFieldState(ProjectMetadataField.AudioWorkType);
+        _yearFieldState = CreateSpecialFieldState(ProjectMetadataField.Year);
+        ConfigureEmbeddedMetadataFields();
+        _metadataState.PropertyChanged += MetadataState_PropertyChanged;
+        _observedCanonicalMetadata = _metadataState.CanonicalMetadata;
+        _observedCanonicalMetadata.PropertyChanged += CanonicalMetadata_PropertyChanged;
+        Activated += DiscProjectSetupDialog_Activated;
+        Closing += DiscProjectSetupDialog_Closing;
+        Closed += DiscProjectSetupDialog_Closed;
+        WeakEventManager<DeveloperAppearancePreview, EventArgs>.AddHandler(DeveloperToolsCommands.AppearancePreview,
+            nameof(DeveloperAppearancePreview.Changed), PreviewAppearanceChanged);
         _isInitializing = true;
-        _minimumDiscs = request.MinimumDiscs;
-        _maximumDiscs = request.MaximumDiscs;
+        _minimumDiscs = Math.Clamp(request.MinimumDiscs, 1, 99);
+        _maximumDiscs = Math.Clamp(request.MaximumDiscs, _minimumDiscs, 99);
         _exportPresets = request.ExportPresets;
         _maxSourceBitrateKbps = request.MaxSourceBitrateKbps;
         _coverWorkFolder = request.CoverWorkFolder;
-        _keepAlbumLinkedToTitle = request.KeepAlbumLinkedToTitle;
-        GenreTextBox.Items.Clear();
-        GenreTextBox.ItemsSource = GenreListService.GetGenres(request.UsePrivateGenreList);
-
         Title = request.WindowTitle;
-        TitleText.Text = request.WindowTitle;
-        SourceInformationText.Text = request.SourceInformation;
-        InstructionText.Text = request.Instruction;
+        MetadataButton.IsEnabled = _openMetadataDialog is not null;
 
-        var isFolderProject = request.SourceKind == ProjectSetupSourceKind.Folder;
-        DiscCountLabel.Visibility = isFolderProject ? Visibility.Collapsed : Visibility.Visible;
-        DiscCountPanel.Visibility = isFolderProject ? Visibility.Collapsed : Visibility.Visible;
-        ProjectFolderLabel.Visibility = isFolderProject ? Visibility.Visible : Visibility.Collapsed;
-        ProjectFolderButton.Visibility = isFolderProject ? Visibility.Visible : Visibility.Collapsed;
-        ProjectFolderButton.Content = BuildFolderDisplayName(request.SourceFolder);
-        ProjectFolderButton.ToolTip = request.SourceFolder;
+        ApplySourceModeProfile(_modeProfile);
+        ProjectFolderTextBlock.Text = BuildFolderDisplayName(request.SourceFolder);
 
-        DiscCountTextBox.Text = Math.Clamp(request.DefaultDiscCount, request.MinimumDiscs, request.MaximumDiscs)
-            .ToString(CultureInfo.InvariantCulture);
+        DiscCountState = new DiscCountInputState(request.DefaultDiscCount, _minimumDiscs, _maximumDiscs);
+        DiscCountPanel.DataContext = DiscCountState;
+        DiscCountState.ValueChanged += value =>
+        {
+            if (!_isInitializing) _discCountChanged?.Invoke(value);
+        };
 
         PresetComboBox.ItemsSource = request.ExportPresets;
-        if (request.ExportPresets.Contains(request.SelectedExportPreset))
+        if (request.IsDiscResume && !request.ExportPresets.Contains(request.SelectedExportPreset))
+            PresetComboBox.ItemsSource = request.ExportPresets.Append(request.SelectedExportPreset).ToArray();
+        if (request.IsDiscResume || request.ExportPresets.Contains(request.SelectedExportPreset))
             PresetComboBox.SelectedItem = request.SelectedExportPreset;
         else if (request.ExportPresets.Count > 0)
             PresetComboBox.SelectedIndex = 0;
 
         _lastAcceptedPreset = PresetComboBox.SelectedItem?.ToString() ?? request.SelectedExportPreset ?? "";
+        if (request.IsDiscResume)
+        {
+            PresetComboBox.IsEnabled = false;
+            DiscCountPanel.IsEnabled = false;
+        }
+        if (request.IsDiscResume || request.IsContinuation)
+        {
+            StartProjectButton.Content = LocalizationText.Get("MainWindow.Action.Continue");
+            StartProjectButton.MinWidth = 150;
+            StartProjectButton.Width = double.NaN;
+            System.Windows.Automation.AutomationProperties.SetName(StartProjectButton, LocalizationText.Get("MainWindow.Action.Continue"));
+        }
         ParallelJobsTextBox.Text = string.IsNullOrWhiteSpace(request.ParallelJobs) ? "Auto" : request.ParallelJobs;
 
         SelectOutputExtension(string.IsNullOrWhiteSpace(request.OutputExtension) ? ".m4a" : request.OutputExtension);
-        OutputFolderTextBox.Text = request.OutputFolder ?? "";
-        _selectedCoverSourcePath = request.CoverSourcePath ?? "";
-        _processedCoverPath = !string.IsNullOrWhiteSpace(request.CoverPreviewSource) && File.Exists(request.CoverPreviewSource)
-            ? request.CoverPreviewSource
+        SetOutputFolder(request.OutputFolder ?? "", persistGlobally: false);
+        _selectedCoverSourcePath = _metadataState.CoverSourcePath;
+        _processedCoverPath = !string.IsNullOrWhiteSpace(_metadataState.ProcessedCoverPath) && File.Exists(_metadataState.ProcessedCoverPath)
+            ? _metadataState.ProcessedCoverPath
             : "";
-        SetCoverPreview(string.IsNullOrWhiteSpace(request.CoverPreviewSource) ? _selectedCoverSourcePath : request.CoverPreviewSource);
+        SetCoverPreview(string.IsNullOrWhiteSpace(_metadataState.CoverPreviewSource) ? _selectedCoverSourcePath : _metadataState.CoverPreviewSource);
 
-        TitleTextBox.Text = request.BookTitle ?? "";
-        AlbumTextBox.Text = request.Album ?? "";
-        AuthorTextBox.Text = request.Author ?? "";
-        NarratorTextBox.Text = request.Narrator ?? "";
-        GenreTextBox.Text = GenreListService.IsSelectableGenre(request.Genre)
-            ? request.Genre
-            : GenreListService.GetDefaultGenre(request.UsePrivateGenreList);
+        RefreshEmbeddedMetadataFields();
         FileNameTemplateTextBox.Text = string.IsNullOrWhiteSpace(request.FileNameTemplate) ? "{Autor} - {Titel}" : request.FileNameTemplate;
         AutoMergeCheckBox.IsChecked = request.AutoMergeAfterConversion;
-        AlbumTextBox.IsTabStop = !_keepAlbumLinkedToTitle;
-        ConfigureTabOrder(isFolderProject);
-        UpdateAlbumLinkPresentation();
+        if (_settingsManager is not null)
+        {
+            _settingsManager.DriveCircleChanged += GlobalSettingsManager_DriveCircleChanged;
+            _settingsManager.GenreOptionsChanged += GlobalSettingsManager_GenreOptionsChanged;
+        }
+        DriveCircleRow.Visibility = request.SourceKind == ProjectSetupSourceKind.Folder ? Visibility.Collapsed : Visibility.Visible;
+        DriveCircleCheckBox.IsChecked = _settingsManager?.Current.ExperimentalDriveRoundEnabled == true;
+        ConfigureTabOrder(_modeProfile);
 
         _isInitializing = false;
         UpdatePreview();
 
         Loaded += (_, _) =>
         {
-            if (isFolderProject)
+            ProjectSetupPageNavigationBridge.Register(this);
+            UpdateSetupPageNavigationButtons();
+            UpdateOutputFolderBadge();
+
+            if (_modeProfile.ShowsProjectFolder)
             {
-                TitleTextBox.Focus();
-                TitleTextBox.SelectAll();
+                SetupTitleField.FocusEditorAndSelectAll();
             }
             else
             {
@@ -147,47 +319,187 @@ public partial class DiscProjectSetupDialog : Window
         };
     }
 
-    private void ConfigureTabOrder(bool isFolderProject)
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (isFolderProject)
-        {
-            TitleTextBox.TabIndex = 0;
-            AlbumTextBox.TabIndex = 1;
-            AuthorTextBox.TabIndex = 2;
-            NarratorTextBox.TabIndex = 3;
-            GenreTextBox.TabIndex = 4;
-            StartProjectButton.TabIndex = 5;
-            SortTracksButton.TabIndex = 6;
-            PresetComboBox.TabIndex = 7;
-            ParallelJobsTextBox.TabIndex = 8;
-            OutputExtensionComboBox.TabIndex = 9;
-            ChooseOutputFolderButton.TabIndex = 10;
-            FileNameTemplateTextBox.TabIndex = 11;
-            AutoMergeCheckBox.TabIndex = 12;
-            DiscCountTextBox.TabIndex = 13;
+        if (e.Handled || Keyboard.Modifiers != ModifierKeys.None)
             return;
+
+        var direction = e.Key switch
+        {
+            Key.Left => -1,
+            Key.Right => 1,
+            _ => 0
+        };
+        if (direction == 0 || ShouldPreserveArrowKeyForFocusedEditor(e.OriginalSource))
+            return;
+
+        if (NavigateSetupPage(direction))
+            e.Handled = true;
+    }
+
+    private static bool ShouldPreserveArrowKeyForFocusedEditor(object? source)
+    {
+        for (var current = source as DependencyObject; current is not null; current = GetInputAncestor(current))
+        {
+            if (current is ConceptMetadataFieldControl or TextBoxBase or PasswordBox or ComboBox or Selector or Slider or ScrollBar)
+                return true;
         }
 
-        DiscCountTextBox.TabIndex = 0;
-        PresetComboBox.TabIndex = 1;
-        ParallelJobsTextBox.TabIndex = 2;
-        OutputExtensionComboBox.TabIndex = 3;
-        ChooseOutputFolderButton.TabIndex = 4;
-        FileNameTemplateTextBox.TabIndex = 5;
-        AutoMergeCheckBox.TabIndex = 6;
-        TitleTextBox.TabIndex = 7;
-        AlbumTextBox.TabIndex = 8;
-        AuthorTextBox.TabIndex = 9;
-        NarratorTextBox.TabIndex = 10;
-        GenreTextBox.TabIndex = 11;
-        StartProjectButton.TabIndex = 12;
-        SortTracksButton.TabIndex = 13;
+        return false;
     }
+
+    private static DependencyObject? GetInputAncestor(DependencyObject current)
+    {
+        if (current is Visual or System.Windows.Media.Media3D.Visual3D)
+        {
+            var visualParent = VisualTreeHelper.GetParent(current);
+            if (visualParent is not null)
+                return visualParent;
+        }
+
+        return current is FrameworkContentElement contentElement
+            ? contentElement.Parent
+            : LogicalTreeHelper.GetParent(current);
+    }
+
+    private void PreviousSetupPageButton_Click(object sender, RoutedEventArgs e) => NavigateSetupPage(-1);
+
+    private void NextSetupPageButton_Click(object sender, RoutedEventArgs e) => NavigateSetupPage(1);
+
+    internal bool CanNavigateSetupPage(int direction)
+    {
+        var target = _currentSetupPage + Math.Sign(direction);
+        return !_isSetupPageAnimating && target is >= 0 and <= 1;
+    }
+
+    internal bool NavigateSetupPage(int direction)
+    {
+        if (!CanNavigateSetupPage(direction))
+            return false;
+
+        var targetPage = _currentSetupPage + Math.Sign(direction);
+        var outgoing = _currentSetupPage == 0 ? SetupPage0 : SetupPage1;
+        var incoming = targetPage == 0 ? SetupPage0 : SetupPage1;
+        var outgoingTransform = _currentSetupPage == 0 ? SetupPage0Transform : SetupPage1Transform;
+        var incomingTransform = targetPage == 0 ? SetupPage0Transform : SetupPage1Transform;
+        var distance = Math.Max(1, SetupPageHost.ActualWidth);
+        var directionSign = targetPage > _currentSetupPage ? 1d : -1d;
+        var durationMs = AnimationTimingSettingsService.Normalize(
+            _getProjectSetupPageAnimationMilliseconds());
+
+        _isSetupPageAnimating = true;
+        ProjectSetupPageNavigationBridge.NotifyNavigationStateChanged();
+        outgoing.IsHitTestVisible = false;
+        incoming.Visibility = Visibility.Visible;
+        incoming.IsHitTestVisible = false;
+        incomingTransform.X = directionSign * distance;
+
+        if (durationMs == 0)
+        {
+            CompleteSetupPageNavigation(targetPage, outgoing, incoming, outgoingTransform, incomingTransform);
+            return true;
+        }
+
+        var duration = TimeSpan.FromMilliseconds(durationMs);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var outgoingAnimation = new DoubleAnimation(0, -directionSign * distance, duration) { EasingFunction = easing };
+        var incomingAnimation = new DoubleAnimation(directionSign * distance, 0, duration) { EasingFunction = easing };
+        incomingAnimation.Completed += (_, _) =>
+            CompleteSetupPageNavigation(targetPage, outgoing, incoming, outgoingTransform, incomingTransform);
+        outgoingTransform.BeginAnimation(TranslateTransform.XProperty, outgoingAnimation, HandoffBehavior.SnapshotAndReplace);
+        incomingTransform.BeginAnimation(TranslateTransform.XProperty, incomingAnimation, HandoffBehavior.SnapshotAndReplace);
+        UpdateSetupPageNavigationButtons();
+        return true;
+    }
+
+    private void CompleteSetupPageNavigation(
+        int targetPage,
+        FrameworkElement outgoing,
+        FrameworkElement incoming,
+        TranslateTransform outgoingTransform,
+        TranslateTransform incomingTransform)
+    {
+        outgoingTransform.BeginAnimation(TranslateTransform.XProperty, null);
+        incomingTransform.BeginAnimation(TranslateTransform.XProperty, null);
+        outgoingTransform.X = 0;
+        incomingTransform.X = 0;
+        outgoing.Visibility = Visibility.Collapsed;
+        outgoing.IsHitTestVisible = false;
+        incoming.Visibility = Visibility.Visible;
+        incoming.IsHitTestVisible = true;
+        _currentSetupPage = targetPage;
+        _isSetupPageAnimating = false;
+        UpdateSetupPageNavigationButtons();
+        ProjectSetupPageNavigationBridge.NotifyNavigationStateChanged();
+    }
+
+    private void UpdateSetupPageNavigationButtons()
+    {
+        PreviousSetupPageButton.IsEnabled = CanNavigateSetupPage(-1);
+        NextSetupPageButton.IsEnabled = CanNavigateSetupPage(1);
+    }
+
+    private void OnTitleAlbumBindingChanged()
+    {
+        QueueMetadataFieldRefresh();
+        if (_metadataFields.TitleAlbumBinding.IsActive)
+            return;
+
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            new Action(() =>
+            {
+                if (!_metadataFields.TitleAlbumBinding.IsActive &&
+                    _metadataFields.Album.CanEditValues &&
+                    _metadataFields.Album.Values.Count == 0)
+                {
+                    SetupAlbumField.TryOpenMinimalEditor();
+                }
+            }));
+    }
+
+    private void ApplySourceModeProfile(ProjectSetupModeProfile profile)
+    {
+        DiscCountLabel.Visibility = profile.ShowsDiscCount ? Visibility.Visible : Visibility.Collapsed;
+        DiscCountPanel.Visibility = profile.ShowsDiscCount ? Visibility.Visible : Visibility.Collapsed;
+        ProjectFolderLabel.Visibility = profile.ShowsProjectFolder ? Visibility.Visible : Visibility.Collapsed;
+        ProjectFolderButton.Visibility = profile.ShowsProjectFolder ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ConfigureTabOrder(ProjectSetupModeProfile profile)
+    {
+        var index = 0;
+        if (profile.ShowsDiscCount)
+            DiscCountTextBox.TabIndex = index++;
+
+        ParallelJobsTextBox.TabIndex = index++;
+        OutputExtensionComboBox.TabIndex = index++;
+        PresetComboBox.TabIndex = index++;
+        AutoMergeCheckBox.TabIndex = index++;
+        DriveCircleCheckBox.TabIndex = index++;
+        OutputFolderStateChipButton.TabIndex = index++;
+        OpenOutputFolderButton.TabIndex = index++;
+        FileNameTemplateTextBox.TabIndex = index++;
+        SetupTitleField.TabIndex = index++;
+        SetupAlbumField.TabIndex = index++;
+        SetupAuthorField.TabIndex = index++;
+        SetupNarratorField.TabIndex = index++;
+        SetupGenreField.TabIndex = index++;
+        SetupSeriesField.TabIndex = index++;
+        SetupAbridgedStatusField.TabIndex = index++;
+        SetupWorkTypeField.TabIndex = index++;
+        SetupYearField.TabIndex = index++;
+        SetupIsbnField.TabIndex = index++;
+        SetupDescriptionField.TabIndex = index++;
+        StartProjectButton.TabIndex = index++;
+        SortTracksButton.TabIndex = index;
+    }
+
 
     private static string BuildFolderDisplayName(string folderPath)
     {
         if (string.IsNullOrWhiteSpace(folderPath))
-            return "Quellordner";
+            return LocalizationText.Get("Disc.Setup.SourceFolder");
 
         var trimmed = folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return Path.GetFileName(trimmed) is { Length: > 0 } name ? name : folderPath;
@@ -215,7 +527,19 @@ public partial class DiscProjectSetupDialog : Window
     {
         if (!CaptureResult(validateForStart: true))
             return;
+        if (!TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent.Exit))
+            return;
+        if (_request.ConfirmDiscCountOnStart && _modeProfile.ShowsDiscCount && DiscCountState.RequiresStartConfirmation && _shouldWarnDiscCount())
+        {
+            var confirmation = new DiscCountConfirmationDialog(DiscCountState);
+            if (ModalDialogService.ShowDialog(confirmation, this) != true || confirmation.Result != AppDialogResult.Ok)
+                return;
+            if (!CaptureResult(validateForStart: true))
+                return;
+            _setAlwaysWarnDiscCount?.Invoke(confirmation.AlwaysWarn);
+        }
 
+        _setupDraftExitApproved = true;
         DialogResult = true;
         Close();
     }
@@ -223,13 +547,12 @@ public partial class DiscProjectSetupDialog : Window
     private bool CaptureResult(bool validateForStart)
     {
         var discCount = 1;
-        if (_request.SourceKind != ProjectSetupSourceKind.Folder &&
-            (!int.TryParse(DiscCountTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out discCount) ||
-             discCount < _minimumDiscs || discCount > _maximumDiscs))
+        if (_modeProfile.ShowsDiscCount &&
+            !DiscCountState.TryGetValue(out discCount))
         {
             if (validateForStart)
             {
-                ShowError($"Bitte eine CD-Anzahl von {_minimumDiscs} bis {_maximumDiscs} eingeben.");
+                ShowError(LocalizationText.Format("Disc.Setup.DiscCountRange", _minimumDiscs, _maximumDiscs));
                 DiscCountTextBox.Focus();
                 DiscCountTextBox.SelectAll();
                 return false;
@@ -238,10 +561,10 @@ public partial class DiscProjectSetupDialog : Window
             discCount = Math.Clamp(_request.DefaultDiscCount, _minimumDiscs, _maximumDiscs);
         }
 
-        var preset = PresetComboBox.SelectedItem?.ToString() ?? _request.SelectedExportPreset;
+        var preset = _request.IsDiscResume ? _request.SelectedExportPreset : PresetComboBox.SelectedItem?.ToString() ?? _request.SelectedExportPreset;
         if (validateForStart && string.IsNullOrWhiteSpace(preset))
         {
-            ShowError("Bitte ein Export-Preset auswählen.");
+            ShowError(LocalizationText.Get("Disc.Setup.SelectPreset"));
             PresetComboBox.Focus();
             return false;
         }
@@ -251,7 +574,7 @@ public partial class DiscProjectSetupDialog : Window
         {
             if (validateForStart)
             {
-                ShowError("Bitte bei Parallel-Jobs „Auto“ oder eine Zahl von 1 bis 40 eingeben.");
+                ShowError(LocalizationText.Get("Disc.Setup.ParallelJobsRange"));
                 ParallelJobsTextBox.Focus();
                 ParallelJobsTextBox.SelectAll();
                 return false;
@@ -260,25 +583,21 @@ public partial class DiscProjectSetupDialog : Window
             parallelJobs = _request.ParallelJobs;
         }
 
-        var outputFolder = OutputFolderTextBox.Text.Trim();
-        if (validateForStart && string.IsNullOrWhiteSpace(outputFolder))
-        {
-            ShowError("Bitte einen Ausgabeordner auswählen.");
-            OutputFolderTextBox.Focus();
-            return false;
-        }
+        var outputFolder = _outputFolder.Trim();
+
+        AlignManagedCoverWithCommittedTitle();
 
         Result = new DiscProjectSetupResult(
-            discCount,
+            _request.IsDiscResume ? _request.DefaultDiscCount : discCount,
             preset,
             NormalizeParallelJobs(parallelJobs),
             GetSelectedOutputExtension(),
             outputFolder,
-            TitleTextBox.Text.Trim(),
-            AlbumTextBox.Text.Trim(),
-            AuthorTextBox.Text.Trim(),
-            NarratorTextBox.Text.Trim(),
-            GetGenreText(),
+            _metadataState.BookTitle.Trim(),
+            _metadataState.Album.Trim(),
+            _metadataState.Author.Trim(),
+            _metadataState.Narrator.Trim(),
+            _metadataState.Genre.Trim(),
             GetComboBoxText(FileNameTemplateTextBox).Trim(),
             _selectedCoverSourcePath,
             _processedCoverPath,
@@ -327,36 +646,366 @@ public partial class DiscProjectSetupDialog : Window
     {
         var dialog = new OpenFolderDialog
         {
-            Title = "Ausgabeordner auswählen",
+            Title = LocalizationText.Get("Disc.Setup.SelectOutputFolder"),
             Multiselect = false
         };
 
-        if (!string.IsNullOrWhiteSpace(OutputFolderTextBox.Text) &&
-            Directory.Exists(OutputFolderTextBox.Text))
-        {
-            dialog.InitialDirectory = OutputFolderTextBox.Text;
-        }
-        else
-        {
-            dialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        }
+        dialog.InitialDirectory = !string.IsNullOrWhiteSpace(_outputFolder) &&
+                                  Directory.Exists(_outputFolder)
+            ? _outputFolder
+            : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 
         if (dialog.ShowDialog(this) != true)
             return;
 
-        OutputFolderTextBox.Text = dialog.FolderName;
+        SetOutputFolder(dialog.FolderName, persistGlobally: true);
         ErrorText.Visibility = Visibility.Collapsed;
+    }
+
+    private void SetOutputFolder(string? outputFolder, bool persistGlobally)
+    {
+        _outputFolder = outputFolder?.Trim() ?? "";
+        OpenOutputFolderButton.IsEnabled =
+            !string.IsNullOrWhiteSpace(_outputFolder) && Directory.Exists(_outputFolder);
+        UpdateOutputFolderBadge();
+
+        if (persistGlobally && !string.IsNullOrWhiteSpace(_outputFolder))
+            _setOutputFolder?.Invoke(_outputFolder);
+    }
+
+    private void OpenOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_outputFolder) || !Directory.Exists(_outputFolder))
+        {
+            AppDialogService.Warning(
+                this,
+                LocalizationText.Get("Disc.Setup.FolderNotFound.Title"),
+                LocalizationText.Format("Disc.Setup.FolderNotFound.Message", _outputFolder));
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _outputFolder,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            AppDialogService.Warning(
+                this,
+                LocalizationText.Get("Disc.Setup.ExplorerFailed.Title"),
+                LocalizationText.Format("Disc.Setup.ExplorerFailed.Message", ex.Message));
+        }
+    }
+
+    private void OutputFolderStateChip_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateOutputFolderBadge();
+    }
+
+    private void UpdateOutputFolderBadge()
+    {
+        var availableWidth = OutputFolderBadgeTextBlock.ActualWidth;
+        if (availableWidth <= 0)
+            availableWidth = Math.Max(0, OutputFolderStateChip.ActualWidth - 18);
+
+        OutputFolderBadgeTextBlock.Text = OutputFolderBadgeDisplayService.BuildText(
+            _outputFolder,
+            availableWidth,
+            MeasureOutputFolderBadgeText);
+    }
+
+    private double MeasureOutputFolderBadgeText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        var dpi = VisualTreeHelper.GetDpi(OutputFolderBadgeTextBlock).PixelsPerDip;
+        var formattedText = new FormattedText(
+            text,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            new Typeface(
+                OutputFolderBadgeTextBlock.FontFamily,
+                OutputFolderBadgeTextBlock.FontStyle,
+                OutputFolderBadgeTextBlock.FontWeight,
+                OutputFolderBadgeTextBlock.FontStretch),
+            OutputFolderBadgeTextBlock.FontSize,
+            OutputFolderBadgeTextBlock.Foreground,
+            dpi);
+
+        return formattedText.WidthIncludingTrailingWhitespace;
+    }
+
+    private void ConfigureEmbeddedMetadataFields()
+    {
+        SetupTitleField.DataContext = _metadataFields.Title;
+        ConceptMetadataFieldBindingAccessory.Configure(
+            SetupAlbumField,
+            _metadataFields.Album,
+            _metadataFields.TitleAlbumBinding);
+        SetupAuthorField.DataContext = _metadataFields.Authors;
+        SetupNarratorField.DataContext = _metadataFields.Narrators;
+        SetupGenreField.DataContext = _metadataFields.Genres;
+        SetupSeriesField.DataContext = _seriesFieldState;
+        SetupAbridgedStatusField.DataContext = _abridgedStatusFieldState;
+        SetupWorkTypeField.DataContext = _workTypeFieldState;
+        SetupYearField.DataContext = _yearFieldState;
+        SetupIsbnField.DataContext = _isbnField;
+        SetupDescriptionField.DataContext = _descriptionFieldState;
+        SetupCompatibilityField.DataContext = this;
+
+        foreach (var field in new[]
+        {
+            SetupTitleField,
+            SetupAlbumField,
+            SetupAuthorField,
+            SetupNarratorField,
+            SetupGenreField
+        })
+        {
+            field.MinimalPresentationScope = _minimalPresentationScope;
+        }
+    }
+
+    private ConceptSpecialMetadataFieldState CreateSpecialFieldState(ProjectMetadataField field) =>
+        new(
+            _metadataState,
+            _metadataPreferences,
+            field,
+            _saveMetadata,
+            _metadataPreferencesChanged,
+            _candidateSession);
+
+    private void RefreshEmbeddedMetadataFields()
+    {
+        _metadataFields.Refresh();
+        _isbnField.Refresh();
+        _seriesFieldState.RefreshCanonical();
+        _descriptionFieldState.RefreshCanonical();
+        _abridgedStatusFieldState.RefreshCanonical();
+        _workTypeFieldState.RefreshCanonical();
+        _yearFieldState.RefreshCanonical();
+        OnPropertyChanged(nameof(CompatibilityFieldText));
+        OnPropertyChanged(nameof(IsCompatibilityDescriptionEnabled));
+        RefreshEmbeddedMetadataCandidates();
+        UpdatePreview();
+    }
+
+    private void RefreshEmbeddedMetadataCandidates()
+    {
+        var snapshots = _sourceSnapshotsProvider();
+        var decisions = _metadataFieldDecisionsProvider();
+        var bindings = new[] { _metadataFields.TitleAlbumBinding };
+
+        foreach (var field in _metadataFields.Fields.Append(_isbnField))
+        {
+            field.SetCandidates(ConceptMetadataFieldCandidateComposer.Build(
+                field,
+                _metadataState,
+                snapshots,
+                decisions,
+                _genres,
+                _candidateSession,
+                _candidateService,
+                bindings));
+        }
+        var allCandidates = _candidateService.Build(snapshots);
+        _seriesFieldState.SetCandidates(_seriesFieldState.BuildCandidates(allCandidates));
+        _abridgedStatusFieldState.SetCandidates(_abridgedStatusFieldState.BuildCandidates(allCandidates));
+        _workTypeFieldState.SetCandidates(_workTypeFieldState.BuildCandidates(allCandidates));
+    }
+
+    private void QueueMetadataFieldRefresh()
+    {
+        if (_metadataRefreshQueued || Dispatcher.HasShutdownStarted)
+            return;
+
+        _metadataRefreshQueued = true;
+        _ = Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() =>
+            {
+                _metadataRefreshQueued = false;
+                RefreshEmbeddedMetadataFields();
+            }));
+    }
+
+    private void MetadataState_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProjectMetadataState.CanonicalMetadata) &&
+            !ReferenceEquals(_observedCanonicalMetadata, _metadataState.CanonicalMetadata))
+        {
+            _observedCanonicalMetadata.PropertyChanged -= CanonicalMetadata_PropertyChanged;
+            _observedCanonicalMetadata = _metadataState.CanonicalMetadata;
+            _observedCanonicalMetadata.PropertyChanged += CanonicalMetadata_PropertyChanged;
+            QueueMetadataFieldRefresh();
+        }
+
+        if (e.PropertyName is nameof(ProjectMetadataState.CoverSourcePath) or
+            nameof(ProjectMetadataState.ProcessedCoverPath) or
+            nameof(ProjectMetadataState.CoverPreviewSource))
+        {
+            _selectedCoverSourcePath = _metadataState.CoverSourcePath;
+            _processedCoverPath = _metadataState.ProcessedCoverPath;
+            SetCoverPreview(_metadataState.CoverPreviewSource);
+        }
+
+        if (e.PropertyName is nameof(ProjectMetadataState.BookTitle) or
+            nameof(ProjectMetadataState.Album) or
+            nameof(ProjectMetadataState.Author) or
+            nameof(ProjectMetadataState.Narrator) or
+            nameof(ProjectMetadataState.Genre) or
+            nameof(ProjectMetadataState.Series))
+        {
+            QueueMetadataFieldRefresh();
+        }
+    }
+
+    private void CanonicalMetadata_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ProjectMetadataField.Description) or
+            nameof(ProjectMetadataField.Series) or
+            nameof(ProjectMetadataField.AbridgedStatus) or
+            nameof(ProjectMetadataField.AudioWorkType) or
+            nameof(ProjectMetadataField.Year) or
+            nameof(ProjectMetadataField.ISBN))
+        {
+            QueueMetadataFieldRefresh();
+        }
+    }
+
+    private void DiscProjectSetupDialog_Activated(object? sender, EventArgs e)
+    {
+        if (!_isInitializing)
+            QueueMetadataFieldRefresh();
+    }
+
+    private void OnPropertyChanged(string propertyName) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+    private enum SetupDraftLeaveIntent
+    {
+        Exit,
+        Metadata
+    }
+
+    internal static ConceptMetadataFieldViewModel[] GetActiveSetupDrafts(IEnumerable<ConceptMetadataFieldViewModel> fields) =>
+        fields.Where(field => field.HasDraft).ToArray();
+
+    internal static void DiscardSetupDrafts(IEnumerable<ConceptMetadataFieldViewModel> fields)
+    {
+        foreach (var field in fields.Where(field => field.HasDraft))
+            field.DiscardDraft();
+    }
+
+    private sealed record SetupDraftParticipant(string Label, Func<bool> HasDraft, Action DiscardDraft);
+
+    private SetupDraftParticipant[] GetActiveSetupDraftParticipants()
+    {
+        var participants = _metadataFields.Fields
+            .Select(field => new SetupDraftParticipant(field.Label, () => field.HasDraft, field.DiscardDraft))
+            .ToList();
+        participants.Add(new SetupDraftParticipant(_isbnField.Label, () => _isbnField.HasDraft, _isbnField.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_abridgedStatusFieldState.Label, () => _abridgedStatusFieldState.HasDraft, _abridgedStatusFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_workTypeFieldState.Label, () => _workTypeFieldState.HasDraft, _workTypeFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_yearFieldState.Label, () => _yearFieldState.HasDraft, _yearFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_seriesFieldState.SeriesLabel, () => _seriesFieldState.HasSeriesNameDraft, _seriesFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_seriesFieldState.SeriesPartLabel, () => _seriesFieldState.HasSeriesPartDraft, _seriesFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_descriptionFieldState.DescriptionLabel, () => _descriptionFieldState.HasDraft, _descriptionFieldState.DiscardDraft));
+        return participants.Where(item => item.HasDraft()).ToArray();
+    }
+
+    private bool TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent intent)
+    {
+        var activeDrafts = GetActiveSetupDraftParticipants();
+        if (activeDrafts.Length == 0)
+            return true;
+
+        if (!_metadataPreferences.WarnBeforeDiscardingConceptDrafts)
+        {
+            foreach (var draft in activeDrafts)
+                draft.DiscardDraft();
+            RefreshEmbeddedMetadataFields();
+            return true;
+        }
+
+        var continueText = intent == SetupDraftLeaveIntent.Metadata
+            ? LocalizationText.Get("Disc.Setup.DiscardAndOpenMetadata")
+            : LocalizationText.Get("Disc.Setup.CloseAnyway");
+        var result = AppDialogService.Show(
+            this,
+            "BookStitch",
+            LocalizationText.Get("Disc.Setup.UnconfirmedInput"),
+            ConceptDraftWarningPresentation.BuildMessage(activeDrafts.Select(draft => draft.Label)),
+            AppDialogKind.Warning,
+            buttons:
+            [
+                new AppDialogButton(LocalizationText.Get("Disc.Setup.Back"), AppDialogResult.Cancel, IsDefault: true, IsCancel: true),
+                new AppDialogButton(continueText, AppDialogResult.Yes, IsDanger: true)
+            ]);
+        if (result != AppDialogResult.Yes)
+            return false;
+
+        foreach (var draft in activeDrafts)
+            draft.DiscardDraft();
+        RefreshEmbeddedMetadataFields();
+        return true;
+    }
+
+    private void DiscProjectSetupDialog_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_setupDraftExitApproved)
+            return;
+
+        if (!TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent.Exit))
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        CaptureResult(validateForStart: false);
+        _setupDraftExitApproved = true;
+    }
+
+    private void PreviewAppearanceChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.CheckAccess() && IsLoaded && string.IsNullOrWhiteSpace(_metadataState.ProcessedCoverPath) && !File.Exists(_selectedCoverSourcePath))
+            SetDefaultCoverPreview();
+    }
+
+    private void DiscProjectSetupDialog_Closed(object? sender, EventArgs e)
+    {
+        WeakEventManager<DeveloperAppearancePreview, EventArgs>.RemoveHandler(DeveloperToolsCommands.AppearancePreview,
+            nameof(DeveloperAppearancePreview.Changed), PreviewAppearanceChanged);
+        if (_settingsManager is not null)
+        {
+            _settingsManager.DriveCircleChanged -= GlobalSettingsManager_DriveCircleChanged;
+            _settingsManager.GenreOptionsChanged -= GlobalSettingsManager_GenreOptionsChanged;
+        }
+        ProjectSetupPageNavigationBridge.Unregister(this);
+        _metadataState.PropertyChanged -= MetadataState_PropertyChanged;
+        _observedCanonicalMetadata.PropertyChanged -= CanonicalMetadata_PropertyChanged;
+        Activated -= DiscProjectSetupDialog_Activated;
+        Closing -= DiscProjectSetupDialog_Closing;
     }
 
     private void CoverBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        e.Handled = true;
         ChooseCover();
     }
 
     private void CoverBorder_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_processedCoverPath))
-            e.Handled = true;
+        if (sender is Border { ContextMenu: { } contextMenu } &&
+            contextMenu.Items.OfType<MenuItem>().FirstOrDefault() is { } removeCoverItem)
+        {
+            removeCoverItem.IsEnabled = !string.IsNullOrWhiteSpace(_processedCoverPath);
+        }
     }
 
     private void RemoveCover_Click(object sender, RoutedEventArgs e)
@@ -364,80 +1013,91 @@ public partial class DiscProjectSetupDialog : Window
         if (string.IsNullOrWhiteSpace(_processedCoverPath))
             return;
 
+        try
+        {
+            EmbeddedCoverService.RecordUserRemoval(_metadataState.CanonicalMetadata, _selectedCoverSourcePath);
+        }
+        catch (Exception ex)
+        {
+            AppDialogService.Error(this, LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                LocalizationText.Get("Disc.Setup.CoverFailed.Message"), new[] { ex.Message });
+            return;
+        }
         _selectedCoverSourcePath = "";
         _processedCoverPath = "";
+        _metadataState.ApplyCoverMetadata("", "", MetadataOrigin.User);
         SetDefaultCoverPreview();
-        _previewCoverChanged?.Invoke("", "");
     }
 
     private void ChooseCover_Click(object sender, RoutedEventArgs e)
     {
+        e.Handled = true;
         ChooseCover();
     }
 
     private void ChooseCover()
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Cover auswählen",
-            Filter = "Bilddateien (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp|Alle Dateien (*.*)|*.*",
-            Multiselect = false
-        };
-
-        var currentCoverFolder = !string.IsNullOrWhiteSpace(_selectedCoverSourcePath) &&
-                                 File.Exists(_selectedCoverSourcePath)
-            ? Path.GetDirectoryName(_selectedCoverSourcePath)
-            : null;
-
-        dialog.InitialDirectory = GetExistingFolderOrDesktop(
-            currentCoverFolder,
-            _request.LastCoverFolder);
-
-        if (dialog.ShowDialog(this) != true)
+        if (_isCoverDialogOpen)
             return;
 
-        var selectedFolder = Path.GetDirectoryName(dialog.FileName);
-        if (!string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder))
-            _setLastCoverFolder?.Invoke(selectedFolder);
-
-        ProcessSelectedCover(dialog.FileName);
-    }
-
-    private static string GetExistingFolderOrDesktop(params string?[] candidates)
-    {
-        foreach (var candidate in candidates)
+        _isCoverDialogOpen = true;
+        try
         {
-            if (!string.IsNullOrWhiteSpace(candidate) && Directory.Exists(candidate))
-                return candidate;
-        }
+            var selectedFile = _coverPickerService.ChooseCoverFile(
+                this,
+                new CoverPickerContext(
+                    _request.SourceKind,
+                    _request.SourceFolder,
+                    _selectedCoverSourcePath,
+                    _request.LastCoverFolder));
+            if (string.IsNullOrWhiteSpace(selectedFile))
+                return;
 
-        return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var selectedFolder = Path.GetDirectoryName(selectedFile);
+            if (!string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder))
+                _setLastCoverFolder?.Invoke(selectedFolder);
+
+            ProcessSelectedCover(selectedFile);
+        }
+        finally
+        {
+            Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                new System.Action(() => _isCoverDialogOpen = false));
+        }
     }
 
     private void ProcessSelectedCover(string sourcePath)
     {
         try
         {
-            var result = _coverImageService.CreateProcessedCover(sourcePath, _coverWorkFolder);
+            var result = _coverImageService.CreateProcessedCover(
+                sourcePath,
+                _coverWorkFolder,
+                _metadataState.BookTitle.Trim(),
+                _getCoverWarningThresholdPixels());
+            EmbeddedCoverService.RecordUserSelection(_metadataState.CanonicalMetadata, result.SourcePath);
             _selectedCoverSourcePath = result.SourcePath;
             _processedCoverPath = result.ProcessedJpegPath;
-            SetCoverPreview(result.ProcessedJpegPath);
-            _previewCoverChanged?.Invoke(_selectedCoverSourcePath, _processedCoverPath);
+            _metadataState.ApplyCoverMetadata(result.SourcePath, result.ProcessedJpegPath, MetadataOrigin.User);
+            SetCoverPreview(_metadataState.CoverPreviewSource);
 
             if (!string.IsNullOrWhiteSpace(result.Warning))
             {
-                AppDialogService.Warning(
+                AppDialogService.CoverWarning(
                     this,
-                    "Cover übernommen",
-                    result.Warning);
+                    LocalizationText.Get("Disc.Setup.CoverAccepted"),
+                    result.Warning,
+                    _getCoverWarningThresholdPixels(),
+                    _setCoverWarningThresholdPixels);
             }
         }
         catch (Exception ex)
         {
             AppDialogService.Error(
                 this,
-                "Cover konnte nicht übernommen werden",
-                "Das Coverbild konnte nicht verarbeitet werden.",
+                LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                LocalizationText.Get("Disc.Setup.CoverFailed.Message"),
                 new[] { ex.Message });
         }
     }
@@ -453,16 +1113,21 @@ public partial class DiscProjectSetupDialog : Window
         try
         {
             var image = new BitmapImage();
+            if (File.Exists(filePath)) CoverInputSafety.ValidateFile(filePath);
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.UriSource = File.Exists(filePath)
                 ? new Uri(filePath, UriKind.Absolute)
-                : new Uri("pack://application:,,,/Assets/Icons/BookStitchLogo-Round.png", UriKind.Absolute);
+                : new Uri(
+                    CoverPreviewPresentationService.GetPlaceholderSource(_getAppearanceMode()),
+                    UriKind.Relative);
             image.EndInit();
             image.Freeze();
 
             CoverPreviewImage.Source = image;
-            CoverHintText.Text = File.Exists(filePath) ? "Cover ändern" : "Cover wählen";
+            CoverHintBorder.Visibility = File.Exists(filePath)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
         catch
         {
@@ -472,10 +1137,29 @@ public partial class DiscProjectSetupDialog : Window
 
     private void SetDefaultCoverPreview()
     {
-        var image = new BitmapImage(new Uri("pack://application:,,,/Assets/Icons/BookStitchLogo-Round.png", UriKind.Absolute));
+        CoverPreviewImage.Source = TryFindResource(AppearanceSettingsService.CoverPlaceholderImageSourceKey) as ImageSource ??
+            LoadCoverPlaceholderFallback();
+        CoverHintBorder.Visibility = Visibility.Visible;
+    }
+
+    private ImageSource LoadCoverPlaceholderFallback()
+    {
+        var image = new BitmapImage(
+            new Uri(
+                CoverPreviewPresentationService.GetPlaceholderSource(_getAppearanceMode()),
+                UriKind.Relative));
         image.Freeze();
-        CoverPreviewImage.Source = image;
-        CoverHintText.Text = "Cover wählen";
+        return image;
+    }
+
+    private void MetadataButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent.Metadata))
+            return;
+
+        _openMetadataDialog?.Invoke(this);
+        RefreshEmbeddedMetadataFields();
+        e.Handled = true;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -484,14 +1168,13 @@ public partial class DiscProjectSetupDialog : Window
         {
             var settings = _openAdvancedSettings(this);
             AutoMergeCheckBox.IsChecked = settings.AutoMergeAfterConversion;
-            _keepAlbumLinkedToTitle = settings.KeepAlbumLinkedToTitle;
+            DriveCircleCheckBox.IsChecked = _settingsManager?.Current.ExperimentalDriveRoundEnabled == true;
             SelectOutputExtension(settings.OutputExtension);
             FileNameTemplateTextBox.Text = settings.FileNameTemplate;
-            if (_keepAlbumLinkedToTitle)
-                AlbumTextBox.Text = TitleTextBox.Text;
-            AlbumTextBox.IsTabStop = !_keepAlbumLinkedToTitle;
-            UpdateAlbumLinkPresentation();
+            SetOutputFolder(settings.OutputFolder, persistGlobally: false);
             UpdatePreview();
+            if (string.IsNullOrWhiteSpace(_metadataState.ProcessedCoverPath))
+                SetDefaultCoverPreview();
         }
         Activate();
         Focus();
@@ -501,6 +1184,12 @@ public partial class DiscProjectSetupDialog : Window
     {
         if (string.IsNullOrWhiteSpace(_request.SourceFolder) || !Directory.Exists(_request.SourceFolder))
             return;
+
+        if(ProjectFolderOpenService.IsManagedFolder(_request.SourceFolder))
+        {
+            ProjectFolderOpenService.Open(this,_request.SourceFolder,_settingsManager);
+            return;
+        }
 
         try
         {
@@ -512,48 +1201,73 @@ public partial class DiscProjectSetupDialog : Window
         }
         catch (Exception ex)
         {
-            AppDialogService.Warning(this, "Quellordner konnte nicht geöffnet werden", ex.Message);
+            AppDialogService.Warning(this, LocalizationText.Get("Disc.Setup.SourceFolderOpenFailed"), ex.Message);
         }
     }
 
-    private void AlbumLabel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        _keepAlbumLinkedToTitle = !_keepAlbumLinkedToTitle;
-        _setAlbumLink?.Invoke(_keepAlbumLinkedToTitle);
-        AlbumTextBox.IsTabStop = !_keepAlbumLinkedToTitle;
-        if (_keepAlbumLinkedToTitle)
-            AlbumTextBox.Text = TitleTextBox.Text;
-        UpdateAlbumLinkPresentation();
-        e.Handled = true;
-    }
 
-    private void UpdateAlbumLinkPresentation()
+    private static ProjectMetadataState CreateMetadataState(ProjectSetupDialogRequest request)
     {
-        AlbumLabel.ToolTip = _keepAlbumLinkedToTitle
-            ? "Aktuell gekoppelt. Klicken, um Titel und Album getrennt zu bearbeiten."
-            : "Aktuell getrennt. Klicken, um Titel und Album automatisch zu koppeln.";
-    }
+        var metadata = new ProjectMetadata();
+        SetSourceScalar(metadata, ProjectMetadataField.Title, request.BookTitle);
+        SetSourceScalar(metadata, ProjectMetadataField.Album, request.Album);
+        SetSourceList(metadata, ProjectMetadataField.Authors, request.Author);
+        SetSourceList(metadata, ProjectMetadataField.Narrators, request.Narrator);
+        SetSourceList(
+            metadata,
+            ProjectMetadataField.Genres,
+            GenreListService.IsSelectableGenre(request.Genre)
+                ? request.Genre
+                : GenreListService.GetDefaultGenre(request.UsePrivateGenreList));
 
-    private void TitleTextBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_keepAlbumLinkedToTitle && !_isSynchronizingTitleAndAlbum)
+        var coverSourcePath = AppearanceAssetCatalog.IsCoverPlaceholderPath(request.CoverSourcePath)
+            ? ""
+            : request.CoverSourcePath ?? "";
+        var previewSource = AppearanceAssetCatalog.IsCoverPlaceholderPath(request.CoverPreviewSource)
+            ? ""
+            : request.CoverPreviewSource ?? "";
+        var state = new ProjectMetadataState
         {
-            _isSynchronizingTitleAndAlbum = true;
-            AlbumTextBox.Text = TitleTextBox.Text;
-            _isSynchronizingTitleAndAlbum = false;
-        }
-        UpdatePreview();
+            CoverSourcePath = coverSourcePath,
+            ProcessedCoverPath = !string.IsNullOrWhiteSpace(previewSource) && File.Exists(previewSource)
+                ? previewSource
+                : "",
+            CoverPreviewSource = previewSource
+        };
+        state.ApplyCanonicalMetadata(metadata);
+        return state;
     }
 
-    private void AlbumTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    private static void SetSourceScalar(ProjectMetadata metadata, ProjectMetadataField field, string? value)
     {
-        if (_keepAlbumLinkedToTitle && !_isSynchronizingTitleAndAlbum)
+        if (!string.IsNullOrWhiteSpace(value))
+            metadata.SetValue(field, value, MetadataOrigin.SourceAggregation);
+    }
+
+    private static void SetSourceList(ProjectMetadata metadata, ProjectMetadataField field, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
         {
-            _isSynchronizingTitleAndAlbum = true;
-            TitleTextBox.Text = AlbumTextBox.Text;
-            _isSynchronizingTitleAndAlbum = false;
+            metadata.SetValue<IReadOnlyList<string>>(
+                field,
+                [value.Trim()],
+                MetadataOrigin.SourceAggregation);
         }
-        UpdatePreview();
+    }
+
+    private void AlignManagedCoverWithCommittedTitle()
+    {
+        if (string.IsNullOrWhiteSpace(_processedCoverPath) || !File.Exists(_processedCoverPath))
+            return;
+
+        var alignedPath = _coverImageService.EnsureManagedCoverForTitle(_processedCoverPath, _metadataState.BookTitle);
+        if (string.Equals(alignedPath, _processedCoverPath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _processedCoverPath = alignedPath;
+        var origin = _metadataState.CanonicalMetadata.Cover.Origin;
+        _metadataState.ApplyCoverMetadata(_selectedCoverSourcePath, alignedPath, origin);
+        SetCoverPreview(_metadataState.CoverPreviewSource);
     }
 
     private void ShowError(string message)
@@ -562,46 +1276,30 @@ public partial class DiscProjectSetupDialog : Window
         ErrorText.Visibility = Visibility.Visible;
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    private void SortTracksButton_Click(object sender, RoutedEventArgs e)
     {
         CaptureResult(validateForStart: false);
+        if (!TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent.Exit))
+            return;
+
+        _setupDraftExitApproved = true;
         DialogResult = false;
-        Close();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!TryResolveSetupDraftsBeforeLeaving(SetupDraftLeaveIntent.Exit))
+            return;
+
         CaptureResult(validateForStart: false);
+        _setupDraftExitApproved = true;
         DialogResult = false;
         Close();
-    }
-
-    private void NumberTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
-    {
-        e.Handled = !e.Text.All(char.IsDigit);
     }
 
     private void ParallelJobsTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         e.Handled = !e.Text.All(ch => char.IsDigit(ch) || char.IsLetter(ch));
-    }
-
-    private void DiscCountTextBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Up)
-        {
-            StepDiscCount(+1);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Down)
-        {
-            StepDiscCount(-1);
-            e.Handled = true;
-        }
-        else
-        {
-            Input_KeyDown(sender, e);
-        }
     }
 
     private void ParallelJobsTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -616,16 +1314,6 @@ public partial class DiscProjectSetupDialog : Window
             StepParallelJobs(-1);
             e.Handled = true;
         }
-        else
-        {
-            Input_KeyDown(sender, e);
-        }
-    }
-
-    private void DiscCountTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        StepDiscCount(e.Delta > 0 ? +1 : -1);
-        e.Handled = true;
     }
 
     private void ParallelJobsTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -634,31 +1322,27 @@ public partial class DiscProjectSetupDialog : Window
         e.Handled = true;
     }
 
+    private void GlobalSettingsManager_GenreOptionsChanged(object? sender, EventArgs e)
+    {
+        _genres = GenreListService.GetGenres(_settingsManager!.Current);
+        RefreshEmbeddedMetadataCandidates();
+    }
+
+    private void GlobalSettingsManager_DriveCircleChanged(object? sender, EventArgs e)
+        => DriveCircleCheckBox.IsChecked = _settingsManager!.DriveCircleEnabled;
+
+    private void DriveCircleCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializing || _settingsManager is null) return;
+        _settingsManager.DriveCircleEnabled = DriveCircleCheckBox.IsChecked == true;
+    }
+
     private void AutoMergeCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         if (_isInitializing)
             return;
 
         _setAutoMerge?.Invoke(AutoMergeCheckBox.IsChecked == true);
-    }
-
-    private void Input_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-        {
-            OkButton_Click(sender, e);
-            e.Handled = true;
-        }
-    }
-
-    private void IncreaseDiscCount_Click(object sender, RoutedEventArgs e)
-    {
-        StepDiscCount(+1);
-    }
-
-    private void DecreaseDiscCount_Click(object sender, RoutedEventArgs e)
-    {
-        StepDiscCount(-1);
     }
 
     private void IncreaseParallelJobs_Click(object sender, RoutedEventArgs e)
@@ -671,13 +1355,12 @@ public partial class DiscProjectSetupDialog : Window
         StepParallelJobs(-1);
     }
 
-    private void StepDiscCount(int delta)
+    private static string GetProposedText(TextBox textBox, string input)
     {
-        if (!int.TryParse(DiscCountTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
-            value = _minimumDiscs;
-
-        value = Math.Clamp(value + delta, _minimumDiscs, _maximumDiscs);
-        DiscCountTextBox.Text = value.ToString(CultureInfo.InvariantCulture);
+        var text = textBox.Text ?? string.Empty;
+        var selectionStart = Math.Clamp(textBox.SelectionStart, 0, text.Length);
+        var selectionLength = Math.Clamp(textBox.SelectionLength, 0, text.Length - selectionStart);
+        return text.Remove(selectionStart, selectionLength).Insert(selectionStart, input);
     }
 
     private void StepParallelJobs(int delta)
@@ -690,11 +1373,6 @@ public partial class DiscProjectSetupDialog : Window
         value = Math.Clamp(value + delta, 1, 40);
         ParallelJobsTextBox.Text = value.ToString(CultureInfo.InvariantCulture);
         ParallelJobsTextBox.SelectAll();
-    }
-
-    private void MetadataTextBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        UpdatePreview();
     }
 
     private void MetadataComboBox_KeyUp(object sender, KeyEventArgs e)
@@ -711,14 +1389,6 @@ public partial class DiscProjectSetupDialog : Window
 
     private void MetadataComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ReferenceEquals(sender, GenreTextBox) &&
-            GenreListService.IsSeparator(GetComboBoxText(GenreTextBox)))
-        {
-            GenreTextBox.SelectedItem = null;
-            GenreTextBox.Text = GenreListService.GetDefaultGenre(_request.UsePrivateGenreList);
-            e.Handled = true;
-        }
-
         SyncFileNameTemplateIfNeeded(sender);
         UpdatePreview();
     }
@@ -753,6 +1423,7 @@ public partial class DiscProjectSetupDialog : Window
         }
 
         _lastAcceptedPreset = confirmedPreset;
+        AcceptedPresetChanged?.Invoke(confirmedPreset);
     }
 
     private string ConfirmPresetBitrateIfNeeded(string requestedPreset)
@@ -769,21 +1440,20 @@ public partial class DiscProjectSetupDialog : Window
 
         var result = AppDialogService.Show(
             this,
-            "Export-Preset prüfen",
-            "Gewähltes Preset ist höher als die Quelldateien",
-            $"Die höchste erkannte Quell-Bitrate liegt bei {_maxSourceBitrateKbps.Value} kbps.\n" +
-            $"Ausgewählt ist {requested.BitrateKbps} kbps. Hochkonvertieren macht die Datei größer, aber nicht hörbar besser.",
+            LocalizationText.Get("Disc.Setup.PresetWarning.Title"),
+            LocalizationText.Get("Disc.Setup.PresetWarning.Heading"),
+            LocalizationText.Format("Disc.Setup.PresetWarning.Message", _maxSourceBitrateKbps.Value, requested.BitrateKbps),
             AppDialogKind.Warning,
             details: new[]
             {
-                $"Empfohlen: {recommended.DisplayName}",
-                $"Gewählt: {requested.DisplayName}"
+                LocalizationText.Format("Disc.Setup.PresetWarning.Recommended", recommended.DisplayName),
+                LocalizationText.Format("Disc.Setup.PresetWarning.Selected", requested.DisplayName)
             },
             buttons: new[]
             {
-                new AppDialogButton($"Auf {recommended.DisplayName} stellen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Trotzdem verwenden", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Format("Disc.Setup.PresetWarning.UseRecommended", recommended.DisplayName), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Disc.Setup.PresetWarning.UseAnyway"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         return result switch
@@ -832,19 +1502,12 @@ public partial class DiscProjectSetupDialog : Window
             return;
 
         PreviewTextBlock.Text = FileNameTemplateService.BuildOutputFileName(
-            TitleTextBox.Text,
-            AuthorTextBox.Text,
-            NarratorTextBox.Text,
+            _metadataState.BookTitle,
+            _metadataState.Author,
+            _metadataState.Narrator,
             string.IsNullOrWhiteSpace(GetComboBoxText(FileNameTemplateTextBox)) ? "{Autor} - {Titel}" : GetComboBoxText(FileNameTemplateTextBox),
-            GetSelectedOutputExtension());
-    }
-
-    private string GetGenreText()
-    {
-        var genre = GetComboBoxText(GenreTextBox).Trim();
-        return GenreListService.IsSeparator(genre)
-            ? GenreListService.GetDefaultGenre(_request.UsePrivateGenreList)
-            : genre;
+            GetSelectedOutputExtension(),
+            _metadataState.Album);
     }
 
     private static string GetComboBoxText(ComboBox comboBox)

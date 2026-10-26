@@ -8,55 +8,69 @@ public class PausedPipelineContinuationServiceTests
 {
     private readonly PausedPipelineContinuationService _service = new();
 
-    [Fact]
-    public void Resolve_FreshMp3DiscAcquisition_ContinuesImportDirectly()
+    [Theory]
+    [InlineData(true, false, false, false, PausedPipelineContinuationKind.AudioDiscRip, ProjectManifestTypes.FolderProject)]
+    [InlineData(false, false, false, true, PausedPipelineContinuationKind.AudioDiscRip, ProjectManifestTypes.AudioCdProject)]
+    [InlineData(false, true, false, false, PausedPipelineContinuationKind.Mp3DiscImport, ProjectManifestTypes.FolderProject)]
+    [InlineData(false, false, true, false, PausedPipelineContinuationKind.Mp3DiscImport, ProjectManifestTypes.Mp3DiscProject)]
+    public void CreatePlan_AcquiringSources_uses_each_continuation_trigger_independently(
+        bool isAudioDiscProjectAwaitingRip,
+        bool needsDiscImport,
+        bool isMp3Disc,
+        bool isAudioDisc,
+        PausedPipelineContinuationKind expectedKind,
+        string expectedManifestType)
     {
-        var result = _service.Resolve(new PausedPipelineContinuationInput(
-            ProjectPipelineState.AcquiringSources,
-            IsAudioDiscProjectAwaitingRip: false,
-            LoadedProjectIsAudioDisc: false,
-            LoadedProjectNeedsDiscImport: true,
-            LoadedProjectIsMp3Disc: true));
+        var result = _service.CreatePlan(
+            CreateInput(
+                ProjectPipelineState.AcquiringSources,
+                isAudioDiscProjectAwaitingRip,
+                needsDiscImport,
+                isMp3Disc,
+                isAudioDisc));
 
-        Assert.Equal(PausedPipelineContinuationKind.Mp3DiscImport, result);
+        Assert.Equal(expectedKind, result.Kind);
+        Assert.Equal(expectedManifestType, result.ProjectManifestType);
     }
 
     [Fact]
-    public void Resolve_LoadedMp3DiscAcquisition_ContinuesImportDirectly()
+    public void CreatePlan_Converting_ContinuesCurrentExportPlan()
     {
-        var result = _service.Resolve(new PausedPipelineContinuationInput(
-            ProjectPipelineState.AcquiringSources,
-            IsAudioDiscProjectAwaitingRip: false,
-            LoadedProjectIsAudioDisc: false,
-            LoadedProjectNeedsDiscImport: false,
-            LoadedProjectIsMp3Disc: true));
+        var result = _service.CreatePlan(
+            CreateInput(
+                ProjectPipelineState.Converting,
+                needsDiscImport: true,
+                isMp3Disc: true));
 
-        Assert.Equal(PausedPipelineContinuationKind.Mp3DiscImport, result);
+        Assert.Equal(PausedPipelineContinuationKind.CurrentExportPlan, result.Kind);
+        Assert.Equal(ProjectManifestTypes.Mp3DiscProject, result.ProjectManifestType);
     }
 
     [Fact]
-    public void Resolve_AudioDiscAcquisition_ContinuesRipDirectly()
+    public void CreatePlan_LocalProject_UsesFolderManifestType()
     {
-        var result = _service.Resolve(new PausedPipelineContinuationInput(
-            ProjectPipelineState.AcquiringSources,
-            IsAudioDiscProjectAwaitingRip: true,
-            LoadedProjectIsAudioDisc: false,
-            LoadedProjectNeedsDiscImport: false,
-            LoadedProjectIsMp3Disc: false));
+        var result = _service.CreatePlan(
+            CreateInput(
+                ProjectPipelineState.ReviewBeforeMerge,
+                isLocal: true));
 
-        Assert.Equal(PausedPipelineContinuationKind.AudioDiscRip, result);
+        Assert.Equal(PausedPipelineContinuationKind.CurrentExportPlan, result.Kind);
+        Assert.Equal(ProjectManifestTypes.FolderProject, result.ProjectManifestType);
     }
 
-    [Fact]
-    public void Resolve_Converting_ContinuesCurrentExportPlan()
-    {
-        var result = _service.Resolve(new PausedPipelineContinuationInput(
-            ProjectPipelineState.Converting,
-            IsAudioDiscProjectAwaitingRip: false,
-            LoadedProjectIsAudioDisc: false,
-            LoadedProjectNeedsDiscImport: true,
-            LoadedProjectIsMp3Disc: true));
-
-        Assert.Equal(PausedPipelineContinuationKind.CurrentExportPlan, result);
-    }
+    private static PausedPipelineContinuationInput CreateInput(
+        ProjectPipelineState pipelineState,
+        bool isAudioDiscProjectAwaitingRip = false,
+        bool needsDiscImport = false,
+        bool isMp3Disc = false,
+        bool isAudioDisc = false,
+        bool isLocal = false) =>
+        new(
+            pipelineState,
+            isAudioDiscProjectAwaitingRip,
+            new PipelineProjectState(
+                needsDiscImport,
+                isMp3Disc,
+                isAudioDisc,
+                isLocal));
 }

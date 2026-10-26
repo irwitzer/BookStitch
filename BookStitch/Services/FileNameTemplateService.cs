@@ -66,13 +66,13 @@ public static class FileNameTemplateService
     {
         var cleaned = (text ?? "").Trim();
 
-        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        foreach (var invalidChar in Path.GetInvalidFileNameChars().Concat("<>:\"/\\|?*").Concat(Enumerable.Range(0, 32).Select(value => (char)value)).Distinct())
             cleaned = cleaned.Replace(invalidChar, ' ');
 
         cleaned = Regex.Replace(cleaned, @"\s+", " ");
         cleaned = Regex.Replace(cleaned, @"\s+-\s+", " - ");
         cleaned = cleaned.Trim(' ', '.', '-');
 
-        return cleaned;
+        return WindowsOutputPathService.IsReservedName(cleaned) ? "_" + cleaned : cleaned;
     }
 }

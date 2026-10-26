@@ -1,47 +1,26 @@
-# Third-Party Notices
+# Third-party notices
 
-This file summarizes third-party components and services used by BookStitch. BookStitch's own source code is licensed under GPL-3.0-only; third-party components remain under their own license terms.
+BookStitch's own code is distributed under [GNU GPL v3.0 only](LICENSE). Dependencies and third-party material retain their own applicable licenses. This summary does **not** replace those licenses or their required notices; consult the linked upstream terms and the notices supplied with any distributed binary package.
 
-This file is a notice summary, not a replacement for the original third-party license texts.
+## Application dependencies
 
-## Runtime dependencies
+The following versions are declared in `BookStitch/BookStitch.csproj` in the reviewed source snapshot; **recheck them against the final release build**.
 
-### TagLibSharp
+| Component | Declared version | Use | License information |
+| --- | --- | --- | --- |
+| [TagLibSharp](https://www.nuget.org/packages/TagLibSharp) | `2.3.0` | Audio metadata reading and writing | See NuGet package and upstream license; verify applicable LGPL terms and bundled notices. |
+| [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp) | `3.1.12` | Cover image handling | [Six Labors licensing](https://sixlabors.com/pricing/); verify applicable split-license rights for your distribution. |
 
-- Package: `TagLibSharp`
-- Version used by this project: `2.3.0`
-- Purpose: Reading and writing audio metadata.
-- License: `LGPL-2.1-only`
-- Source / package information: NuGet package metadata and upstream project information.
+**BookStitch 2 release decision:** ImageSharp remains pinned to `3.1.12`, with its known security advisories acknowledged. The maintainer has decided against a package update for this release because of licensing constraints. Replacement or revision of this dependency is deferred to BookStitch 3. This decision does not resolve the advisories or change the applicable license obligations.
 
-### SixLabors.ImageSharp
+## External audio tools
 
-- Package: `SixLabors.ImageSharp`
-- Version used by this project: `3.1.12`
-- Purpose: Cover image loading, processing and export preparation.
-- License: Six Labors Split License, Version 1.0
-- Source / package information: NuGet package metadata and upstream project information.
+[FFmpeg and FFprobe](https://ffmpeg.org/legal.html) are used for audio analysis, conversion and export but are **not included in the standard BookStitch source or `EndUser` publish payload**. FFmpeg licensing varies with the binaries and build configuration (including LGPL/GPL and optional components). Anyone redistributing a specific FFmpeg build must provide its applicable notices, licenses and required source-code access independently.
 
-## External tools
+## Development and test packages
 
-### FFmpeg and FFprobe
+The test projects use packages such as `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`, and `coverlet.collector`. Consult each project's actual package references and upstream licenses. They are not automatically part of the application release payload.
 
-BookStitch uses FFmpeg and FFprobe for audio probing, decoding, conversion, ripping and export workflows.
+## Project media and artwork
 
-FFmpeg/FFprobe are external tools and are not part of BookStitch's own source code. Their license obligations depend on the exact FFmpeg build and configuration used or redistributed. Release packages that bundle FFmpeg/FFprobe must include the corresponding FFmpeg license information and comply with the license terms of the bundled build.
-
-
-## Test and development dependencies
-
-The test project uses additional development-time dependencies, including:
-
-- `Microsoft.NET.Test.Sdk`
-- `xunit`
-- `xunit.runner.visualstudio`
-- `coverlet.collector`
-
-These packages are used for building and testing BookStitch and remain under their respective license terms.
-
-## BookStitch project assets
-
-The BookStitch-specific icons, logo and bundled WAV notification sounds were created for BookStitch. Unless otherwise stated, they are distributed together with BookStitch under the same GPL-3.0-only project license.
+BookStitch-specific branding, icons and notification assets accompany this project. The applicable rights for any third-party-derived image, sound, recording or other asset must be checked **individually before redistribution**. Do not assume an asset is GPL-licensed merely because it appears in this repository.

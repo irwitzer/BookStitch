@@ -7,6 +7,20 @@ namespace BookStitch.Tests.Services;
 public sealed class LocalProjectLivePreparationServiceTests
 {
     [Fact]
+    public async Task Preparation_checkpoint_failure_cancels_acquisition_and_drains_children_before_rethrow()
+    {
+        var importer = new ControlledImportService();
+        var drained = false;
+        var error = await Assert.ThrowsAsync<IOException>(() => new LocalProjectLivePreparationService(importer).RunAsync(
+            new LocalProjectLivePreparationRequest("source", ["source\\01.mp3", "source\\02.mp3"],
+                "project", 1, () => { drained = true; return Task.CompletedTask; }),
+            (_, _) => throw new IOException("checkpoint failed"), null, CancellationToken.None));
+        Assert.Equal("checkpoint failed", error.Message);
+        Assert.False(importer.ImportCompleted);
+        Assert.True(drained);
+    }
+
+    [Fact]
     public async Task RunAsync_StartsPreparationWhileImportIsStillRunning()
     {
         var importService = new ControlledImportService();
@@ -172,6 +186,41 @@ public sealed class LocalProjectLivePreparationServiceTests
         await runTask;
     }
 
+    [Fact]
+    public async Task RunAsync_WhenImportFails_WaitsForAlreadyStartedPreparationBeforeRethrowing()
+    {
+        var importService = new FailingAfterFirstCopyImportService();
+        var service = new LocalProjectLivePreparationService(importService);
+        var preparationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePreparation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var preparationCompleted = false;
+
+        var runTask = service.RunAsync(
+            new LocalProjectLivePreparationRequest(
+                "source",
+                ["source\\01.mp3", "source\\02.mp3"],
+                "project",
+                ParallelJobs: 1),
+            async (_, token) =>
+            {
+                preparationStarted.TrySetResult();
+                await releasePreparation.Task.WaitAsync(token);
+                preparationCompleted = true;
+            },
+            progress: null,
+            CancellationToken.None);
+
+        await preparationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.Delay(100);
+        Assert.False(runTask.IsCompleted);
+
+        releasePreparation.TrySetResult();
+        var exception = await Assert.ThrowsAsync<IOException>(() => runTask.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.Equal("identity store failed", exception.Message);
+        Assert.True(preparationCompleted);
+    }
+
     private static void UpdateMaximum(ref int target, int value)
     {
         int current;
@@ -233,6 +282,28 @@ public sealed class LocalProjectLivePreparationServiceTests
                 "project\\originals",
                 files.Length,
                 files.Length));
+        }
+    }
+
+    private sealed class FailingAfterFirstCopyImportService : ILocalProjectImportService
+    {
+        public Task<LocalProjectImportResult> CopySourcesAsync(
+            string sourceFolder,
+            IReadOnlyCollection<string> sourceFiles,
+            string projectFolder,
+            IProgress<LocalProjectCopyProgress>? progress,
+            IProgress<LocalProjectCopiedFile>? copiedFileProgress,
+            CancellationToken cancellationToken)
+        {
+            var first = sourceFiles.First();
+            copiedFileProgress?.Report(new LocalProjectCopiedFile(
+                1,
+                sourceFiles.Count,
+                first,
+                "project\\originals\\01.mp3",
+                false));
+
+            throw new IOException("identity store failed");
         }
     }
 

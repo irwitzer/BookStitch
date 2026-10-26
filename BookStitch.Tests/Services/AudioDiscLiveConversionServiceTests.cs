@@ -14,17 +14,19 @@ public sealed class AudioDiscLiveConversionServiceTests
         var projectFolder = Path.Combine(Path.GetTempPath(), "BookStitch.Tests", Guid.NewGuid().ToString("N"));
         var sourcePath = Path.Combine(projectFolder, "ripped", "003_Test.flac");
         var preset = ExportPreset.Parse("AAC Mono 64 kbps");
+        var sourceId = Guid.NewGuid();
 
         var result = service.CreatePreparation(
-            new AudioDiscRippedTrack(2, 3, 1, sourcePath, TimeSpan.FromMinutes(4)),
+            new AudioDiscRippedTrack(2, 3, 1, sourceId, sourcePath, TimeSpan.FromMinutes(4)),
             projectFolder,
             preset);
 
         Assert.Equal(2, result.Track.Index);
+        Assert.Equal(sourceId, result.Track.SourceId);
         Assert.Equal(2, result.Track.DiscNumber);
         Assert.Equal(1, result.Track.TrackNumber);
         Assert.Equal("FLAC", result.Track.Codec);
-        Assert.Equal("Konvertieren", result.Track.ProcessingAction);
+        Assert.Equal(ProcessingActionIds.Convert, result.Track.ProcessingAction);
         Assert.Equal(TimeSpan.FromMinutes(4).Ticks, result.Track.DurationTicks);
         Assert.Equal(sourcePath, result.SourcePath);
         Assert.StartsWith(

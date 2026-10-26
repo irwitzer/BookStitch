@@ -36,7 +36,7 @@ public class ExportPlanServiceTests
         Assert.EndsWith(System.IO.Path.Combine("converted", "aac_mono_64k"), plan.ConvertedFolder);
         Assert.EndsWith(System.IO.Path.Combine("merge", "concat-list.txt"), plan.ConcatListPath);
         Assert.EndsWith(System.IO.Path.Combine("merge", "chapters.ffmetadata"), plan.ChapterMetadataPath);
-        Assert.EndsWith(System.IO.Path.Combine(ProjectFolderLayout.SettingsFolderName, ProjectFolderLayout.WorkManifestFileName), plan.ManifestPath);
+        Assert.EndsWith(System.IO.Path.Combine(ProjectFolderLayout.SettingsFolderName, ProjectFolderLayout.ExportManifestFileName), plan.ManifestPath);
         Assert.EndsWith(".part.m4a", plan.FinalPartPath);
         Assert.Equal(@"E:\Export\Stephen King", plan.FinalOutputFolder);
         Assert.Equal("Der Anschlag.m4a", plan.FinalOutputFileName);

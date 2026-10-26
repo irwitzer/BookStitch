@@ -4,6 +4,14 @@
              xmlns:local="clr-namespace:BookStitch"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Themes/AppearanceTheme.xaml"/>
+                <ResourceDictionary Source="/Themes/WindowChromeStyles.xaml"/>
+                <ResourceDictionary Source="/Themes/NavigationDialogStyles.xaml"/>
+                <ResourceDictionary Source="/Themes/ProjectTypeVisuals.xaml"/>
+                <ResourceDictionary Source="/Themes/ChapterSymbols.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

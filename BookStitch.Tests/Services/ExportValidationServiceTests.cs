@@ -10,6 +10,19 @@ public class ExportValidationServiceTests
     private readonly ExportValidationService _service = new();
 
     [Fact]
+    public void Validate_missing_ffprobe_blocks_complete_export_preflight()
+    {
+        using var source = new TemporaryFolder();
+        using var output = new TemporaryFolder();
+        using var work = new TemporaryFolder();
+        WriteFile(source, "track.mp3", "audio");
+        var tools = ReadyFfmpeg(); tools.FfprobeAvailable = false; tools.FfprobePath = "";
+        var result = _service.Validate([ValidTrack("track.mp3")], tools, source.Path, output.Path,
+            "book.m4b", ".m4b", work.Path);
+        Assert.Contains(LocalizationText.Get("Export.FfprobeMissing"), result.Errors);
+    }
+
+    [Fact]
     public void Validate_WithValidExportPlan_ReturnsNoErrors()
     {
         using var sourceFolder = new TemporaryFolder();
@@ -245,7 +258,7 @@ public class ExportValidationServiceTests
     }
 
     [Fact]
-    public void Validate_WithUnsupportedTrack_ReturnsBlockingError()
+    public void Validate_WithPendingAction_ReturnsBlockingError()
     {
         using var sourceFolder = new TemporaryFolder();
         using var outputFolder = new TemporaryFolder();
@@ -263,6 +276,41 @@ public class ExportValidationServiceTests
             workFolder.Path);
 
         Assert.Contains(result.Errors, error => error.Contains("Audioformat konnte nicht sicher verarbeitet werden"));
+    }
+
+    [Theory]
+    [InlineData("Track 01.mp3", ".mp3", "MP3", "Konvertieren")]
+    [InlineData("Track 01.m4a", ".m4a", "AAC", "Übernehmen")]
+    [InlineData("Track 01.m4b", ".m4b", "AAC", "Übernehmen")]
+    [InlineData("Track 01.aac", ".aac", "AAC", "Konvertieren")]
+    [InlineData("Track 01.wav", ".wav", "PCM", "Konvertieren")]
+    [InlineData("Track 01.flac", ".flac", "FLAC", "Konvertieren")]
+    [InlineData("Track 01.wma", ".wma", "WMA", "Konvertieren")]
+    [InlineData("Track 01.ogg", ".ogg", "VORBIS", "Konvertieren")]
+    [InlineData("Track 01.oga", ".oga", "VORBIS", "Konvertieren")]
+    [InlineData("Track 01.opus", ".opus", "OPUS", "Konvertieren")]
+    [InlineData("Track 01.ogg", ".ogg", "OPUS", "Konvertieren")]
+    public void Validate_AllowsExportableProcessingActions(
+        string fileName,
+        string extension,
+        string codec,
+        string processingAction)
+    {
+        using var sourceFolder = new TemporaryFolder();
+        using var outputFolder = new TemporaryFolder();
+        using var workFolder = new TemporaryFolder();
+        WriteFile(sourceFolder, fileName, "audio");
+
+        var result = _service.Validate(
+            [ValidTrack(fileName, extension, codec, processingAction)],
+            ReadyFfmpeg(),
+            sourceFolder.Path,
+            outputFolder.Path,
+            "Test.m4b",
+            ".m4b",
+            workFolder.Path);
+
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -304,6 +352,76 @@ public class ExportValidationServiceTests
 
         var track = ValidTrack("Track 01.mp3");
         track.ChapterTitle = "";
+
+        var result = _service.Validate(
+            [track],
+            ReadyFfmpeg(),
+            sourceFolder.Path,
+            outputFolder.Path,
+            "Test.m4b",
+            ".m4b",
+            workFolder.Path);
+
+        Assert.Empty(result.Errors);
+        Assert.Contains(result.Warnings, warning => warning.Contains("Kapitelvorschlag ist leer"));
+    }
+
+    [Fact]
+    public void Validate_WithEmptyEmbeddedParentChapterTitle_DoesNotReturnWarning()
+    {
+        using var sourceFolder = new TemporaryFolder();
+        using var outputFolder = new TemporaryFolder();
+        using var workFolder = new TemporaryFolder();
+
+        WriteFile(sourceFolder, "Track 01.m4b", "audio");
+
+        var track = ValidTrack("Track 01.m4b", ".m4b", "AAC", "Übernehmen");
+        track.ChapterTitle = "";
+        track.DurationTicks = TimeSpan.FromSeconds(2).Ticks;
+        track.EmbeddedChapters =
+        [
+            new TrackEmbeddedChapterInfo
+            {
+                Title = "Embedded",
+                StartTicks = 0,
+                EndTicks = TimeSpan.FromSeconds(2).Ticks
+            }
+        ];
+
+        var result = _service.Validate(
+            [track],
+            ReadyFfmpeg(),
+            sourceFolder.Path,
+            outputFolder.Path,
+            "Test.m4b",
+            ".m4b",
+            workFolder.Path);
+
+        Assert.Empty(result.Errors);
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("Kapitelvorschlag ist leer"));
+    }
+
+    [Fact]
+    public void Validate_WithOnlyInvalidEmbeddedChaptersAndEmptyChapterTitle_ReturnsWarning()
+    {
+        using var sourceFolder = new TemporaryFolder();
+        using var outputFolder = new TemporaryFolder();
+        using var workFolder = new TemporaryFolder();
+
+        WriteFile(sourceFolder, "Track 01.m4b", "audio");
+
+        var track = ValidTrack("Track 01.m4b", ".m4b", "AAC", "Übernehmen");
+        track.ChapterTitle = "";
+        track.DurationTicks = TimeSpan.FromSeconds(2).Ticks;
+        track.EmbeddedChapters =
+        [
+            new TrackEmbeddedChapterInfo
+            {
+                Title = "Invalid",
+                StartTicks = TimeSpan.FromSeconds(1).Ticks,
+                EndTicks = TimeSpan.FromSeconds(1).Ticks
+            }
+        ];
 
         var result = _service.Validate(
             [track],
@@ -428,6 +546,28 @@ public class ExportValidationServiceTests
 
         Assert.Empty(result.Errors);
         Assert.DoesNotContain(result.Warnings, warning => warning.Contains("Doppelter Kapitelvorschlag"));
+    }
+
+    [Theory]
+    [InlineData(ChapterSettingsService.ModeNone, false, false)]
+    [InlineData(ChapterSettingsService.ModeNone, true, false)]
+    [InlineData(ChapterSettingsService.ModeAuto, false, true)]
+    [InlineData(ChapterSettingsService.ModeOriginal, false, true)]
+    [InlineData(ChapterSettingsService.ModeCustom, false, true)]
+    [InlineData(ChapterSettingsService.ModeOriginal, true, false)]
+    public void Empty_chapter_validation_respects_explicit_mode_without_disabling_other_checks(string mode, bool embedded, bool warningExpected)
+    {
+        using var source = new TemporaryFolder(); using var output = new TemporaryFolder(); using var work = new TemporaryFolder();
+        var track = ValidTrack("track.m4a", ".m4a", "AAC", "Übernehmen");
+        track.ChapterTitle = ""; track.DurationTicks = TimeSpan.FromSeconds(2).Ticks;
+        WriteFile(source, track.FileName, "audio");
+        if (embedded) track.EmbeddedChapters = [new TrackEmbeddedChapterInfo { Title = "source chapter", StartTicks = 0, EndTicks = track.DurationTicks.Value }];
+        var result = _service.Validate([track], ReadyFfmpeg(), source.Path, output.Path, "book.m4b", ".m4b", work.Path, chapterMode: mode);
+        Assert.Empty(result.Errors);
+        Assert.Equal(warningExpected, result.Warnings.Any(w => w.Contains("Kapitelvorschlag ist leer")));
+        Assert.Equal("", track.ChapterTitle);
+        var invalid = _service.Validate([track], new FfmpegToolStatus(), source.Path, output.Path, "book.m4b", ".m4b", work.Path, chapterMode: mode);
+        Assert.NotEmpty(invalid.Errors);
     }
 
     private static TrackInfo ValidTrack(

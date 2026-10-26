@@ -1,4 +1,4 @@
-﻿using BookStitch.Dialog;
+using BookStitch.Dialog;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -7,6 +7,21 @@ namespace BookStitch.Services;
 
 public static class AppDialogService
 {
+    public static bool ConfirmProjectUpdate(Window owner) => Show(owner,
+        LocalizationText.Get("Integrity.Startup.Title"),LocalizationText.Get("Integrity.Startup.Title"),
+        LocalizationText.Get("Integrity.Startup.Message"),AppDialogKind.Information,
+        buttons:[new(LocalizationText.Get("Integrity.Startup.Now"),AppDialogResult.Yes,IsPrimary:true,IsDefault:true),
+                 new(LocalizationText.Get("Integrity.Startup.Later"),AppDialogResult.Cancel,IsCancel:true)])==AppDialogResult.Yes;
+
+    public static void CoverWarning(Window owner, string heading, string message,
+        int thresholdPixels, Action<int> setThresholdPixels)
+    {
+        var dialog = new CoverSourceWarningDialog(heading, message);
+        ModalDialogService.ShowDialog(dialog, owner);
+        if (dialog.Result == AppDialogResult.Ok)
+            setThresholdPixels(CoverWarningSettingsService.ResolveWarningChoice(thresholdPixels, dialog.AlwaysWarn));
+    }
+
     public static AppDialogResult Show(
         Window owner,
         string title,
@@ -16,7 +31,8 @@ public static class AppDialogService
         IEnumerable<string>? details = null,
         IReadOnlyList<AppDialogButton>? buttons = null,
         double? width = null,
-        double? height = null)
+        double? height = null,
+        bool restoreOwnerFocus = true)
     {
         var dialog = new AppMessageDialog(title, heading, message, kind, details, buttons)
         {
@@ -30,8 +46,7 @@ public static class AppDialogService
         if (height.HasValue)
             dialog.Height = Math.Max(dialog.MinHeight, height.Value);
 
-        dialog.ShowDialog();
-        dialog.Activate();
+        ModalDialogService.ShowDialog(dialog, owner, restoreOwnerFocus: restoreOwnerFocus);
         return dialog.Result;
     }
 
@@ -102,8 +117,8 @@ public static class AppDialogService
             details,
             new[]
             {
-                new AppDialogButton("Ja", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Nein", AppDialogResult.No, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("Common.Yes"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Common.No"), AppDialogResult.No, IsCancel: true)
             });
 
         return result == AppDialogResult.Yes;
@@ -125,9 +140,9 @@ public static class AppDialogService
             details,
             new[]
             {
-                new AppDialogButton("Ja", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Nein", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("Common.Yes"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Common.No"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
     }
 
@@ -140,7 +155,7 @@ public static class AppDialogService
 
         return list
             .Take(maxItems)
-            .Concat(new[] { $"… und {list.Count - maxItems} weitere Einträge" })
+            .Concat(new[] { LocalizationText.Format("Common.MoreEntries", list.Count - maxItems) })
             .ToList();
     }
 }

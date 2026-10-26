@@ -6,7 +6,8 @@ public sealed class DiscDriveRotationService
 {
     public IReadOnlyList<string> BuildRound(
         IReadOnlyList<DiscDriveConfigurationItem> configuredDrives,
-        string lastProcessedDriveRoot)
+        string lastProcessedDriveRoot,
+        bool startWithSelectedDrive = false)
     {
         configuredDrives ??= [];
         var activeRoots = configuredDrives
@@ -18,13 +19,15 @@ public sealed class DiscDriveRotationService
             .Take(DiscDriveConfigurationService.MaximumActiveDrives)
             .ToList();
 
-        if (activeRoots.Count == 0)
-            return [];
-
         var lastRoot = DiscDriveConfigurationService.NormalizeRootPath(lastProcessedDriveRoot);
         var index = activeRoots.FindIndex(root => string.Equals(root, lastRoot, StringComparison.OrdinalIgnoreCase));
         if (index < 0)
-            return activeRoots;
+            return startWithSelectedDrive && lastRoot.Length > 0
+                ? new[] { lastRoot }.Concat(activeRoots).ToArray()
+                : activeRoots;
+
+        if (startWithSelectedDrive)
+            return activeRoots.Skip(index).Concat(activeRoots.Take(index)).ToArray();
 
         return activeRoots
             .Skip(index + 1)

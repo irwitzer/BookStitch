@@ -16,17 +16,35 @@ public sealed class SettingsService
     {
         WriteIndented = true
     };
+    private static readonly AtomicJsonStore JsonStore = new();
 
     private readonly string _appDataFolder;
     private readonly string _defaultProjectRootFolder;
+    private readonly bool _allowLegacySettingsMigration;
     private string? _resolvedProjectRootFolder;
 
     public SettingsService()
-        : this(GetDefaultAppDataFolder(), GetDefaultProjectRootFolder())
+        : this(new BookStitchEnvironmentResolver().Resolve())
+    {
+    }
+
+    public SettingsService(BookStitchEnvironmentContext environmentContext)
+        : this(
+            environmentContext.AppDataRoot,
+            environmentContext.DefaultProjectRoot,
+            allowLegacySettingsMigration: environmentContext.IsProduction)
     {
     }
 
     public SettingsService(string appDataFolder, string defaultProjectRootFolder)
+        : this(appDataFolder, defaultProjectRootFolder, allowLegacySettingsMigration: true)
+    {
+    }
+
+    public SettingsService(
+        string appDataFolder,
+        string defaultProjectRootFolder,
+        bool allowLegacySettingsMigration)
     {
         if (string.IsNullOrWhiteSpace(appDataFolder))
             throw new ArgumentException("Es wurde kein AppData-Ordner übergeben.", nameof(appDataFolder));
@@ -36,6 +54,7 @@ public sealed class SettingsService
 
         _appDataFolder = Path.GetFullPath(appDataFolder);
         _defaultProjectRootFolder = Path.GetFullPath(defaultProjectRootFolder);
+        _allowLegacySettingsMigration = allowLegacySettingsMigration;
     }
 
     public string AppDataFolder => _appDataFolder;
@@ -52,34 +71,87 @@ public sealed class SettingsService
 
     public string LogsFolder => Path.Combine(SettingsFolder, "logs");
 
+    // The rejected second instance must not migrate, archive, normalize or save the first instance's settings.
+    public string ReadUiLanguageAtStartup()
+    {
+        try
+        {
+            var location = ReadLocation(LocationFilePath);
+            var legacy = SettingsReadResult.Missing;
+            var root = _defaultProjectRootFolder;
+            if (location.Status == JsonReadStatus.Success && !string.IsNullOrWhiteSpace(location.Location!.BookStitchProjectsRoot))
+                root = ResolveWorkingFolder(location.Location.BookStitchProjectsRoot);
+            else if (_allowLegacySettingsMigration)
+            {
+                legacy = ReadSettings(LegacySettingsFilePath);
+                if (legacy.Status == JsonReadStatus.Success) root = ResolveWorkingFolder(legacy.Settings!.WorkingFolder);
+            }
+            var current = ReadSettings(GetSettingsFilePath(root));
+            if (current.Status == JsonReadStatus.Success) return UiLanguageService.Normalize(current.Settings!.UiLanguage);
+            if (_allowLegacySettingsMigration && legacy.Status == JsonReadStatus.Missing)
+                legacy = ReadSettings(LegacySettingsFilePath);
+            return UiLanguageService.Normalize(legacy.Settings?.UiLanguage);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or
+            PersistentJsonSchemaException or ArgumentException or NotSupportedException)
+        {
+            return UiLanguageService.System;
+        }
+    }
+
     public AppSettings Load()
     {
         var projectRootFolder = ResolveProjectRootFolder();
         var settingsFilePath = GetSettingsFilePath(projectRootFolder);
+        var currentRead = ReadSettings(settingsFilePath);
 
-        if (TryRead<AppSettings>(settingsFilePath, out var currentSettings))
+        if (currentRead.Status == JsonReadStatus.Success)
         {
-            NormalizeWorkingFolder(currentSettings!, projectRootFolder);
+            var currentSettings = currentRead.Settings!;
+            MigrateDebugSettingsBeforeGlobalUpgrade(currentRead);
+            var migrated = AppSettingsMigrationService.MigrateToCurrent(
+                currentSettings,
+                currentRead.SchemaVersion,
+                currentRead.LegacyData!);
+            NormalizeSettings(currentSettings, projectRootFolder);
+            if (migrated)
+            {
+                AtomicWriteJson(settingsFilePath, currentSettings);
+                PersistentJsonSchema.TraceLegacyMigration("globale Einstellungen", settingsFilePath);
+            }
+
             EnsureLocationFile(projectRootFolder);
-            return currentSettings!;
+            return currentSettings;
         }
 
-        if (File.Exists(settingsFilePath))
-            TryArchiveCorruptFile(settingsFilePath);
+        if (currentRead.Status == JsonReadStatus.Corrupt)
+            ArchiveCorruptFileOrThrow(settingsFilePath);
 
-        if (TryRead<AppSettings>(LegacySettingsFilePath, out var legacySettings))
+        if (_allowLegacySettingsMigration)
         {
-            var legacyProjectRoot = ResolveWorkingFolder(legacySettings!.WorkingFolder);
-            NormalizeWorkingFolder(legacySettings, legacyProjectRoot);
-            SaveToProjectRoot(legacySettings, legacyProjectRoot);
-            TryArchiveLegacySettings();
-            return legacySettings;
+            var legacyRead = ReadSettings(LegacySettingsFilePath);
+            if (legacyRead.Status == JsonReadStatus.Success)
+            {
+                var legacySettings = legacyRead.Settings!;
+                var legacyProjectRoot = ResolveWorkingFolder(legacySettings.WorkingFolder);
+                MigrateDebugSettingsBeforeGlobalUpgrade(legacyRead);
+                AppSettingsMigrationService.MigrateToCurrent(
+                    legacySettings,
+                    legacyRead.SchemaVersion,
+                    legacyRead.LegacyData!);
+                NormalizeSettings(legacySettings, legacyProjectRoot);
+                SaveToProjectRoot(legacySettings, legacyProjectRoot);
+                TryArchiveLegacySettings();
+                return legacySettings;
+            }
         }
 
         var defaults = new AppSettings
         {
             WorkingFolder = projectRootFolder
         };
+        defaults.SchemaVersion = AppSettingsVersions.CurrentSchemaVersion;
+        AppSettingsNormalizationService.Normalize(defaults);
 
         EnsureLocationFile(projectRootFolder);
         return defaults;
@@ -90,7 +162,8 @@ public sealed class SettingsService
         ArgumentNullException.ThrowIfNull(settings);
 
         var projectRootFolder = ResolveWorkingFolder(settings.WorkingFolder);
-        NormalizeWorkingFolder(settings, projectRootFolder);
+        settings.SchemaVersion = AppSettingsVersions.CurrentSchemaVersion;
+        NormalizeSettings(settings, projectRootFolder);
         SaveToProjectRoot(settings, projectRootFolder);
     }
 
@@ -107,10 +180,25 @@ public sealed class SettingsService
 
     private void SaveToProjectRoot(AppSettings settings, string projectRootFolder)
     {
+        settings.SchemaVersion = AppSettingsVersions.CurrentSchemaVersion;
+        var normalizedRoot = Path.GetFullPath(projectRootFolder);
+        var locationRead = ReadLocation(LocationFilePath);
+        if (locationRead.Status == JsonReadStatus.Corrupt)
+            ArchiveCorruptFileOrThrow(LocationFilePath);
+
+        var locationNeedsUpdate =
+            locationRead.Status != JsonReadStatus.Success ||
+            !PathsEqual(locationRead.Location!.BookStitchProjectsRoot, normalizedRoot);
         var settingsFilePath = GetSettingsFilePath(projectRootFolder);
         AtomicWriteJson(settingsFilePath, settings);
-        AtomicWriteJson(LocationFilePath, new SettingsLocation { BookStitchProjectsRoot = projectRootFolder });
-        _resolvedProjectRootFolder = projectRootFolder;
+        if (locationNeedsUpdate)
+        {
+            AtomicWriteJson(
+                LocationFilePath,
+                new SettingsLocation { BookStitchProjectsRoot = normalizedRoot });
+        }
+
+        _resolvedProjectRootFolder = normalizedRoot;
     }
 
     private string ResolveProjectRootFolder()
@@ -118,17 +206,28 @@ public sealed class SettingsService
         if (!string.IsNullOrWhiteSpace(_resolvedProjectRootFolder))
             return _resolvedProjectRootFolder;
 
-        if (TryRead<SettingsLocation>(LocationFilePath, out var location) &&
-            !string.IsNullOrWhiteSpace(location!.BookStitchProjectsRoot))
+        var locationRead = ReadLocation(LocationFilePath);
+        if (locationRead.Status == JsonReadStatus.Success &&
+            !string.IsNullOrWhiteSpace(locationRead.Location!.BookStitchProjectsRoot))
         {
-            _resolvedProjectRootFolder = ResolveWorkingFolder(location.BookStitchProjectsRoot);
+            _resolvedProjectRootFolder = ResolveWorkingFolder(locationRead.Location.BookStitchProjectsRoot);
             return _resolvedProjectRootFolder;
         }
 
-        if (TryRead<AppSettings>(LegacySettingsFilePath, out var legacySettings))
+        if (locationRead.Status == JsonReadStatus.Corrupt ||
+            locationRead.Status == JsonReadStatus.Success)
         {
-            _resolvedProjectRootFolder = ResolveWorkingFolder(legacySettings!.WorkingFolder);
-            return _resolvedProjectRootFolder;
+            ArchiveCorruptFileOrThrow(LocationFilePath);
+        }
+
+        if (_allowLegacySettingsMigration)
+        {
+            var legacyRead = ReadSettings(LegacySettingsFilePath);
+            if (legacyRead.Status == JsonReadStatus.Success)
+            {
+                _resolvedProjectRootFolder = ResolveWorkingFolder(legacyRead.Settings!.WorkingFolder);
+                return _resolvedProjectRootFolder;
+            }
         }
 
         _resolvedProjectRootFolder = _defaultProjectRootFolder;
@@ -152,15 +251,7 @@ public sealed class SettingsService
 
     private void EnsureLocationFile(string projectRootFolder)
     {
-        try
-        {
-            AtomicWriteJson(LocationFilePath, new SettingsLocation { BookStitchProjectsRoot = projectRootFolder });
-        }
-        catch
-        {
-            // Das Laden der eigentlichen Einstellungen bleibt möglich, auch wenn
-            // die kleine Standortdatei vorübergehend nicht geschrieben werden kann.
-        }
+        UpdateLocationFileIfNeeded(projectRootFolder, suppressWriteFailure: true);
     }
 
     private static void NormalizeWorkingFolder(AppSettings settings, string projectRootFolder)
@@ -168,60 +259,140 @@ public sealed class SettingsService
         settings.WorkingFolder = Path.GetFullPath(projectRootFolder);
     }
 
-    private static bool TryRead<T>(string filePath, out T? value)
+    private static void NormalizeSettings(AppSettings settings, string projectRootFolder)
     {
-        value = default;
+        NormalizeWorkingFolder(settings, projectRootFolder);
+        AppSettingsNormalizationService.Normalize(settings);
+    }
+
+    private static SettingsReadResult ReadSettings(string filePath)
+    {
+        string json;
+        try
+        {
+            json = File.ReadAllText(filePath, Encoding.UTF8);
+        }
+        catch (FileNotFoundException)
+        {
+            return SettingsReadResult.Missing;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return SettingsReadResult.Missing;
+        }
 
         try
         {
-            if (!File.Exists(filePath))
-                return false;
+            var schema = PersistentJsonSchema.Read(
+                json,
+                "globale Einstellungen",
+                filePath,
+                AppSettingsVersions.CurrentSchemaVersion);
+            using var document = JsonDocument.Parse(json);
+            var settings = document.RootElement.Deserialize<AppSettings>(JsonOptions);
+            return settings is null
+                ? SettingsReadResult.Corrupt
+                : new SettingsReadResult(
+                    JsonReadStatus.Success,
+                    settings,
+                    schema.Version,
+                    AppSettingsLegacyData.Read(document.RootElement));
+        }
+        catch (JsonException)
+        {
+            return SettingsReadResult.Corrupt;
+        }
+        catch (PersistentJsonSchemaException exception) when (!exception.IsUnsupportedFutureVersion)
+        {
+            return SettingsReadResult.Corrupt;
+        }
+    }
 
-            var json = File.ReadAllText(filePath, Encoding.UTF8);
-            value = JsonSerializer.Deserialize<T>(json, JsonOptions);
-            return value is not null;
+    private void MigrateDebugSettingsBeforeGlobalUpgrade(SettingsReadResult readResult)
+    {
+        if (readResult.SchemaVersion >= AppSettingsVersions.CurrentSchemaVersion)
+            return;
+
+        new DebugSettingsService(this)
+            .MigrateLegacyGlobalSettingsBeforeUpgrade(readResult.LegacyData!);
+    }
+
+    private static LocationReadResult ReadLocation(string filePath)
+    {
+        string json;
+        try
+        {
+            json = File.ReadAllText(filePath, Encoding.UTF8);
+        }
+        catch (FileNotFoundException)
+        {
+            return LocationReadResult.Missing;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return LocationReadResult.Missing;
+        }
+
+        try
+        {
+            var location = JsonSerializer.Deserialize<SettingsLocation>(json, JsonOptions);
+            return location is null
+                ? LocationReadResult.Corrupt
+                : new LocationReadResult(JsonReadStatus.Success, location);
+        }
+        catch (JsonException)
+        {
+            return LocationReadResult.Corrupt;
+        }
+    }
+
+    private void UpdateLocationFileIfNeeded(string projectRootFolder, bool suppressWriteFailure)
+    {
+        var normalizedRoot = Path.GetFullPath(projectRootFolder);
+        var locationRead = ReadLocation(LocationFilePath);
+        if (locationRead.Status == JsonReadStatus.Success &&
+            PathsEqual(locationRead.Location!.BookStitchProjectsRoot, normalizedRoot))
+        {
+            return;
+        }
+
+        if (locationRead.Status == JsonReadStatus.Corrupt)
+            ArchiveCorruptFileOrThrow(LocationFilePath);
+
+        try
+        {
+            AtomicWriteJson(
+                LocationFilePath,
+                new SettingsLocation { BookStitchProjectsRoot = normalizedRoot });
+        }
+        catch when (suppressWriteFailure)
+        {
+            // Das Laden der eigentlichen Einstellungen bleibt möglich, wenn eine
+            // fehlende Standortdatei vorübergehend nicht angelegt werden kann.
+        }
+    }
+
+    private static bool PathsEqual(string? left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left))
+            return false;
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
         }
         catch
         {
-            value = default;
             return false;
         }
     }
 
     private static void AtomicWriteJson<T>(string filePath, T value)
     {
-        var directory = Path.GetDirectoryName(filePath)
-            ?? throw new InvalidOperationException("Für die Zieldatei konnte kein Ordner ermittelt werden.");
-
-        Directory.CreateDirectory(directory);
-
-        var temporaryPath = Path.Combine(
-            directory,
-            $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            var json = JsonSerializer.Serialize(value, JsonOptions);
-            using (var stream = new FileStream(
-                       temporaryPath,
-                       FileMode.CreateNew,
-                       FileAccess.Write,
-                       FileShare.None,
-                       bufferSize: 16 * 1024,
-                       FileOptions.WriteThrough))
-            using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
-            {
-                writer.Write(json);
-                writer.Flush();
-                stream.Flush(flushToDisk: true);
-            }
-
-            File.Move(temporaryPath, filePath, overwrite: true);
-        }
-        finally
-        {
-            TryDeleteFile(temporaryPath);
-        }
+        JsonStore.Save(filePath, value, JsonOptions);
     }
 
     private void TryArchiveLegacySettings()
@@ -233,19 +404,28 @@ public sealed class SettingsService
         TryMoveWithoutOverwrite(LegacySettingsFilePath, archivePath);
     }
 
-    private static void TryArchiveCorruptFile(string filePath)
+    private static void ArchiveCorruptFileOrThrow(string filePath)
     {
         var directory = Path.GetDirectoryName(filePath);
         if (string.IsNullOrWhiteSpace(directory))
-            return;
+            throw new IOException($"Die beschädigte Einstellungsdatei kann nicht gesichert werden: {filePath}");
 
         var name = Path.GetFileNameWithoutExtension(filePath);
         var extension = Path.GetExtension(filePath);
         var archivePath = Path.Combine(
             directory,
-            $"{name}.corrupt-{DateTime.Now:yyyy.MM.dd-HHmmss}{extension}");
+            $"{name}.corrupt-{DateTime.UtcNow:yyyy.MM.dd-HHmmss.fff}-{Guid.NewGuid():N}{extension}");
 
-        TryMoveWithoutOverwrite(filePath, archivePath);
+        try
+        {
+            File.Move(filePath, archivePath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException(
+                $"Die beschädigte Einstellungsdatei konnte nicht sicher archiviert werden. Datei: {filePath}",
+                exception);
+        }
     }
 
     private static void TryMoveWithoutOverwrite(string sourcePath, string targetPath)
@@ -264,38 +444,39 @@ public sealed class SettingsService
         }
     }
 
-    private static void TryDeleteFile(string filePath)
-    {
-        try
-        {
-            if (File.Exists(filePath))
-                File.Delete(filePath);
-        }
-        catch
-        {
-            // Eine verwaiste temporäre Datei ist besser als ein fehlgeschlagener
-            // Settings-Schreibvorgang.
-        }
-    }
-
-    private static string GetDefaultAppDataFolder()
-    {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "BookStitch");
-    }
-
-    private static string GetDefaultProjectRootFolder()
-    {
-        var musicFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
-        if (string.IsNullOrWhiteSpace(musicFolder))
-            musicFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        return Path.Combine(musicFolder, "BookStitchProjects");
-    }
-
     private sealed class SettingsLocation
     {
         public string BookStitchProjectsRoot { get; set; } = string.Empty;
+    }
+
+    private enum JsonReadStatus
+    {
+        Missing,
+        Success,
+        Corrupt
+    }
+
+    private readonly record struct SettingsReadResult(
+        JsonReadStatus Status,
+        AppSettings? Settings,
+        int SchemaVersion,
+        AppSettingsLegacyData? LegacyData)
+    {
+        public static SettingsReadResult Missing { get; } =
+            new(JsonReadStatus.Missing, null, PersistentJsonSchema.LegacyVersion, null);
+
+        public static SettingsReadResult Corrupt { get; } =
+            new(JsonReadStatus.Corrupt, null, PersistentJsonSchema.LegacyVersion, null);
+    }
+
+    private readonly record struct LocationReadResult(
+        JsonReadStatus Status,
+        SettingsLocation? Location)
+    {
+        public static LocationReadResult Missing { get; } =
+            new(JsonReadStatus.Missing, null);
+
+        public static LocationReadResult Corrupt { get; } =
+            new(JsonReadStatus.Corrupt, null);
     }
 }

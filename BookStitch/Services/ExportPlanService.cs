@@ -26,16 +26,18 @@ public sealed class ExportPlanService
             ? request.ProjectWorkFolderOverride
             : Path.Combine(request.WorkingRootFolder, BuildProjectWorkFolderName(request.SourceFolder, request.Author, request.BookTitle));
 
+        var targetRate = ProjectSampleRateService.ReadTarget(projectWorkFolder);
+        FolderSampleRateService.Apply(trackSnapshot, targetRate);
+        foreach (var track in trackSnapshot) track.AllowAacReuse = ProjectSampleRateService.AllowsAacReuse(projectWorkFolder);
+
         var presetFolder = preset.GetFolderName();
         ProjectFolderLayout.EnsureProjectFolders(projectWorkFolder);
         var convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectWorkFolder, presetFolder);
         var mergeFolder = ProjectFolderLayout.GetMergeFolder(projectWorkFolder);
         var concatListPath = Path.Combine(mergeFolder, "concat-list.txt");
         var chapterMetadataPath = Path.Combine(mergeFolder, "chapters.ffmetadata");
-        var finalPartPath = Path.Combine(mergeFolder, Path.GetFileName(ConvertedTrackPathService.GetPartFilePath(request.FinalOutputPath)));
-        var manifestPath = string.Equals(projectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase)
-            ? ProjectFolderLayout.GetExportManifestPath(projectWorkFolder)
-            : ProjectFolderLayout.GetWorkManifestPath(projectWorkFolder);
+        var finalPartPath = ConvertedTrackPathService.GetMergePartFilePath(projectWorkFolder, request.FinalOutputPath);
+        var manifestPath = ProjectFolderLayout.GetExportManifestPath(projectWorkFolder);
         var finalOutputFolder = Path.GetDirectoryName(request.FinalOutputPath) ?? string.Empty;
         var finalOutputFileName = Path.GetFileName(request.FinalOutputPath);
 
@@ -58,7 +60,7 @@ public sealed class ExportPlanService
             finalOutputFolder,
             finalOutputFileName,
             finalPartPath,
-            manifestPath);
+            manifestPath) { TargetSampleRateHz = targetRate };
     }
 
     public string BuildProjectWorkFolderName(string sourceFolder, string? author, string? bookTitle)

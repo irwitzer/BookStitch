@@ -19,7 +19,8 @@ public sealed class Mp3DiscWorkflowStatusAdapter
         bool isExtension = false,
         bool isPaused = false,
         bool currentDiscFinished = false,
-        bool allDiscsFinished = false)
+        bool allDiscsFinished = false,
+        string? driveDisplayName = null)
     {
         ArgumentNullException.ThrowIfNull(activeTrackNumbers);
         ArgumentNullException.ThrowIfNull(preset);
@@ -52,11 +53,12 @@ public sealed class Mp3DiscWorkflowStatusAdapter
                 safeCurrentTotal,
                 safeProjectCopied,
                 safeProjectTotal,
-                CurrentDisc: Math.Max(1, currentDisc),
+                CurrentDisc: Math.Max(currentDiscFinished ? 0 : 1, currentDisc),
                 TotalDiscs: Math.Max(1, totalDiscs),
                 Percent: copyPercent,
                 CurrentSourceFinished: currentDiscFinished,
-                AllSourcesFinished: allDiscsFinished),
+                AllSourcesFinished: allDiscsFinished,
+                DriveDisplayName: driveDisplayName),
             ConversionProgress = new ConversionActivityProgress(
                 safeConverted,
                 safeProjectTotal,

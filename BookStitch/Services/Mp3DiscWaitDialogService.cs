@@ -26,28 +26,29 @@ public sealed class Mp3DiscWaitDialogService
         Action<string> setProgressText,
         CancellationToken token,
         Action<DiscPollingDisplayState>? notifyDisplayState = null,
-        string? expectedDiscSignature = null)
+        string? driveDisplayName = null,
+        bool canCompleteImport = true)
     {
         var request = new DiscWaitDialogRequest(
             discNumber,
             totalDiscs,
             "MP3-CD",
-            $"Bitte CD {discNumber} von {totalDiscs} einlegen. BookStitch prüft automatisch und startet, sobald eine neue unterstützte MP3-CD erkannt wurde.",
-            "Bereits importierte CDs werden erkannt, nicht erneut importiert und nach Möglichkeit wieder ausgeworfen.",
-            CreateDriveDisplayName(sourceFolder),
-            notifyDisplayState);
+            LocalizationText.Format("Disc.Wait.Mp3Instruction", discNumber, totalDiscs),
+            LocalizationText.Get("Disc.Wait.Mp3Hint"),
+            driveDisplayName ?? CreateDriveDisplayName(sourceFolder),
+            notifyDisplayState,
+            CanCompleteImport: canCompleteImport && discNumber > 1);
 
         return _discWaitDialogService.WaitForDiscAsync(
             owner,
             request,
-            cancellationToken => Task.Run(
-                () => _mp3DiscPollingService.CheckDiscSourceForNextImport(
-                    sourceFolder,
-                    discNumber,
-                    totalDiscs,
-                    importedDiscSignatures,
-                    expectedDiscSignature),
-                cancellationToken),
+            (checkRequest, cancellationToken) => _mp3DiscPollingService.CheckDiscSourceForNextImportAsync(
+                sourceFolder,
+                discNumber,
+                totalDiscs,
+                importedDiscSignatures,
+                cancellationToken,
+                checkRequest.AcceptNextDuplicate),
             setStatusText,
             setProgressText,
             token);
@@ -56,6 +57,6 @@ public sealed class Mp3DiscWaitDialogService
     private static string CreateDriveDisplayName(string sourceFolder)
     {
         var root = Path.GetPathRoot(sourceFolder)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar);
-        return string.IsNullOrWhiteSpace(root) ? string.Empty : $"CD-Laufwerk {root}";
+        return string.IsNullOrWhiteSpace(root) ? string.Empty : LocalizationText.Format("Disc.Wait.CdDrive", root);
     }
 }

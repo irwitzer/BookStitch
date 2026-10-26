@@ -12,23 +12,6 @@ public enum AudioDiscLiveConversionOutcome
     Canceled
 }
 
-public sealed record AudioDiscLiveConversionSessionSnapshot(
-    int AcceptedCount,
-    int CompletedCount,
-    int FailedCount,
-    int CanceledCount,
-    int DuplicateCount,
-    int ReusedCount,
-    IReadOnlyList<int>? ActiveTrackNumbers = null,
-    int ExistingConvertedCount = 0)
-{
-    public int ConvertedCount => ExistingConvertedCount > 0
-        ? ExistingConvertedCount + CompletedCount
-        : CompletedCount + ReusedCount;
-    public int FinishedCount => CompletedCount + ReusedCount + FailedCount + CanceledCount;
-    public int PendingCount => Math.Max(0, AcceptedCount - FinishedCount);
-}
-
 public sealed class AudioDiscLiveConversionSession : IDisposable
 {
     private readonly Func<AudioDiscRippedTrack, CancellationToken, Task<AudioDiscLiveConversionOutcome>> _processor;
@@ -56,7 +39,12 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
         ExportPreset preset,
         int maxParallelConversions,
         Action<AudioDiscLiveConversionSessionSnapshot>? statusChanged = null,
-        int existingConvertedCount = 0)
+        int existingConvertedCount = 0,
+        Func<AudioDiscRippedTrack, PerformanceOperationScope>? startPerformanceOperation = null,
+        Func<Guid, PerformanceExternalProcessContext?>? createPerformanceContext = null,
+        Action? tryFinalizePerformanceSession = null,
+        string ffprobePath = "",
+        Func<bool>? isPauseRequested = null)
     {
         ArgumentNullException.ThrowIfNull(preparationService);
         ArgumentNullException.ThrowIfNull(workflowService);
@@ -70,10 +58,17 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
         _manifestSession = new AudioDiscLiveConversionManifestSession(
             workManifestService,
             audioDiscManifest,
-            preset);
+            preset, audio: workflowService.AudioProcessing, ffprobePath: ffprobePath,
+            effectiveParallelism: maxParallelConversions);
 
         var queue = new LiveConversionQueueService();
         var semaphore = new SemaphoreSlim(Math.Max(1, maxParallelConversions));
+
+        bool PauseRequested()
+        {
+            try { return isPauseRequested?.Invoke() == true; }
+            catch { return false; }
+        }
 
         _processor = async (rippedTrack, token) =>
         {
@@ -82,7 +77,7 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
                 audioDiscManifest.ProjectFolder,
                 preset);
 
-            if (_manifestSession.ReconcileTrack(preparation))
+            if (_manifestSession.ReconcileTrack(preparation, token))
                 return AudioDiscLiveConversionOutcome.Reused;
 
             _manifestSession.MarkTrackStarted(preparation);
@@ -102,20 +97,79 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
             }
 
             var completed = false;
-            await workflowService.RunAsync(
-                preparation.Track,
-                queuedItem,
-                preset,
-                queue,
-                semaphore,
-                () => { },
-                () => completed = true,
-                () => { },
-                token);
+            PerformanceOperationScope conversionPerformanceScope = default;
+            try
+            {
+                await workflowService.RunAsync(
+                    preparation.Track,
+                    queuedItem,
+                    preset,
+                    queue,
+                    semaphore,
+                    () =>
+                    {
+                        if (startPerformanceOperation is null)
+                            return;
+
+                        try
+                        {
+                            conversionPerformanceScope = startPerformanceOperation(rippedTrack);
+                        }
+                        catch
+                        {
+                            conversionPerformanceScope = default;
+                        }
+                    },
+                    () => completed = true,
+                    () => { },
+                    token,
+                    () =>
+                    {
+                        if (!conversionPerformanceScope.IsActive || createPerformanceContext is null)
+                            return null;
+
+                        try
+                        {
+                            return createPerformanceContext(conversionPerformanceScope.OperationId);
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    },
+                    persistPreparedTrack: () => _manifestSession.MarkTrackCompleted(preparation, token));
+
+                if (completed)
+                    conversionPerformanceScope.Complete();
+                else if (token.IsCancellationRequested)
+                    conversionPerformanceScope.Cancel(PauseRequested());
+                else
+                    conversionPerformanceScope.Fail(new InvalidOperationException("Audio-CD-Live-Konvertierung fehlgeschlagen."));
+            }
+            catch (OperationCanceledException)
+            {
+                conversionPerformanceScope.Cancel(PauseRequested());
+                throw;
+            }
+            catch
+            {
+                conversionPerformanceScope.Fail(new InvalidOperationException("Audio-CD-Live-Konvertierung wurde durch eine Ausnahme beendet."));
+                throw;
+            }
+            finally
+            {
+                try
+                {
+                    tryFinalizePerformanceSession?.Invoke();
+                }
+                catch
+                {
+                    // Performance finalization must never alter live conversion behavior.
+                }
+            }
 
             if (completed)
             {
-                _manifestSession.MarkTrackCompleted(preparation);
                 return AudioDiscLiveConversionOutcome.Completed;
             }
 
@@ -202,6 +256,7 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
                     track.DiscNumber,
                     track.GlobalIndex,
                     track.TrackNumber,
+                    track.SourceId,
                     sourcePath,
                     track.Duration),
                 token);
@@ -222,7 +277,10 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
         }
 
         if (tasks.Length == 0)
+        {
+            if (_manifestSession is not null) await _manifestSession.DrainTimingAsync();
             return;
+        }
 
         var allTasks = Task.WhenAll(tasks);
         var interval = snapshotInterval ?? TimeSpan.FromSeconds(30);
@@ -230,6 +288,7 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
         if (periodicSnapshot is null || interval <= TimeSpan.Zero)
         {
             await allTasks;
+            if (_manifestSession is not null) await _manifestSession.DrainTimingAsync();
             return;
         }
 
@@ -243,6 +302,7 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
         }
 
         await allTasks;
+        if (_manifestSession is not null) await _manifestSession.DrainTimingAsync();
     }
 
     public void SaveManifestSnapshot()
@@ -282,6 +342,7 @@ public sealed class AudioDiscLiveConversionSession : IDisposable
             return;
 
         _disposed = true;
+        _manifestSession?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _ownedSemaphore?.Dispose();
     }
 

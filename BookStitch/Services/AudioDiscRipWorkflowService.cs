@@ -25,7 +25,7 @@ public sealed record AudioDiscRipWorkflowRequest(
     Func<AudioDiscProjectManifestDisc, CancellationToken, Task<AudioDiscPollingResult?>> WaitForRequiredDiscAsync,
     Func<AudioDiscProjectManifestDisc, CancellationToken, Task<bool>> ConfirmRequiredDiscAvailableAsync,
     Func<AudioDiscProjectManifestDisc, IProgress<AudioDiscRipProgress>, CancellationToken, Task<AudioDiscRipResult>> RipDiscAsync,
-    Func<AudioDiscProjectManifestDisc, bool> TryEjectDisc,
+    Func<AudioDiscProjectManifestDisc, CancellationToken, Task<bool>> TryEjectDiscAsync,
     Func<Task> QueueExistingRippedTracksAsync,
     Func<Task> WaitForLiveConversionsAsync,
     Action SaveSnapshot,
@@ -72,6 +72,9 @@ public sealed class AudioDiscRipWorkflowService
                 disc = await request.WaitForNextDiscAsync(nextDiscNumber.Value, request.CancellationToken);
                 if (disc is null)
                 {
+                    if (_projectService.IsProjectRipCompleted(manifest))
+                        break;
+
                     return WaitForDisc(
                         "Audio-CD-Projekt wartet auf die nächste Disc.");
                 }
@@ -112,7 +115,7 @@ public sealed class AudioDiscRipWorkflowService
                 request.SaveSnapshot();
 
                 projectRipCompletedAfterDisc = _projectService.IsProjectRipCompleted(manifest);
-                var ejected = request.TryEjectDisc(disc);
+                var ejected = await request.TryEjectDiscAsync(disc, request.CancellationToken);
                 if (!projectRipCompletedAfterDisc)
                     request.DiscChangeRequired(disc, ejected);
             }

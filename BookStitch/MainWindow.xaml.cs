@@ -1,6 +1,10 @@
-﻿using BookStitch.Dialog;
+using BookStitch.Controls;
+using BookStitch.Dialog;
 using BookStitch.Models;
+using BookStitch.Models.TrackOrdering;
+using BookStitch.Presentation;
 using BookStitch.Services;
+using BookStitch.Services.TrackOrdering;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
@@ -20,6 +24,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 
@@ -27,310 +32,410 @@ namespace BookStitch;
 
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
-    private const string DefaultCoverPreviewSource = "/Assets/Icons/BookStitchLogo-Round.png";
+    private readonly record struct VisibleTrackGridRow(TrackInfo Track, TrackEmbeddedChapterDisplayInfo? Chapter)
+    {
+        public static VisibleTrackGridRow ForTrack(TrackInfo track) => new(track, null);
+
+        public static VisibleTrackGridRow ForChapter(TrackInfo track, TrackEmbeddedChapterDisplayInfo chapter) => new(track, chapter);
+    }
 
     private static readonly TimeSpan ProjectSnapshotInterval = TimeSpan.FromSeconds(30);
 
-    private readonly FolderScanner _folderScanner = new();
-    private readonly EmbeddedCoverService _embeddedCoverService = new();
-    private readonly SettingsService _settingsService = new();
-    private readonly FfmpegService _ffmpegService = new();
-    private readonly AudioInfoService _audioInfoService = new();
-    private readonly TrackListActionService _trackListActionService = new();
-    private readonly TrackListStateService _trackListStateService = new();
-    private readonly TrackListWarningService _trackListWarningService = new();
-    private readonly CoverImageService _coverImageService = new();
-    private readonly FinalTagService _finalTagService = new();
-    private readonly Mp3DiscImportService _mp3DiscImportService = new();
-    private readonly Mp3DiscProjectService _mp3DiscProjectService = new();
-    private readonly Mp3DiscUiStatusService _mp3DiscUiStatusService = new();
-    private readonly Mp3DiscPreparationService _mp3DiscPreparationService = new();
-    private readonly Mp3DiscTrackReconciliationService _mp3DiscTrackReconciliationService = new();
-    private readonly DiscDriveService _discDriveService = new();
-    private readonly DiscDriveConfigurationService _discDriveConfigurationService = new();
-    private readonly DiscDriveRotationService _discDriveRotationService = new();
-    private readonly DiscDriveCandidateProbeService _discDriveCandidateProbeService;
-    private readonly AudioDiscReaderService _audioDiscReaderService = new();
-    private readonly AudioDiscProjectService _audioDiscProjectService = new();
-    private readonly AudioDiscRipService _audioDiscRipService = new();
-    private readonly AudioDiscPipelineTimingService _audioDiscPipelineTimingService = new();
-    private readonly AudioDiscLiveConversionService _audioDiscLiveConversionService = new();
-    private readonly IDiscWaitDialogService _discWaitDialogService;
-    private readonly Mp3DiscPollingService _mp3DiscPollingService;
-    private readonly Mp3DiscWaitDialogService _mp3DiscWaitDialogService;
-    private readonly AudioDiscPollingService _audioDiscPollingService;
-    private readonly BookMetadataService _bookMetadataService = new();
-    private readonly ExportValidationService _exportValidationService = new();
-    private readonly OutputFolderLayoutService _outputFolderLayoutService = new();
-    private readonly WorkManifestService _workManifestService = new();
-    private readonly ProjectSnapshotService _projectSnapshotService;
-    private readonly ProjectExtensionRollbackService _projectExtensionRollbackService = new();
-    private readonly AudioDiscRunPreparationService _audioDiscRunPreparationService;
-    private readonly AudioDiscRipWorkflowService _audioDiscRipWorkflowService;
-    private readonly AudioDiscRipCompletionWorkflowService _audioDiscRipCompletionWorkflowService;
-    private readonly ExportPlanService _exportPlanService = new();
-    private readonly ConvertedFileCleanupService _convertedFileCleanupService = new();
-    private readonly TrackWorkspaceFilterService _trackWorkspaceFilterService = new();
-    private readonly WorkFolderStructureService _workFolderStructureService = new();
-    private readonly ProjectIndexService _projectIndexService = new();
-    private readonly ProjectResumePlanService _projectResumePlanService = new();
-    private readonly TrackPreparedStateRefreshService _trackPreparedStateRefreshService;
-    private readonly ProjectResumeLoadWorkflowService _projectResumeLoadWorkflowService;
-    private readonly ExportUiStateService _exportUiStateService = new();
-    private readonly PausedPipelineContinuationService _pausedPipelineContinuationService = new();
-    private readonly ExportChapterService _exportChapterService = new();
-    private readonly ExportFailureDetailsService _exportFailureDetailsService = new();
-    private readonly WorkflowExportFailureStatusService _workflowExportFailureStatusService = new();
-    private readonly FfmpegRunnerService _ffmpegRunnerService = new();
-    private readonly AacExportProcessingService _aacExportProcessingService;
-    private readonly LocalProjectImportService _localProjectImportService = new();
-    private readonly LocalProjectExtensionStateService _localProjectExtensionStateService = new();
-    private readonly LocalProjectLivePreparationService _localProjectLivePreparationService;
-    private readonly LiveConversionWorkflowService _liveConversionWorkflowService;
-    private readonly Mp3DiscPresetPreparationWorkflowService _mp3DiscPresetPreparationWorkflowService;
-    private readonly Mp3DiscImportWorkflowService _mp3DiscImportWorkflowService;
-    private readonly ExportWorkflowService _exportWorkflowService;
-    private readonly ApplicationShutdownService _applicationShutdownService = new();
-    private readonly TrackIssueSummaryService _trackIssueSummaryService = new();
-    private readonly NotificationService _notificationService;
+    private enum TrackAnalysisCancellationScope
+    {
+        None,
+        LocalFolderImport,
+        LocalFolderExtension,
+        ResumeLoad
+    }
+
+    private readonly MainWindowServiceComposition _services;
+    private readonly MainWindowRuntimeComposition _runtimeServices;
     private readonly TrackStateUpdateQueueService _trackStateUpdateQueueService;
-    private readonly DiagnosticLogService _diagnosticLogService;
-    private readonly WorkflowStatusCoordinator _workflowStatusCoordinator = new();
-    private readonly WorkflowStatusFormatter _workflowStatusFormatter = new();
-    private readonly LocalWorkflowStatusAdapter _localWorkflowStatusAdapter = new();
-    private readonly Mp3DiscWorkflowStatusAdapter _mp3DiscWorkflowStatusAdapter = new();
-    private readonly AudioDiscWorkflowStatusAdapter _audioDiscWorkflowStatusAdapter = new();
+    private readonly DispatcherTimer _chapterMetadataRefreshTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(250)
+    };
+    private readonly DispatcherTimer _projectSetupDiscCountRefreshTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(120)
+    };
+    private readonly Stopwatch _startupPerformanceStopwatch = Stopwatch.StartNew();
+    private string _startupPerformanceDetails = string.Empty;
+    private readonly Presentation.MainWindowPresentationState _presentationState = new();
+    private readonly ChapterSettingsEditorService _chapterSettingsEditorService = new();
+    private bool _isRefreshingMainChapterSettingsEditor;
 
     private AppSettings _settings = new();
-    private string? _developerAudioDiscTestDriveRoot;
+    private CoverPickerService _coverPickerService = null!;
+    private DebugSettings _debugSettings = new();
+    private DebugWindowPlacementService? _debugWindowPlacementService;
+    private DeveloperToolsWindow? _developerToolsWindow;
     private FfmpegToolStatus _ffmpegStatus = new();
     private bool _isLoadingSettings;
     private bool _suppressPresetBitrateWarning;
     private bool _isApplyingExportPresetSelectionToUi;
-    private bool _isBusy;
-    private bool _isExporting;
-    private bool _isDiscImporting;
-    private bool _isPipelinePaused;
-    private bool _isPipelineFailed;
-    private bool _pauseRequested;
-    private bool _isProjectExtensionRun;
     private Func<Task>? _pausedProjectExtensionContinuation;
     private Action? _pausedProjectExtensionStopAction;
+    private PresetReconversionRollbackContext? _presetReconversionRollbackContext;
+    private ProjectExtensionRollbackSnapshot? _projectExtensionRollbackSnapshot;
     private TimeSpan _audioDiscElapsedBeforeCurrentRun;
     private TimeSpan _audioDiscCurrentRunElapsed;
     private int? _audioDiscElapsedDiscNumber;
     private string _audioDiscElapsedProjectFolder = string.Empty;
     private CancellationTokenSource? _exportCancellation;
+    private string? _lockedDiscResumePreset;
+    private readonly DiscResumePreviewState _resumeDiscPreview = new();
+    private bool _resumeDiscSourceSelectionRequired;
+    private string? _resumeDiscStartDriveRoot;
+    private bool _isDiscStopSaveInProgress;
     private CancellationTokenSource? _discImportCancellation;
+    private CancellationTokenSource? _trackAnalysisCancellation;
+    private TrackAnalysisCancellationScope _trackAnalysisCancellationScope;
     private Guid _workflowStatusOperationId;
     private Mp3DiscProjectManifest? _activeMp3DiscManifest;
+    private readonly Mp3DiscChapterSourceCatalog _mp3DiscChapterSourceCatalog = new();
+    private Mp3DiscPendingChapterDisc? _transientMp3DiscChapterPreview;
+    private ChapterAutoEngineResult? _currentAutoChapterResult;
+    private ActiveChapterResult? _currentActiveChapterResult;
+    private IReadOnlyList<MetadataFieldDecisionDiagnostic> _latestMetadataFieldDecisions = [];
+    private string _latestMetadataDiagnosisProjectFolder = string.Empty;
     private bool _isShutdownInProgress;
     private bool _allowWindowClose;
+    private bool _windowCloseCleanupCompleted;
+    private PerformanceOperationScope _shutdownPerformanceScope;
     private bool _isApplyingTrackGridColumnLayout;
     private bool _trackGridContextMenuForHeader;
+    private readonly HashSet<Grid> _embeddedChapterRowGrids = [];
+    private string _embeddedChapterColumnLayoutSignature = string.Empty;
     private bool _isCoverDialogOpen;
     private string _trackGridSortKey = string.Empty;
     private ListSortDirection _trackGridSortDirection = ListSortDirection.Descending;
     private TrackInfo? _lastFileWarningJumpTrack;
     private TrackInfo? _lastChapterWarningJumpTrack;
+    private TrackEmbeddedChapterDisplayInfo? _activeEmbeddedChapterRow;
+    private bool _isUpdatingTrackSelectionFromChapterNavigation;
+    private static readonly TimeSpan TrackGridAutoScrollInterval = TimeSpan.FromMilliseconds(16);
+    private static readonly TimeSpan TrackGridAutoScrollMaxElapsed = TimeSpan.FromMilliseconds(50);
+    private readonly DispatcherTimer _trackGridAutoScrollTimer = new(DispatcherPriority.Render) { Interval = TrackGridAutoScrollInterval };
+    private readonly Stopwatch _trackGridAutoScrollClock = new();
+    private bool _isTrackGridAutoScrollActive;
+    private Point _trackGridAutoScrollAnchor;
+    private Point _trackGridAutoScrollCurrent;
+    private TimeSpan _trackGridAutoScrollLastTimestamp;
+    private Cursor? _trackGridCursorBeforeAutoScroll;
 
-    private string _selectedFolder = "Noch kein Ordner ausgewählt.";
+    private static string NoProjectStatusText => LocalizationText.Get("MainWindow.General.ReadyForProject");
+
+    private string _selectedFolder = string.Empty;
     private string _selectedSourceDisplayOverride = "";
     private string _selectedSourceOpenPathOverride = "";
-    private string _statusText = "Bereit.";
+    private string _statusText = NoProjectStatusText;
     private string _currentFolderPath = "";
     private string _currentProjectWorkFolder = "";
+    private readonly SessionProjectLifecycle _sessionProject = new();
+    private readonly Guid _processingRunId = Guid.NewGuid();
+    private DeferredProjectIdentity? _activeLocalPreparation;
+    private bool _isWorkspaceReplacementInProgress;
+    private int _workspaceReplacementVersion;
+    private bool _isProjectCloseInProgress;
+    private bool _isResumeLoading;
+    private ProjectMaintenanceCoordinator? _maintenanceCoordinator;
+    private int _openSettingsContexts;
+    private int _openMetadataContexts;
+    private bool _mainWindowReady;
+    private bool _isProjectBrowserOpen;
+    private long _displayedProjectCatalogGeneration = -1;
     private string _pendingDiscProjectSourceFolder = "";
     private DiscProjectSetupResult? _pendingMp3DiscSetupResult;
     private DiscSourceQuickIdentity? _pendingMp3DiscQuickIdentity;
     private string _pendingMp3DiscStructureSignature = "";
     private AudioDiscInfo? _pendingAudioDisc;
     private int _pendingAudioDiscTotalDiscs = 1;
+    private int? _previewEffectiveTotalDiscs;
     private bool _isAudioDiscProjectAwaitingRip;
     private AudioDiscProjectManifest? _activeAudioDiscManifest;
-    private bool _loadedResumeProjectNeedsDiscImport;
-    private bool _loadedResumeProjectIsMp3Disc;
-    private bool _loadedResumeProjectIsAudioDisc;
-    private bool _loadedResumeProjectIsLocal;
+    private LoadedProjectStateSnapshot _loadedProjectState = LoadedProjectStateSnapshot.None;
     private int _mp3DiscBackgroundPresetPreparationActive;
-    private bool _isWaitingForManualMergeReview;
+    private ProjectReviewStateSnapshot _projectReviewState =
+        new(ProjectPipelineState.Preparing, false, false);
     private string _manualMergeReviewPreparedPreset = "";
     private bool _manualMergeReviewNeedsReconversion;
-    private bool _isCurrentProjectCompleted;
-    private ProjectPipelineState _pipelineState = ProjectPipelineState.Preparing;
-    private bool? _pauseBeforeMergeOverride;
-    private string _outputFolder = "";
+    private bool _manualMergeReviewHasPreparedTracks;
 
-    private string _bookTitle = "";
-    private string _author = "";
-    private string _narrator = "";
-    private string _album = "";
-    private string _series = "";
-    private bool _isSynchronizingTitleAndAlbum;
+    private string _outputFolder = "";
+    private readonly ProjectMetadataState _projectMetadata = new();
+    private readonly ProjectMetadataSession _projectMetadataSession = new();
+    private MetadataDialog? _developmentMetadataDialog;
+    private readonly ChapterGridColumnLayoutState _chapterGridColumnLayoutState = new();
+    private bool _suppressProjectMetadataStateNotifications;
+    private bool _isWorkspaceTransitioning;
+    private bool _integritySweepRunning;
+    private string _lastObservedProjectMetadataBookTitle = "";
+    private string _replaceableGenreSeed = "";
+
     private bool _isMetadataPanelExpanded;
     private bool _isMetadataEditingAvailable;
-    private string _genre = "Audiobook";
     private string _outputExtension = ".m4a";
     private string _fileNameTemplate = "{Autor} - {Titel}";
-    private string _selectedExportPreset = "AAC Stereo 192 kbps";
+    private string _selectedExportPreset = ExportPreset.DefaultDisplayName;
     private string _parallelJobsInput = "Auto";
-    private string _coverSourcePath = "";
-    private string _processedCoverPath = "";
-    private string _coverPreviewSource = DefaultCoverPreviewSource;
     private double _exportProgressPercent;
     private string _exportProgressForeground = "#16858A";
     private bool _isProgressIndeterminate;
-    private const string DiscAnalysisReadingText = "CD wird gelesen …";
-    private const string DiscAnalysisSlowText = "Das Laufwerk antwortet langsam. Bitte einen Moment warten …";
+    private static string DiscAnalysisReadingText => LocalizationText.Get("MainWindow.DiscAnalysis.Reading");
+    private static string DiscAnalysisSlowText => LocalizationText.Get("MainWindow.DiscAnalysis.Slow");
 
     private bool _isDiscSourceAnalysisActive;
     private string _discSourceAnalysisText = DiscAnalysisReadingText;
-    private string _exportProgressText = "0,0 % | 0/0 fertig";
+    private string _exportProgressText = LocalizationText.Format("MainWindow.Progress.Idle", 0);
     private ProjectIndexItem? _selectedResumeProject;
 
-    public ObservableCollection<TrackInfo> Tracks { get; } = [];
+    public BulkObservableCollection<TrackInfo> Tracks { get; } = [];
     public ObservableCollection<ProjectIndexItem> ResumeProjects { get; } = [];
 
-    public IReadOnlyList<string> ExportPresets { get; } =
-    [
-        "AAC Mono 64 kbps",
-        "AAC Mono 96 kbps",
-        "AAC Stereo 96 kbps",
-        "AAC Stereo 128 kbps",
-        "AAC Stereo 160 kbps",
-        "AAC Stereo 192 kbps",
-        "AAC Stereo 256 kbps"
-    ];
+    public IReadOnlyList<string> ExportPresets { get; } = ExportPreset.AvailableDisplayNames;
 
     public bool IsBusy
     {
-        get => _isBusy;
+        get => _presentationState.IsBusy;
         set
         {
-            if (_isBusy == value)
+            var change = MainWindowSelectionStateService.CreateBooleanChange(
+                _presentationState.IsBusy,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _isBusy = value;
+            _presentationState.IsBusy = change.Value;
+            if (change.Value)
+                StopTrackGridAutoScroll();
+
             OnPropertyChanged();
             NotifyExportUiStateChanged();
+            RefreshSystemSleepPrevention();
         }
     }
 
     public bool IsExporting
     {
-        get => _isExporting;
+        get => _presentationState.IsExporting;
         set
         {
-            if (_isExporting == value)
+            var change = MainWindowSelectionStateService.CreateBooleanChange(
+                _presentationState.IsExporting,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _isExporting = value;
+            _presentationState.IsExporting = change.Value;
             OnPropertyChanged();
             NotifyExportUiStateChanged();
+            RefreshSystemSleepPrevention();
         }
     }
 
     public bool IsDiscImporting
     {
-        get => _isDiscImporting;
+        get => _presentationState.IsDiscImporting;
         set
         {
-            if (_isDiscImporting == value)
+            var change = MainWindowSelectionStateService.CreateBooleanChange(
+                _presentationState.IsDiscImporting,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _isDiscImporting = value;
+            _presentationState.IsDiscImporting = change.Value;
             OnPropertyChanged();
             NotifyExportUiStateChanged();
+            RefreshSystemSleepPrevention();
         }
     }
 
-    private ExportUiStateSnapshot ExportUiState => _exportUiStateService.Create(new ExportUiStateInput(
-        _pipelineState,
-        IsBusy,
-        _isPipelinePaused,
-        _isPipelineFailed,
-        _isProjectExtensionRun,
-        _manualMergeReviewNeedsReconversion,
-        _ffmpegStatus.FfmpegAvailable,
-        _loadedResumeProjectNeedsDiscImport,
-        _loadedResumeProjectIsMp3Disc,
-        _loadedResumeProjectIsAudioDisc,
-        _loadedResumeProjectIsLocal,
-        Tracks.Count,
-        !string.IsNullOrWhiteSpace(OutputFolder),
-        ExportProgressPercent,
-        SelectedResumeProject is not null));
+    private ExportUiStateSnapshot ExportUiState =>
+        _services.Status.ExportUiStateService.Create(
+            ExportUiStateInputService.Create(
+                new ExportUiStateSource(
+                    ProjectReviewState.Phase,
+                    new PipelineExecutionState(
+                        IsBusy || _isDiscStopSaveInProgress || _isProjectCloseInProgress || _isWorkspaceTransitioning,
+                        _presentationState.IsPipelinePaused,
+                        _presentationState.IsPipelineFailed,
+                        _presentationState.IsProjectExtensionRun),
+                    _manualMergeReviewNeedsReconversion,
+                    _manualMergeReviewHasPreparedTracks,
+                    _ffmpegStatus.FfmpegAvailable,
+                    LoadedProjectState.ToPipelineProjectState(),
+                    Tracks.Count,
+                    EffectiveOutputFolder,
+                    ExportProgressPercent,
+                    SelectedResumeProject,
+                    _trackAnalysisCancellation is { IsCancellationRequested: false } &&
+                    _trackAnalysisCancellationScope != TrackAnalysisCancellationScope.None,
+                    _presetReconversionRollbackContext is not null,
+                    _resumeDiscPreview.DiscNumber is not null && !_resumeDiscSourceSelectionRequired &&
+                    !IsDiscImporting && !IsExporting,
+                    _presentationState.PauseRequested, _presentationState.UiTransition,
+                    IsDiscImporting, IsExporting, _resumeDiscPreview.ProcessingStarted)));
 
     public bool CanSelectFolder => ExportUiState.CanSelectFolder;
-    public bool CanStartNewProject => CanSelectFolder && _ffmpegStatus.FfmpegAvailable;
+    public bool CanStartNewProject =>
+        CanSelectFolder && _ffmpegStatus.FfmpegAvailable;
     public bool CanConfigureFfmpeg => ExportUiState.CanConfigureFfmpeg;
-    public string FolderButtonGlyph => "📁";
-    public string DiscButtonGlyph => "💿";
-    public Visibility FfmpegSetupButtonVisibility => !_ffmpegStatus.FfmpegAvailable || _settings.ForceShowFfmpegSetupButton
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    public PrimaryButtonVisualState FolderDiscActionVisualState =>
+        MainActionButtonVisualStateService.ResolveProjectAction(LoadedProjectState.HasLoadedProject, CanStartNewProject);
+
+    public PrimaryButtonVisualState ProjectsActionVisualState =>
+        MainActionButtonVisualStateService.ResolveProjectAction(LoadedProjectState.HasLoadedProject, CanRefreshResumeProjects);
+
+    public PrimaryButtonVisualState MetadataActionVisualState =>
+        MainActionButtonVisualStateService.ResolveMetadataAction(CanChangeBookMetadata);
+
+    public string FolderButtonGlyph => UiSymbolResources.Folder;
+    public string DiscButtonGlyph => UiSymbolResources.AudioDisc;
+    private MainWindowSourcePresentation SourcePresentation =>
+        MainWindowSourcePresentationService.Create(
+            Tracks.Count,
+            SelectedFolder,
+            _selectedSourceDisplayOverride,
+            _selectedSourceOpenPathOverride,
+            Tracks.Count > 0 && (LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc));
+
+    public bool HasProjectTracks => Tracks.Count > 0;
+    public Visibility FfmpegSetupButtonVisibility =>
+        !_ffmpegStatus.FfmpegAvailable || _debugSettings.ForceShowFfmpegSetupButton
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public double TrackGridRowHeight =>
+        TrackGridRowHeightService.GetRowHeight(_debugSettings.TrackGridRowHeightLevel);
     public bool CanEditTrackOrder => ExportUiState.CanEditTrackOrder;
-    public bool CanStartExport => ExportUiState.CanStartExport ||
-        (_isAudioDiscProjectAwaitingRip &&
-         !IsBusy &&
-         !IsExporting &&
-         !IsDiscImporting &&
-         _activeAudioDiscManifest is not null &&
-         _ffmpegStatus.FfmpegAvailable);
+    public bool CanStartExport =>
+        _presentationState.UiTransition is null && !_presentationState.PauseRequested &&
+        !_isDiscStopSaveInProgress && (ExportUiState.CanStartExport ||
+        AudioDiscExportAvailabilityService.CanStart(
+            _isAudioDiscProjectAwaitingRip,
+            IsBusy,
+            IsExporting,
+            IsDiscImporting,
+            _activeAudioDiscManifest is not null,
+            _ffmpegStatus.FfmpegAvailable));
     public string ExportButtonText => ExportUiState.ExportButtonText;
+    public Visibility ExportButtonVisibility => ExportUiState.ExportButtonVisibility;
     public string SecondaryButtonText => ExportUiState.SecondaryButtonText;
     public Visibility SecondaryButtonVisibility => ExportUiState.SecondaryButtonVisibility;
-    public bool CanCancelExport => ExportUiState.CanCancelExport;
+    private bool IsNewProjectPreparation => !string.IsNullOrWhiteSpace(_sessionProject.ProjectFolder) &&
+        TrackPathService.PathEquals(_sessionProject.ProjectFolder, _currentProjectWorkFolder) &&
+        ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting;
+    public bool CanDeletePausedNewProject => _presentationState.UiTransition is null && !_isDiscStopSaveInProgress && !_isProjectCloseInProgress &&
+        _presentationState.IsPipelinePaused && !IsBusy && IsNewProjectPreparation &&
+        _sessionProject.ProjectType == ProjectManifestTypes.FolderProject &&
+        !_presentationState.IsProjectExtensionRun && _presetReconversionRollbackContext is null;
+
+    public bool CanCancelExport => !_isDiscStopSaveInProgress && ExportUiState.CanCancelExport;
+    public bool CanStopAndSaveDiscProject => _presentationState.UiTransition is null && _presentationState.IsPipelinePaused &&
+        !IsBusy && !_isDiscStopSaveInProgress &&
+        (LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc) &&
+        DiscProjectStopSaveService.CanOfferImportSave(ProjectReviewState.Phase,
+            LoadedProjectState.NeedsDiscImport || _isAudioDiscProjectAwaitingRip ||
+            (_sessionProject.Owns(_currentProjectWorkFolder) && _sessionProject.StartAccepted) ||
+            _activeMp3DiscManifest?.IsStoppedForResume == true || _activeAudioDiscManifest?.IsStoppedForResume == true,
+            _presentationState.IsProjectExtensionRun, _presetReconversionRollbackContext is not null) &&
+        new DiscProjectStopSaveService().CanSave(_currentProjectWorkFolder);
+    public Visibility StopAndSaveDiscProjectVisibility => CanStopAndSaveDiscProject ||
+        _presentationState.UiTransition?.Target == PipelineUiTransitionTarget.DiscStopSave ? Visibility.Visible : Visibility.Collapsed;
+    public string StopAndSaveDiscProjectButtonText => _presentationState.UiTransition?.Target == PipelineUiTransitionTarget.DiscStopSave
+        ? _presentationState.UiTransition.ButtonText : LocalizationText.Get("MainWindow.Action.Save");
+    public Visibility DeleteNewProjectVisibility => CanDeletePausedNewProject ||
+        _presentationState.UiTransition?.Target == PipelineUiTransitionTarget.DeleteNewProject ? Visibility.Visible : Visibility.Collapsed;
+    public string DeleteNewProjectButtonText => _presentationState.UiTransition?.Target == PipelineUiTransitionTarget.DeleteNewProject
+        ? _presentationState.UiTransition.ButtonText : LocalizationText.Get("Project.Close.Delete");
     public bool CanAddProjectSources => ExportUiState.CanAddProjectSources;
     public Visibility AddProjectSourcesVisibility => ExportUiState.AddProjectSourcesVisibility;
     public string AddProjectSourcesButtonText => ExportUiState.AddProjectSourcesButtonText;
     public bool CanChooseOutputFolder => ExportUiState.CanChooseOutputFolder;
-    public bool CanOpenSelectedFolder => Directory.Exists(SelectedSourceOpenPath);
-    public bool CanOpenOutputFolder => Directory.Exists(OutputFolder);
+    public bool CanOpenSelectedFolder =>
+        !string.IsNullOrWhiteSpace(SelectedSourceOpenPath) && Directory.Exists(SelectedSourceOpenPath);
+    public bool CanOpenOutputFolder =>
+        !string.IsNullOrWhiteSpace(OutputFolder) && Directory.Exists(OutputFolder);
+
+    private string EffectiveOutputFolder =>
+        OutputFolderFallbackService.Resolve(OutputFolder);
+
+    private OutputFolderPrimaryAction EffectiveOutputFolderPrimaryAction =>
+        OutputFolderPrimaryActionService.Resolve(
+            _settings.OutputFolderPrimaryAction,
+            CanOpenOutputFolder);
+
+    public bool IsOutputFolderOpenPrimaryAction =>
+        EffectiveOutputFolderPrimaryAction == OutputFolderPrimaryAction.Open;
+
+    public bool IsOutputFolderChangePrimaryAction =>
+        EffectiveOutputFolderPrimaryAction == OutputFolderPrimaryAction.Change;
+
     public bool CanChangeExportOptions => ExportUiState.CanChangeExportOptions;
-    public bool CanChangeExportPreset => ExportUiState.CanChangeExportPreset;
+    public bool CanChangeExportPreset => string.IsNullOrWhiteSpace(_lockedDiscResumePreset) && ExportUiState.CanChangeExportPreset;
+
+    public bool DriveCircleEnabled
+    {
+        get => _settings.ExperimentalDriveRoundEnabled;
+        set
+        {
+            _services.Foundation.GlobalSettingsManager.DriveCircleEnabled = value;
+        }
+    }
+    public Visibility DriveCircleVisibility => LoadedProjectState.IsMp3Disc || LoadedProjectState.IsAudioDisc ||
+        _pendingAudioDisc is not null || !string.IsNullOrWhiteSpace(_pendingDiscProjectSourceFolder)
+            ? Visibility.Visible : Visibility.Collapsed;
 
     public bool MergeAutomaticallyAfterConversion
     {
         get => _settings.MergeAutomaticallyAfterConversion;
         set
         {
-            if (_settings.MergeAutomaticallyAfterConversion == value)
+            var change = MainWindowSelectionStateService.CreateBooleanChange(
+                _settings.MergeAutomaticallyAfterConversion,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _settings.MergeAutomaticallyAfterConversion = value;
+            _settings.MergeAutomaticallyAfterConversion = change.Value;
             OnPropertyChanged();
             SaveSettingsIfReady();
         }
     }
 
     public bool CanOpenSettings => ExportUiState.CanOpenSettings;
-    public bool CanChangeBookMetadata => _isMetadataEditingAvailable && ExportUiState.CanChangeBookMetadata;
+    public bool CanChangeBookMetadata =>
+        _isMetadataEditingAvailable && ExportUiState.CanChangeBookMetadata;
+    public bool CanRemoveCover => CoverPreviewPresentationService.CanRemove(
+        _projectMetadata.ProcessedCoverPath,
+        CanChangeBookMetadata);
     public bool CanRefreshResumeProjects => ExportUiState.CanRefreshResumeProjects;
     public bool CanInspectSelectedResumeProject => ExportUiState.CanInspectSelectedResumeProject;
-    public Visibility ExportProgressVisibility => ExportUiState.ExportProgressVisibility;
+    public Visibility ExportProgressVisibility => _isResumeLoading ? Visibility.Visible : ExportUiState.ExportProgressVisibility;
 
-    public string PipelineStateDebugText => $"Zustand: {_pipelineState}";
-
-    public Visibility PipelineStateDebugVisibility => _settings.ShowDeveloperTab && _settings.ShowPipelineStateDebug
-        ? Visibility.Visible
-        : Visibility.Collapsed;
-
-    public string ResumeProjectSummary => ResumeProjects.Count == 0
-        ? "Keine Projekte im Projektordner"
-        : ResumeProjects.Count == 1
-            ? "1 Projekt gefunden"
-            : $"{ResumeProjects.Count} Projekte gefunden";
+    public string ResumeProjectSummary =>
+        ResumeProjectSummaryService.Create(ResumeProjects.Count);
 
     public ProjectIndexItem? SelectedResumeProject
     {
         get => _selectedResumeProject;
         set
         {
-            if (ReferenceEquals(_selectedResumeProject, value))
+            var change = MainWindowSelectionStateService.CreateReferenceChange(
+                _selectedResumeProject,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _selectedResumeProject = value;
+            _selectedResumeProject = change.Value;
             OnPropertyChanged();
             NotifyExportUiStateChanged();
         }
@@ -341,7 +446,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _selectedFolder;
         set
         {
-            _selectedFolder = value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _selectedFolder,
+                value ?? string.Empty);
+
+            if (!change.HasChanged)
+                return;
+
+            _selectedFolder = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectedSourceDisplayText));
             OnPropertyChanged(nameof(SelectedSourceOpenPath));
@@ -349,41 +461,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    public string SelectedSourceDisplayText => !string.IsNullOrWhiteSpace(_selectedSourceDisplayOverride)
-        ? _selectedSourceDisplayOverride
-        : BuildSelectedSourceDisplayText(SelectedFolder);
+    public string SelectedSourceDisplayText => SourcePresentation.DisplayText;
 
-    public string SelectedSourceOpenPath => !string.IsNullOrWhiteSpace(_selectedSourceOpenPathOverride)
-        ? _selectedSourceOpenPathOverride
-        : SelectedFolder;
+    public string SelectedSourceOpenPath => SourcePresentation.OpenPath;
 
-    public string CurrentProjectTypeGlyph
+    private LoadedProjectStateSnapshot LoadedProjectState => _loadedProjectState;
+
+    private ProjectReviewStateSnapshot ProjectReviewState => _projectReviewState;
+
+    private void ApplyLoadedProjectState(LoadedProjectStateSnapshot state)
     {
-        get
-        {
-            if (_loadedResumeProjectIsAudioDisc || _activeAudioDiscManifest is not null)
-                return "♪";
-
-            if (_loadedResumeProjectIsMp3Disc || _activeMp3DiscManifest is not null)
-                return "◉";
-
-            if (_loadedResumeProjectIsLocal || !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
-                return "▣";
-
-            return string.Empty;
-        }
+        _loadedProjectState = state;
+        OnPropertyChanged(nameof(FolderDiscActionVisualState));
+        OnPropertyChanged(nameof(ProjectsActionVisualState));
     }
 
-    public Visibility CurrentProjectTypeGlyphVisibility => string.IsNullOrWhiteSpace(CurrentProjectTypeGlyph)
-        ? Visibility.Collapsed
-        : Visibility.Visible;
+    private void ApplyProjectReviewState(ProjectReviewStateSnapshot state)
+    {
+        _projectReviewState = state;
+        NotifyExportUiStateChanged();
+        RefreshSystemSleepPrevention();
+    }
+
+    private CurrentProjectTypePresentation CurrentProjectTypePresentation =>
+        CurrentProjectTypePresentationService.Create(
+            LoadedProjectState,
+            _activeAudioDiscManifest is not null,
+            _activeMp3DiscManifest is not null,
+            !string.IsNullOrWhiteSpace(_currentProjectWorkFolder));
+
+    public string CurrentProjectTypeGlyph => CurrentProjectTypePresentation.Glyph;
+
+    public Visibility CurrentProjectTypeGlyphVisibility => CurrentProjectTypePresentation.IsVisible
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     public string StatusText
     {
-        get => _statusText;
+        get => _presentationState.ProjectStatus(_statusText);
         set
         {
-            _statusText = value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _statusText,
+                (value ?? string.Empty));
+
+            if (!change.HasChanged)
+                return;
+
+            _statusText = change.Value;
             OnPropertyChanged();
         }
     }
@@ -393,49 +518,163 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _outputFolder;
         set
         {
-            _outputFolder = value?.Trim() ?? "";
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _outputFolder,
+                (value?.Trim() ?? string.Empty));
+
+            if (!change.HasChanged)
+                return;
+
+            _outputFolder = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanStartExport));
             OnPropertyChanged(nameof(CanOpenOutputFolder));
+            OnPropertyChanged(nameof(IsOutputFolderOpenPrimaryAction));
+            OnPropertyChanged(nameof(IsOutputFolderChangePrimaryAction));
+            UpdateOutputFolderBadge();
 
             _settings.OutputFolder = _outputFolder;
             SaveSettingsIfReady();
         }
     }
 
-    private bool IsTitleAlbumLinked => _settings.KeepAlbumLinkedToTitle;
+    private void ProjectMetadata_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_suppressProjectMetadataStateNotifications)
+            return;
+
+        switch (e.PropertyName)
+        {
+            case nameof(ProjectMetadataState.CanonicalMetadata):
+                SynchronizeActiveMetadataBindings();
+                break;
+
+            case nameof(ProjectMetadataState.BookTitle):
+            {
+                var previousTitle = _lastObservedProjectMetadataBookTitle;
+                _lastObservedProjectMetadataBookTitle = _projectMetadata.BookTitle;
+                OnPropertyChanged(nameof(BookTitle));
+                OnPropertyChanged(nameof(MetadataSummaryTitle));
+                OnPropertyChanged(nameof(MetadataSummaryDetails));
+                OnPropertyChanged(nameof(OutputFileNamePreview));
+                OnExportPreviewChanged();
+                QueueChapterMetadataRefreshIfNeeded();
+                RefreshActiveAudioDiscPreviewMetadata();
+                RefreshActiveMp3DiscPreviewMetadata(previousTitle);
+                AlignManagedCoverWithBookTitle();
+                break;
+            }
+
+            case nameof(ProjectMetadataState.Album):
+                OnPropertyChanged(nameof(Album));
+                OnPropertyChanged(nameof(MetadataSummaryDetails));
+                QueueChapterMetadataRefreshIfNeeded();
+                break;
+
+            case nameof(ProjectMetadataState.Author):
+                OnPropertyChanged(nameof(Author));
+                OnPropertyChanged(nameof(MetadataSummaryDetails));
+                OnPropertyChanged(nameof(OutputFileNamePreview));
+                OnExportPreviewChanged();
+                RefreshActiveAudioDiscPreviewMetadata();
+                break;
+
+            case nameof(ProjectMetadataState.Narrator):
+                OnPropertyChanged(nameof(Narrator));
+                OnPropertyChanged(nameof(MetadataSummaryDetails));
+                OnPropertyChanged(nameof(OutputFileNamePreview));
+                OnExportPreviewChanged();
+                break;
+
+            case nameof(ProjectMetadataState.Genre):
+                OnPropertyChanged(nameof(Genre));
+                OnPropertyChanged(nameof(MetadataSummaryDetails));
+                if (GenreListService.IsSelectableGenre(_projectMetadata.Genre))
+                {
+                    _settings.DefaultGenre = _projectMetadata.Genre;
+                    SaveSettingsIfReady();
+                }
+                break;
+
+            case nameof(ProjectMetadataState.CoverPreviewSource):
+                OnPropertyChanged(nameof(CoverPreviewSource));
+                OnPropertyChanged(nameof(CoverHintVisibility));
+                break;
+
+            case nameof(ProjectMetadataState.ProcessedCoverPath):
+                OnPropertyChanged(nameof(CoverHintVisibility));
+                OnPropertyChanged(nameof(CanRemoveCover));
+                break;
+        }
+    }
 
     public string BookTitle
     {
-        get => _bookTitle;
+        get => _projectMetadata.BookTitle;
         set
         {
-            var previousTitle = _bookTitle;
-            _bookTitle = value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _projectMetadata.BookTitle,
+                value);
+            if (!change.HasChanged)
+                return;
+
+            var previousTitle = _projectMetadata.BookTitle;
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.BookTitle = change.Value;
+            _lastObservedProjectMetadataBookTitle = change.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryTitle));
             OnPropertyChanged(nameof(MetadataSummaryDetails));
             OnPropertyChanged(nameof(OutputFileNamePreview));
 
-            if (IsTitleAlbumLinked && !_isSynchronizingTitleAndAlbum)
-            {
-                _isSynchronizingTitleAndAlbum = true;
-                Album = value;
-                _isSynchronizingTitleAndAlbum = false;
-            }
-
             OnExportPreviewChanged();
+            QueueChapterMetadataRefreshIfNeeded();
             RefreshActiveAudioDiscPreviewMetadata();
             RefreshActiveMp3DiscPreviewMetadata(previousTitle);
+            AlignManagedCoverWithBookTitle();
+        }
+    }
+
+    private void AlignManagedCoverWithBookTitle()
+    {
+        if (_presentationState.IsProjectExtensionRun || _presetReconversionRollbackContext is not null) return;
+        var currentPath = _projectMetadata.ProcessedCoverPath;
+        if (string.IsNullOrWhiteSpace(currentPath) || !File.Exists(currentPath))
+            return;
+
+        try
+        {
+            var alignedPath = _services.Media.CoverImageService.EnsureManagedCoverForTitle(currentPath, _projectMetadata.BookTitle);
+            if (string.Equals(alignedPath, currentPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var origin = _projectMetadata.CanonicalMetadata.Cover.Origin;
+            _projectMetadata.ApplyCoverMetadata(_projectMetadata.CoverSourcePath, alignedPath, origin);
+            CoverPreviewSource = alignedPath;
+            TryFlushCanonicalMetadataSession();
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Verwalteter Cover-Dateiname konnte nicht an den Titel angeglichen werden", ex);
         }
     }
 
     public string Author
     {
-        get => _author;
+        get => _projectMetadata.Author;
         set
         {
-            _author = value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _projectMetadata.Author,
+                value);
+            if (!change.HasChanged)
+                return;
+
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.Author = change.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryDetails));
             OnPropertyChanged(nameof(OutputFileNamePreview));
@@ -446,10 +685,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string Narrator
     {
-        get => _narrator;
+        get => _projectMetadata.Narrator;
         set
         {
-            _narrator = value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _projectMetadata.Narrator,
+                value);
+            if (!change.HasChanged)
+                return;
+
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.Narrator = change.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryDetails));
             OnPropertyChanged(nameof(OutputFileNamePreview));
@@ -460,79 +707,87 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string Album
     {
-        get => _album;
+        get => _projectMetadata.Album;
         set
         {
-            if (string.Equals(_album, value, StringComparison.Ordinal))
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _projectMetadata.Album,
+                value);
+            if (!change.HasChanged)
                 return;
 
-            _album = value ?? string.Empty;
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.Album = change.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryDetails));
+            QueueChapterMetadataRefreshIfNeeded();
 
-            if (IsTitleAlbumLinked && !_isSynchronizingTitleAndAlbum)
-            {
-                _isSynchronizingTitleAndAlbum = true;
-                BookTitle = _album;
-                _isSynchronizingTitleAndAlbum = false;
-            }
+            OnPropertyChanged(nameof(OutputFileNamePreview));
+            OnExportPreviewChanged();
         }
     }
-
-    public bool IsAlbumTabStop => !IsTitleAlbumLinked;
-
-    public string AlbumLinkToggleToolTip => IsTitleAlbumLinked
-        ? "Aktuell gekoppelt. Klicken, um Titel und Album getrennt zu bearbeiten."
-        : "Aktuell getrennt. Klicken, um Titel und Album automatisch zu koppeln.";
 
     public string Series
     {
-        get => _series;
-        set
-        {
-            if (string.Equals(_series, value, StringComparison.Ordinal))
-                return;
-
-            _series = value ?? string.Empty;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(MetadataSummaryDetails));
-        }
-    }
-
-    public string MetadataSummaryTitle => string.IsNullOrWhiteSpace(BookTitle)
-        ? "Hörbuch-Metadaten"
-        : BookTitle.Trim();
-
-    public string MetadataSummaryDetails
-    {
         get
         {
-            var parts = new[] { Author, Narrator, Album, Genre }
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(4);
-            return string.Join(" · ", parts);
+            var series = _projectMetadata.CanonicalMetadata?
+                .GetValue<IReadOnlyList<SeriesEntry>>(ProjectMetadataField.Series)
+                .Value ?? [];
+
+            return series
+                .FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.Name))
+                ?.Name
+                ?.Trim() ?? string.Empty;
         }
     }
 
-    public string MetadataToggleGlyph => _isMetadataPanelExpanded ? "\uE70E" : "\uE70D";
+    private MetadataSummaryPresentation MetadataSummaryPresentation =>
+        MetadataSummaryPresentationService.Create(
+            BookTitle,
+            Author,
+            Narrator,
+            Album,
+            Genre);
+
+    public string MetadataSummaryTitle =>
+        MetadataSummaryPresentation.Title;
+
+    public string MetadataSummaryDetails =>
+        MetadataSummaryPresentation.Details;
+
+    private MetadataPanelTogglePresentation MetadataPanelTogglePresentation =>
+        MetadataPanelTogglePresentationService.Create(_isMetadataPanelExpanded);
+
+    public string MetadataToggleGlyph =>
+        MetadataPanelTogglePresentation.Glyph;
 
     public string Genre
     {
-        get => _genre;
+        get => _projectMetadata.Genre;
         set
         {
             var normalized = NormalizeComboBoxValue(value);
-            if (GenreListService.IsSeparator(normalized))
+            var decision = GenreSelectionDecisionService.Create(
+                _projectMetadata.Genre,
+                normalized,
+                GenreListService.IsSeparator(normalized));
+
+            if (!decision.ShouldApply)
                 return;
 
-            _genre = normalized;
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.Genre = decision.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataSummaryDetails));
 
-            _settings.DefaultGenre = _genre;
-            SaveSettingsIfReady();
+            if (GenreListService.IsSelectableGenre(_projectMetadata.Genre))
+            {
+                _settings.DefaultGenre = _projectMetadata.Genre;
+                SaveSettingsIfReady();
+            }
         }
     }
 
@@ -541,11 +796,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _outputExtension;
         set
         {
-            _outputExtension = NormalizeComboBoxValue(value);
+            var change = ExportSettingsNormalizationService.CreateOutputExtensionChange(
+                _outputExtension,
+                NormalizeComboBoxValue(value));
 
-            if (_outputExtension != ".m4a" && _outputExtension != ".m4b")
-                _outputExtension = ".m4a";
+            if (!change.HasChanged)
+                return;
 
+            _outputExtension = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(OutputFileNamePreview));
             OnExportPreviewChanged();
@@ -560,7 +818,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _fileNameTemplate;
         set
         {
-            _fileNameTemplate = NormalizeComboBoxValue(value);
+            var change = ExportSettingsNormalizationService.CreateFileNameTemplateChange(
+                _fileNameTemplate,
+                value);
+
+            if (!change.HasChanged)
+                return;
+
+            _fileNameTemplate = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(OutputFileNamePreview));
             OnExportPreviewChanged();
@@ -570,23 +835,45 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    public string OutputFolderLayout
+    {
+        get => _settings.OutputFolderLayout;
+        set
+        {
+            var normalized = OutputFolderLayoutService.NormalizeLayout(value);
+            if (string.Equals(_settings.OutputFolderLayout, normalized, StringComparison.Ordinal))
+                return;
+            _settings.OutputFolderLayout = normalized;
+            OnPropertyChanged();
+            OnExportPreviewChanged();
+            SaveSettingsIfReady();
+        }
+    }
+
     public string SelectedExportPreset
     {
         get => _selectedExportPreset;
         set
         {
-            var preset = NormalizeComboBoxValue(value);
+            if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset) &&
+                !string.Equals(NormalizeComboBoxValue(value), _lockedDiscResumePreset, StringComparison.OrdinalIgnoreCase))
+                return;
+            var change = ExportSettingsNormalizationService.CreatePresetChange(
+                _selectedExportPreset,
+                NormalizeComboBoxValue(value),
+                ExportPresets,
+                ExportPreset.DefaultDisplayName);
 
-            if (!ExportPresets.Contains(preset))
-                preset = "AAC Stereo 192 kbps";
+            if (!change.HasChanged)
+                return;
 
-            _selectedExportPreset = preset;
+            _selectedExportPreset = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ExportPreviewCodecSummary));
 
             RecalculateProcessingActionsForCurrentPreset();
             UpdateManualMergeReviewPresetState();
-            if (!_isWaitingForManualMergeReview)
+            if (!ProjectReviewState.IsWaitingForManualMergeReview)
                 UpdateFinalStatus(Tracks.Count);
 
             _settings.SelectedExportPreset = _selectedExportPreset;
@@ -602,32 +889,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string CoverPreviewSource
     {
-        get => _coverPreviewSource;
+        get => CoverPreviewPresentationService.NormalizeSource(
+            _projectMetadata.CoverPreviewSource,
+            AppearanceSettingsService.GetEffectiveMode(_settings),
+            AppearanceSettingsService.GetCoverPlaceholderOverride());
         set
         {
-            _coverPreviewSource = string.IsNullOrWhiteSpace(value)
-                ? DefaultCoverPreviewSource
+            var stateValue = string.IsNullOrWhiteSpace(value) || AppearanceAssetCatalog.IsCoverPlaceholderPath(value)
+                ? string.Empty
                 : value;
+            var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
+                _projectMetadata.CoverPreviewSource,
+                stateValue);
+
+            if (!change.HasChanged)
+                return;
+
+            _suppressProjectMetadataStateNotifications = true;
+            _projectMetadata.CoverPreviewSource = change.Value;
+            _suppressProjectMetadataStateNotifications = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CoverHintVisibility));
         }
     }
 
-    public Visibility CoverHintVisibility => string.IsNullOrWhiteSpace(_processedCoverPath) && CanChangeBookMetadata
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    public Visibility CoverHintVisibility =>
+        CoverPreviewPresentationService.IsHintVisible(
+            _projectMetadata.ProcessedCoverPath,
+            CanChangeBookMetadata)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
     public double ExportProgressPercent
     {
         get => _exportProgressPercent;
         set
         {
-            var normalized = Math.Clamp(value, 0, 100);
+            var change = ProgressStateChangeService.CreatePercentChange(
+                _exportProgressPercent,
+                value);
 
-            if (Math.Abs(_exportProgressPercent - normalized) < 0.05)
+            if (!change.HasChanged)
                 return;
 
-            _exportProgressPercent = normalized;
+            _exportProgressPercent = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ExportProgressVisibility));
         }
@@ -638,23 +943,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _exportProgressForeground;
         private set
         {
-            if (string.Equals(_exportProgressForeground, value, StringComparison.OrdinalIgnoreCase))
+            var change = ProgressStateChangeService.CreateForegroundChange(
+                _exportProgressForeground,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _exportProgressForeground = value;
+            _exportProgressForeground = change.Value;
             OnPropertyChanged();
         }
     }
 
     public bool IsProgressIndeterminate
     {
-        get => _isProgressIndeterminate;
+        get => _isResumeLoading || _isProgressIndeterminate;
         set
         {
-            if (_isProgressIndeterminate == value)
+            var change = ProgressStateChangeService.CreateIndeterminateChange(
+                _isProgressIndeterminate,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _isProgressIndeterminate = value;
+            _isProgressIndeterminate = change.Value;
             OnPropertyChanged();
         }
     }
@@ -664,10 +977,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _isDiscSourceAnalysisActive;
         private set
         {
-            if (_isDiscSourceAnalysisActive == value)
+            var change = ProgressStateChangeService.CreateAnalysisActiveChange(
+                _isDiscSourceAnalysisActive,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _isDiscSourceAnalysisActive = value;
+            _isDiscSourceAnalysisActive = change.Value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(DiscSourceAnalysisVisibility));
             OnPropertyChanged(nameof(StandardProgressVisibility));
@@ -679,33 +996,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         get => _discSourceAnalysisText;
         private set
         {
-            if (string.Equals(_discSourceAnalysisText, value, StringComparison.Ordinal))
+            var change = ProgressStateChangeService.CreateTextChange(
+                _discSourceAnalysisText,
+                value);
+
+            if (!change.HasChanged)
                 return;
 
-            _discSourceAnalysisText = value;
+            _discSourceAnalysisText = change.Value;
             OnPropertyChanged();
         }
     }
 
-    public Visibility DiscSourceAnalysisVisibility => IsDiscSourceAnalysisActive
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    public Visibility DiscSourceAnalysisVisibility =>
+        IsDiscSourceAnalysisActive
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-    public Visibility StandardProgressVisibility => IsDiscSourceAnalysisActive
-        ? Visibility.Collapsed
-        : Visibility.Visible;
+    public Visibility StandardProgressVisibility =>
+        IsDiscSourceAnalysisActive
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+    private DriveCircleStatusAnimation? _driveCircleStatusAnimation;
+
+    private IDisposable? BeginDriveCircleStatusAnimation(CancellationToken token)
+    {
+        if (!_settings.ExperimentalDriveRoundEnabled || token.IsCancellationRequested) return null;
+        _driveCircleStatusAnimation?.Dispose();
+        _driveCircleStatusAnimation = new(Dispatcher, () => OnPropertyChanged(nameof(ExportProgressText)), token);
+        OnPropertyChanged(nameof(ExportProgressText));
+        return _driveCircleStatusAnimation;
+    }
 
     public string ExportProgressText
     {
-        get => _exportProgressText;
+        get => _driveCircleStatusAnimation is { IsActive: true } animation ? animation.Text : _exportProgressText;
         set
         {
-            _exportProgressText = value;
+            var change = ProgressStateChangeService.CreateTextChange(
+                _exportProgressText,
+                value);
+
+            if (!change.HasChanged)
+                return;
+
+            _exportProgressText = change.Value;
             OnPropertyChanged();
         }
     }
 
-    public string ExportPreviewCodecSummary => "Export-Preset:";
+    public string ExportPreviewCodecSummary =>
+        "Export-Preset:";
 
     public string OutputFileNamePreview => FileNameTemplateService.BuildOutputFileName(
         BookTitle,
@@ -716,156 +1058,100 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Album,
         Series);
 
-    public string ExportPreviewFileName => Tracks.Count == 0
-        ? "Ausgabe: noch keine Ausgabe geplant"
-        : $"Ausgabe: {BuildOutputRelativePathPreview()}";
+    public string ExportPreviewFileName =>
+        ExportPreviewFileNamePresentationService.Create(
+            Tracks.Count,
+            BuildOutputRelativePathPreview());
 
-    public string ExportPreviewTrackCount => Tracks.Count == 0
-        ? "Tracks: 0"
-        : Tracks.Count == 1
-            ? "Tracks: 1"
-            : $"Tracks: {Tracks.Count}";
+    private ExportPreviewCountPresentation ExportPreviewCountPresentation =>
+        ExportPreviewCountPresentationService.Create(
+            Tracks.Count,
+            ExportPreviewMetricsService.CountPlannedChapters(Tracks));
 
-    public string ExportPreviewTotalDuration
-    {
-        get
-        {
-            if (Tracks.Count == 0)
-                return "Gesamtdauer: 00:00:00";
+    public string ExportPreviewTrackCount =>
+        ExportPreviewCountPresentation.TrackSummary;
 
-            var durations = Tracks
-                .Select(GetPreciseDuration)
-                .Where(duration => duration.HasValue)
-                .Select(duration => duration!.Value)
-                .ToList();
+    public string ExportPreviewTotalDuration =>
+        ExportDurationPresentationService.Create(
+            Tracks.Count,
+            ExportPreviewMetricsService.GetKnownDurations(
+                Tracks.Select(GetPreciseDuration)));
 
-            if (durations.Count == 0)
-                return "Gesamtdauer: noch nicht bekannt";
+    public string ExportPreviewActionSummary =>
+        LocalizationText.Format("MainWindow.Summary.Action", BuildProcessingActionSummary());
 
-            var total = TimeSpan.FromSeconds(durations.Sum(duration => duration.TotalSeconds));
-            var totalText = FormatDuration(total);
+    public string ExportPreviewChapterSummary =>
+        ExportPreviewCountPresentation.ChapterSummary;
 
-            if (durations.Count == Tracks.Count)
-                return $"Gesamtdauer: {totalText}";
-
-            return $"Gesamtdauer: {totalText} ({durations.Count}/{Tracks.Count} bekannt)";
-        }
-    }
-
-    public string ExportPreviewActionSummary => "Aktion: " + BuildProcessingActionSummary();
-
-    public string ExportPreviewChapterSummary
-    {
-        get
-        {
-            var chapterCount = CountPlannedChapters();
-            return chapterCount == 0
-                ? "Kapitel: 0"
-                : chapterCount == 1
-                    ? "Kapitel: 1 geplant"
-                    : $"Kapitel: {chapterCount} geplant";
-        }
-    }
-
-    private int CountPlannedChapters() => Tracks
-        .Where(track => !track.IsExcluded)
-        .Sum(track => track.EmbeddedChapters.Count > 0 ? track.EmbeddedChapters.Count : 1);
-
-    public string ExportPreviewIssueSummary => _trackIssueSummaryService
+    public string ExportPreviewIssueSummary => _services.Tracks.TrackIssueSummaryService
         .Create(Tracks)
         .ToDisplayText();
 
-    private int TrackFileWarningCount => Tracks.Count(track => !string.IsNullOrWhiteSpace(track.DisplayFileWarning));
-
-    private int TrackChapterWarningCount => Tracks.Count(track => !string.IsNullOrWhiteSpace(track.DisplayChapterWarning));
-
-    public string TrackFileWarningSummary
+    private TrackWarningSummaryPresentation TrackWarningSummaryPresentation
     {
         get
         {
-            var count = TrackFileWarningCount;
-            return count == 0
-                ? string.Empty
-                : $"⛔ {count} {Pluralize(count, "Dateiwarnung", "Dateiwarnungen")}";
+            var metrics = TrackWarningMetricsService.Create(
+                Tracks.Select(track => new TrackWarningMetric(
+                    track.DisplayFileWarning,
+                    track.DisplayChapterWarning)));
+
+            return TrackWarningSummaryPresentationService.Create(
+                metrics.FileWarningCount,
+                metrics.ChapterWarningCount);
         }
     }
 
-    public string TrackChapterWarningSummary
-    {
-        get
-        {
-            var count = TrackChapterWarningCount;
-            return count == 0
-                ? string.Empty
-                : $"⚠️ {count} {Pluralize(count, "Kapitelwarnung", "Kapitelwarnungen")}";
-        }
-    }
+    public string TrackFileWarningSummary =>
+        TrackWarningSummaryPresentation.FileWarningSummary;
 
-    public Visibility TrackFileWarningSummaryVisibility => TrackFileWarningCount == 0
-        ? Visibility.Collapsed
-        : Visibility.Visible;
+    public string TrackChapterWarningSummary =>
+        TrackWarningSummaryPresentation.ChapterWarningSummary;
 
-    public Visibility TrackChapterWarningSummaryVisibility => TrackChapterWarningCount == 0
-        ? Visibility.Collapsed
-        : Visibility.Visible;
+    public Visibility TrackFileWarningSummaryVisibility =>
+        TrackWarningSummaryPresentation.HasFileWarnings
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-    public Visibility TrackWarningSummarySeparatorVisibility => TrackFileWarningCount > 0 && TrackChapterWarningCount > 0
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    public Visibility TrackChapterWarningSummaryVisibility =>
+        TrackWarningSummaryPresentation.HasChapterWarnings
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-    public Visibility TrackWarningSummaryVisibility => TrackFileWarningCount > 0 || TrackChapterWarningCount > 0
-        ? Visibility.Visible
-        : Visibility.Collapsed;
+    public Visibility TrackWarningSummarySeparatorVisibility =>
+        TrackWarningSummaryPresentation.ShowSeparator
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public Visibility TrackWarningSummaryVisibility =>
+        TrackWarningSummaryPresentation.IsVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public string EnvironmentBrandText =>
+        _services.Foundation.EnvironmentContext.BrandText;
 
     public MainWindow()
     {
-        _aacExportProcessingService = new AacExportProcessingService(_ffmpegRunnerService);
-        _localProjectLivePreparationService = new LocalProjectLivePreparationService(_localProjectImportService);
-        _liveConversionWorkflowService = new LiveConversionWorkflowService(
-            _aacExportProcessingService,
-            () => _ffmpegStatus.FfmpegPath ?? string.Empty);
-        _mp3DiscPresetPreparationWorkflowService = new Mp3DiscPresetPreparationWorkflowService(
-            _mp3DiscPreparationService,
-            _aacExportProcessingService,
-            () => _ffmpegStatus.FfmpegPath ?? string.Empty);
-        _mp3DiscImportWorkflowService = new Mp3DiscImportWorkflowService(
-            _mp3DiscImportService,
-            _mp3DiscProjectService,
-            _discDriveService);
-        _projectSnapshotService = new ProjectSnapshotService(_mp3DiscProjectService, _audioDiscProjectService, _workManifestService);
-        _audioDiscRunPreparationService = new AudioDiscRunPreparationService(_projectSnapshotService);
-        _audioDiscRipWorkflowService = new AudioDiscRipWorkflowService(
-            _audioDiscProjectService,
-            _audioDiscPipelineTimingService);
-        _audioDiscRipCompletionWorkflowService = new AudioDiscRipCompletionWorkflowService(
-            _audioDiscProjectService);
-        _projectResumeLoadWorkflowService = new ProjectResumeLoadWorkflowService(
-            _audioDiscProjectService,
-            _trackListStateService);
-        _discWaitDialogService = new SwitchableDiscWaitDialogService(() => _settings.UseBoxedDiscWaitDialog);
-        _mp3DiscPollingService = new Mp3DiscPollingService(_mp3DiscImportService, _discDriveService);
-        _mp3DiscWaitDialogService = new Mp3DiscWaitDialogService(_mp3DiscPollingService, _discWaitDialogService);
-        _discDriveCandidateProbeService = new DiscDriveCandidateProbeService(_discDriveService);
-        _audioDiscPollingService = new AudioDiscPollingService(_audioDiscReaderService, _discDriveService);
-        _exportWorkflowService = new ExportWorkflowService(
-            _workManifestService,
-            _projectSnapshotService,
-            _aacExportProcessingService,
-            _convertedFileCleanupService,
-            new ConvertedTrackPreparationPlanService(
-                new ConvertedTrackReconciliationService(_workManifestService)),
-            new ConvertedTrackPreparationWorkflowService(
-                _workManifestService,
-                _aacExportProcessingService),
-            _exportChapterService,
-            _finalTagService,
-            new FinalOutputStorageService());
-        _trackPreparedStateRefreshService = new TrackPreparedStateRefreshService(_projectResumePlanService);
+        var environmentContext = Application.Current is App app
+            ? app.ActiveEnvironmentContext
+            : new BookStitchEnvironmentResolver().Resolve();
+        _services = MainWindowServiceComposition.Create(
+            environmentContext,
+            () => _ffmpegStatus.FfmpegPath ?? string.Empty,
+            () => _debugSettings.UseBoxedDiscWaitDialog);
+        _services.Foundation.ProjectIndexService.SetActiveProjectFolderProvider(() => _currentProjectWorkFolder);
+        _services.Discs.DiscDriveService.SetPerformanceTraceProvider(
+            () => (Application.Current as App)?.PerformanceTraceService);
 
         InitializeComponent();
-        AddHandler(MouseRightButtonUpEvent, new MouseButtonEventHandler(MainWindow_MouseRightButtonUp), true);
+        Title = _services.Foundation.EnvironmentContext.WindowTitle;
 
         ConfigureTrackGridColumnLayoutHandlers();
+        _trackGridAutoScrollTimer.Tick += TrackGridAutoScrollTimer_Tick;
+        _chapterMetadataRefreshTimer.Tick += ChapterMetadataRefreshTimer_Tick;
+        _projectSetupDiscCountRefreshTimer.Tick += ProjectSetupDiscCountRefreshTimer_Tick;
+        _projectMetadata.PropertyChanged += ProjectMetadata_PropertyChanged;
 
         _trackStateUpdateQueueService = new TrackStateUpdateQueueService(
             () => new TrackStateUpdateContext(
@@ -873,47 +1159,172 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _currentProjectWorkFolder,
                 SelectedExportPreset,
                 IsBusy || IsExporting || IsDiscImporting,
-                IsDiscImporting),
-            () =>
-            {
-                TracksGrid.Items.Refresh();
-                if (IsBusy || IsExporting || IsDiscImporting)
-                    OnExportPreviewChanged();
-                else
-                    UpdateFinalStatus(Tracks.Count);
-            },
-            isEnabled: true);
+                IsDiscImporting || _isDiscStopSaveInProgress,
+                ProjectReviewState.Phase),
+            RefreshAfterTrackStateUpdate);
 
         Tracks.CollectionChanged += Tracks_CollectionChanged;
         Closing += MainWindow_Closing;
+        Closed += MainWindow_Closed;
 
+        var startupPhaseTimer = Stopwatch.StartNew();
         LoadSettings();
-        _diagnosticLogService = new DiagnosticLogService(GetProjectFolderStructure().ProjectRootFolder);
-        _diagnosticLogService.WriteApplicationEvent("MAIN WINDOW", "Das Hauptfenster wurde initialisiert.");
-        _notificationService = new NotificationService(
-            new SoundNotificationService(() => _settings),
-            new WindowAttentionService(() => _settings, () => this));
+        DeveloperToolsCommands.AccessState.Initialize(
+            _settings, _services.Foundation.EnvironmentContext.Environment,
+            _services.Foundation.GlobalSettingsManager.SaveImmediate);
+        DeveloperToolsCommands.AccessState.PropertyChanged += DeveloperAccessState_PropertyChanged;
+        DeveloperToolsCommands.AppearancePreview.Changed += DeveloperAppearancePreview_Changed;
+        DeveloperAccessState_PropertyChanged(this, new PropertyChangedEventArgs(nameof(DeveloperToolsAccessState.IsEnabled)));
+        ConfigureMainChapterSettingsEditor();
+        RefreshMainChapterSettingsEditorFromSharedState();
+        _coverPickerService = new CoverPickerService(
+            _settings,
+            SaveSettingsIfReady,
+            () => GetWorkingRootFolder());
+        EnsureCanonicalMetadataSessionForCurrentState();
+        var loadSettingsElapsed = startupPhaseTimer.Elapsed;
+
+        startupPhaseTimer.Restart();
+        _runtimeServices = MainWindowRuntimeComposition.Create(
+            GetProjectFolderStructure().ProjectRootFolder,
+            () => _settings,
+            () => this,
+            _services.Foundation.EnvironmentContext);
+        _services.Foundation.GlobalSettingsManager.SaveFailed += GlobalSettingsManager_SaveFailed;
+        _services.Foundation.GlobalSettingsManager.DriveCircleChanged += GlobalSettingsManager_DriveCircleChanged;
+        _services.Foundation.GlobalSettingsManager.GenreOptionsChanged += GlobalSettingsManager_GenreOptionsChanged;
+        var runtimeCompositionElapsed = startupPhaseTimer.Elapsed;
+
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "MAIN WINDOW",
+            "Das Hauptfenster wurde initialisiert.");
+
+        startupPhaseTimer.Restart();
         DetectFfmpegTools();
-        RefreshResumeProjects(showStatus: false);
+        var ffmpegDetectionElapsed = startupPhaseTimer.Elapsed;
+
+        startupPhaseTimer.Restart();
+        // Catalog preload starts only after the main window is visible.
+        var resumeRefreshElapsed = TimeSpan.Zero;
+        startupPhaseTimer.Stop();
 
         DataContext = this;
         SetMetadataPanelExpanded(false, animate: false);
         SetMetadataEditingAvailable(false);
         _trackStateUpdateQueueService.Start();
+
+        _startupPerformanceDetails =
+            $"LoadSettings={FormatPerformanceMilliseconds(loadSettingsElapsed)} ms; " +
+            $"RuntimeComposition={FormatPerformanceMilliseconds(runtimeCompositionElapsed)} ms; " +
+            $"FfmpegDetection={FormatPerformanceMilliseconds(ffmpegDetectionElapsed)} ms; " +
+            $"ResumeRefresh={FormatPerformanceMilliseconds(resumeRefreshElapsed)} ms; " +
+            $"ConstructorReady={FormatPerformanceMilliseconds(_startupPerformanceStopwatch.Elapsed)} ms";
+
+        var catalog = _services.Foundation.ProjectIndexService.Catalog;
+        _maintenanceCoordinator = new ProjectMaintenanceCoordinator(
+            (request, token) =>
+            {
+                var snapshot = catalog.RefreshAsync(request.WorkingRoot, request.RetentionDays,
+                    force: catalog.Snapshot?.CreatedUtc.ToLocalTime().Date != request.NowUtc.ToLocalTime().Date)
+                    .WaitAsync(token).GetAwaiter().GetResult();
+                token.ThrowIfCancellationRequested();
+                return _services.Foundation.ProjectIndexService.DeleteProjectsOlderThan(
+                    request.WorkingRoot, request.NowUtc, request.RetentionDays, token, snapshot.ProjectIndexItems);
+            },
+            (request, token) => new CoverCleanupService().DeleteOldUnreferencedCoverFiles(
+                request.WorkingRoot, request.CoversFolder, request.NowUtc, request.RetentionDays, token));
+        _services.Foundation.ProjectIndexService.BeforeManualDeletion = () =>
+            _maintenanceCoordinator.StopAsync().GetAwaiter().GetResult();
+        _maintenanceCoordinator.LogFailure = message =>
+            _runtimeServices.DiagnosticLogService.WriteApplicationEvent("AUTOMATIC MAINTENANCE", message);
+        if (Application.Current is App diagnosticsApp)
+        {
+            catalog.StartOperation = name => diagnosticsApp.StartPerformanceOperation(name);
+            catalog.StartPhase = diagnosticsApp.StartPerformancePhase;
+            ProjectCoverThumbnailCache.Shared.StartOperation = name => diagnosticsApp.StartPerformanceOperation(name);
+            _maintenanceCoordinator.StartOperation = name => diagnosticsApp.StartPerformanceOperation(name);
+            _maintenanceCoordinator.StartPhase = diagnosticsApp.StartPerformancePhase;
+        }
+        catalog.SnapshotChanged += ProjectCatalog_SnapshotChanged;
+        Loaded += MainWindow_Loaded;
+    }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        Dispatcher.BeginInvoke(new Action(() => InitializeEmptyProjectSweepState()), DispatcherPriority.Background);
+        _mainWindowReady = true;
+        Dispatcher.BeginInvoke(new Action(() => _ = RefreshProjectCatalogAsync(showStatus: false)), DispatcherPriority.Background);
+
+        if (Application.Current is App app)
+            app.CompletePerformanceStartup();
+
+        var startupElapsed = _startupPerformanceStopwatch.Elapsed;
+        _startupPerformanceStopwatch.Stop();
+
+        _runtimeServices.DiagnosticLogService.WritePerformanceEvent(
+            "MAIN WINDOW STARTUP",
+            startupElapsed,
+            $"{_startupPerformanceDetails}; Tracks={Tracks.Count}; ResumeProjects={ResumeProjects.Count}");
+
+    }
+
+    private static string FormatPerformanceMilliseconds(TimeSpan elapsed) =>
+        elapsed.TotalMilliseconds.ToString("0.0", CultureInfo.InvariantCulture);
+    private void RefreshTrackPresentationViews()
+    {
+        TracksGrid?.Items.Refresh();
+        _developmentMetadataDialog?.RefreshChapterPresentationView();
+    }
+
+    private void RefreshAfterTrackStateUpdate()
+    {
+        RefreshTrackPresentationViews();
+
+        var action = TrackStateRefreshDecisionService.Create(
+            IsBusy,
+            IsExporting,
+            IsDiscImporting);
+
+        switch (action)
+        {
+            case TrackStateRefreshAction.RefreshExportPreview:
+                OnExportPreviewChanged();
+                break;
+
+            case TrackStateRefreshAction.UpdateFinalStatus:
+                UpdateFinalStatus(Tracks.Count);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(action),
+                    action,
+                    "Unbekannte Aktualisierungsaktion.");
+        }
     }
 
     private void SetMetadataEditingAvailable(bool available)
     {
-        if (_isMetadataEditingAvailable == available)
+        var change = MainWindowSelectionStateService.CreateBooleanChange(
+            _isMetadataEditingAvailable,
+            available);
+
+        if (!change.HasChanged)
             return;
 
-        _isMetadataEditingAvailable = available;
+        _isMetadataEditingAvailable = change.Value;
         OnPropertyChanged(nameof(CanChangeBookMetadata));
+        OnPropertyChanged(nameof(CanRemoveCover));
         OnPropertyChanged(nameof(CoverHintVisibility));
     }
 
     private void Tracks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        OnPropertyChanged(nameof(HasProjectTracks));
+        OnPropertyChanged(nameof(SelectedSourceDisplayText));
+        OnPropertyChanged(nameof(SelectedSourceOpenPath));
+        OnPropertyChanged(nameof(CanOpenSelectedFolder));
         NotifyExportUiStateChanged();
         OnExportPreviewChanged();
         _trackStateUpdateQueueService.RequestRefresh();
@@ -923,67 +1334,104 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _isLoadingSettings = true;
 
-        _settings = _settingsService.Load();
+        _settings = _services.Foundation.GlobalSettingsManager.Current;
+        _debugSettings = _services.Foundation.DebugSettingsService.Load();
+        _debugWindowPlacementService = new DebugWindowPlacementService(
+            _debugSettings,
+            _services.Foundation.DebugSettingsService);
 
-        Genre = GenreListService.IsSelectableGenre(_settings.DefaultGenre)
-            ? _settings.DefaultGenre
-            : GenreListService.GetDefaultGenre(_settings.UsePrivateGenreList);
+        var selection = _services.Foundation.SettingsSelectionService.Create(
+            _settings,
+            ExportPresets);
+        ApplyAppearanceResources(_settings);
 
-        OutputExtension = _settings.DefaultOutputExtension is ".m4a" or ".m4b"
-            ? _settings.DefaultOutputExtension
-            : ".m4a";
+        InitializeGenreStateForEmptySession();
+        OutputExtension = selection.OutputExtension;
+        FileNameTemplate = selection.FileNameTemplate;
+        SelectedExportPreset = selection.SelectedExportPreset;
+        SetParallelJobsInput(selection.SelectedParallelJobs, showMessage: false);
 
-        FileNameTemplate = string.IsNullOrWhiteSpace(_settings.DefaultFileNameTemplate)
-            ? "{Autor} - {Titel}"
-            : _settings.DefaultFileNameTemplate;
+        var outputFolderDecision =
+            SettingsFolderLoadDecisionService.CreateOutputFolderDecision(
+                _settings.OutputFolder,
+                Directory.Exists(_settings.OutputFolder));
 
-        SelectedExportPreset = ExportPresets.Contains(_settings.SelectedExportPreset)
-            ? _settings.SelectedExportPreset
-            : "AAC Stereo 192 kbps";
+        if (outputFolderDecision.ShouldApply)
+            OutputFolder = outputFolderDecision.Value;
 
-        SetParallelJobsInput(_settings.SelectedParallelJobs, showMessage: false);
+        var selectedFolderDecision =
+            SettingsFolderLoadDecisionService.CreateSelectedFolderDecision(
+                _settings.LastSelectedFolder);
 
-        if (string.IsNullOrWhiteSpace(_settings.WorkingFolder) || IsLegacyDefaultWorkingFolder(_settings.WorkingFolder))
-            _settings.WorkingFolder = GetDefaultWorkingFolder();
-
-        _settings.ProjectRetentionDays = ProjectIndexService.NormalizeRetentionDays(_settings.ProjectRetentionDays);
-        _settings.DeleteProjectsOlderThanDays = ProjectIndexService.NormalizeDeleteOlderThanDays(_settings.DeleteProjectsOlderThanDays);
-        _settings.OutputFolderLayout = OutputFolderLayoutService.NormalizeLayout(_settings.OutputFolderLayout);
-        _settings.SoundProfile = SoundSettingsService.NormalizeProfile(_settings.SoundProfile).ToString();
-        _settings.FocusProfile = FocusSettingsService.NormalizeProfile(_settings.FocusProfile).ToString();
-        _settings.SoundVolumePercent = SoundSettingsService.NormalizeVolumePercent(_settings.SoundVolumePercent);
-        if (_settings.ShowPipelineStateDebug || _settings.ForceShowFfmpegSetupButton)
-            _settings.ShowDeveloperTab = true;
-
-        if (!string.IsNullOrWhiteSpace(_settings.OutputFolder) && Directory.Exists(_settings.OutputFolder))
-            OutputFolder = _settings.OutputFolder;
-
-        if (!string.IsNullOrWhiteSpace(_settings.LastSelectedFolder))
-            SelectedFolder = _settings.LastSelectedFolder;
+        if (selectedFolderDecision.ShouldApply)
+            SelectedFolder = selectedFolderDecision.Value;
 
         ApplyTrackGridColumnLayout();
         _isLoadingSettings = false;
     }
 
+    private void ApplyAppearanceResources(AppSettings settings)
+    {
+        var resources = Application.Current?.Resources ?? Resources;
+        AppearanceSettingsService.ApplyEffectiveToResources(resources, settings);
+        RefreshCoverPlaceholderForAppearance(settings);
+    }
+
+    private void SetBackgroundPreset(string preset) => DeveloperToolsCommands.AppearancePreview.SetBackground(preset);
+
+    private void SetTextColorPreset(string preset) => DeveloperToolsCommands.AppearancePreview.SetTextColor(preset);
+
+    private void DeveloperAppearancePreview_Changed(object? sender, EventArgs e)
+    {
+        ApplyAppearanceResources(_settings);
+        _developerToolsWindow?.SynchronizeAppearanceControls();
+    }
+
+    private void ApplyRegularAppearanceSettings(AppSettings settings)
+    {
+        ApplyAppearanceResources(settings);
+        DeveloperToolsCommands.AppearancePreview.NotifyRegularSettingsChanged();
+    }
+
+    private void RefreshCoverPlaceholderForAppearance(AppSettings settings)
+    {
+        _ = settings;
+        if (!string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath) ||
+            (!string.IsNullOrWhiteSpace(_projectMetadata.CoverPreviewSource) &&
+             !AppearanceAssetCatalog.IsCoverPlaceholderPath(_projectMetadata.CoverPreviewSource)))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(CoverPreviewSource));
+        OnPropertyChanged(nameof(CoverHintVisibility));
+    }
+
     private void DetectFfmpegTools()
     {
-        _ffmpegStatus = _ffmpegService.DetectTools(_settings);
+        _ffmpegStatus = _services.Media.FfmpegService.DetectTools(_settings);
         ApplyFfmpegStatusToSettingsAndUi();
     }
 
     private void ApplyFfmpegStatusToSettingsAndUi()
     {
-        if (_ffmpegStatus.FfmpegAvailable)
-            _settings.FfmpegPath = _ffmpegStatus.FfmpegPath;
+        var decision = FfmpegSettingsApplicationService.Create(
+            _settings.FfmpegPath,
+            _ffmpegStatus.FfmpegPath,
+            _ffmpegStatus.FfmpegAvailable,
+            _settings.FfprobePath,
+            _ffmpegStatus.FfprobePath,
+            _ffmpegStatus.FfprobeAvailable,
+            StatusText);
 
-        if (_ffmpegStatus.FfprobeAvailable)
-            _settings.FfprobePath = _ffmpegStatus.FfprobePath;
+        _settings.FfmpegPath = decision.FfmpegPath;
+        _settings.FfprobePath = decision.FfprobePath;
 
         SaveSettingsIfReady();
 
         // Die globale Werkzeugerkennung steuert Button und Sperrprofil.
         // Sie überschreibt nicht den fachlichen Projektstatus im Hauptfenster.
-        if (StatusText.StartsWith("FFmpeg ", StringComparison.OrdinalIgnoreCase))
+        if (decision.ShouldClearToolStatus)
             StatusText = string.Empty;
 
         OnPropertyChanged(nameof(CanConfigureFfmpeg));
@@ -997,130 +1445,617 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_isLoadingSettings)
             return;
 
-        _settingsService.Save(_settings);
+        _services.Foundation.GlobalSettingsManager.SaveImmediate();
     }
+
+    private void ApplyMergeAutomaticallyFromSettingsWindow(bool enabled)
+    {
+        if (_settings.MergeAutomaticallyAfterConversion == enabled)
+            return;
+
+        _settings.MergeAutomaticallyAfterConversion = enabled;
+        OnPropertyChanged(nameof(MergeAutomaticallyAfterConversion));
+        OnPropertyChanged(nameof(DriveCircleEnabled));
+    }
+
+    private void GlobalSettingsManager_DriveCircleChanged(object? sender, EventArgs e)
+        => OnPropertyChanged(nameof(DriveCircleEnabled));
+
+    private void GlobalSettingsManager_SaveFailed(object? sender, GlobalSettingsSaveFailedEventArgs e)
+    {
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "GLOBAL SETTINGS SAVE FAILED",
+            e.Exception.ToString());
+        StatusText = LocalizationText.Get("MainWindow.Settings.SaveFailed");
+    }
+
+    private void MainWindowCaption_CloseRequested(object sender, RoutedEventArgs e) => Close();
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
-        if (_allowWindowClose)
+        _ = _maintenanceCoordinator?.StopAsync();
+        PipelineUiTransition? transitionOwner = null;
+        try
         {
-            DeleteOldProjects(showUserMessage: false);
-            _trackStateUpdateQueueService.Dispose();
-            _notificationService.Dispose();
-            return;
-        }
-
-        var activity = _applicationShutdownService.GetActiveActivity(
-            IsDiscImporting,
-            IsDiscImporting && _activeAudioDiscManifest is not null,
-            IsExporting,
-            IsBusy,
-            _isPipelinePaused,
-            _activeAudioDiscManifest is not null,
-            _activeMp3DiscManifest is not null);
-
-        if (activity == ApplicationActivity.None)
-        {
-            DeleteOldProjects(showUserMessage: false);
-            _trackStateUpdateQueueService.Dispose();
-            _notificationService.Dispose();
-            return;
-        }
-
-        e.Cancel = true;
-
-        if (_isShutdownInProgress)
-            return;
-
-        var prompt = _applicationShutdownService.CreatePrompt(activity);
-        var result = AppDialogService.Show(
-            this,
-            title: "BookStitch schließen",
-            heading: prompt.Heading,
-            message: prompt.Message,
-            kind: AppDialogKind.Warning,
-            buttons: new[]
+            if (_isDiscStopSaveInProgress || _isProjectCloseInProgress || (_isShutdownInProgress && !_allowWindowClose) ||
+                (_presentationState.UiTransition is not null && !_allowWindowClose))
             {
-                new AppDialogButton("Weiterarbeiten", AppDialogResult.Cancel, IsDefault: true, IsCancel: true),
-                new AppDialogButton("Abbrechen und schließen", AppDialogResult.Yes, IsDanger: true)
-            });
+                e.Cancel = true;
+                return;
+            }
+            if (_isWorkspaceReplacementInProgress)
+            {
+                e.Cancel = true;
+                return;
+            }
+            if (!_allowWindowClose && _sessionProject.IsUnstartedAudio(_currentProjectWorkFolder))
+            {
+                e.Cancel = true;
+                if (TryDiscardAudioPreparation())
+                {
+                    _allowWindowClose = true;
+                    _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+                }
+                else CancelApplicationRestartRequest();
+                return;
+            }
+            if (!TryCheckpointMetadataBeforeClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+            if (_allowWindowClose)
+                return;
 
-        if (result != AppDialogResult.Yes)
+            if (!TryCheckpointEditableProject())
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            var activity = _services.Pipeline.ApplicationShutdownService.GetActiveActivity(
+                IsDiscImporting,
+                IsDiscImporting && _activeAudioDiscManifest is not null,
+                IsExporting,
+                IsBusy,
+                _presentationState.IsPipelinePaused,
+                _activeAudioDiscManifest is not null,
+                _activeMp3DiscManifest is not null);
+
+            if (activity == ApplicationActivity.None)
+            {
+                if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+                {
+                    e.Cancel = true;
+                    if (await CloseProjectFromWindowAsync())
+                    {
+                        _allowWindowClose = true;
+                        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+                    }
+                    else CancelApplicationRestartRequest();
+                }
+                return;
+            }
+
+            e.Cancel = true;
+
+            if (_isShutdownInProgress)
+                return;
+
+            var prompt = _services.Pipeline.ApplicationShutdownService.CreatePrompt(activity);
+            if (_sessionProject.ProjectType == ProjectManifestTypes.FolderProject &&
+                _sessionProject.DeleteOnWindowClose(_currentProjectWorkFolder,
+                    ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting))
+                prompt = prompt with
+                {
+                    Heading = LocalizationText.Get("Project.Close.DeleteHeading"),
+                    Message = LocalizationText.Get("Project.Close.DeleteMessage")
+                };
+            var discardAttempt = _presentationState.IsProjectExtensionRun || _presetReconversionRollbackContext is not null ||
+                ProjectReviewState.Phase == ProjectPipelineState.Merging;
+            if (discardAttempt && !_presentationState.IsPipelinePaused)
+            {
+                await RequestPipelinePauseAsync();
+                await WaitForProjectProducersAsync();
+            }
+            if (discardAttempt)
+                prompt = prompt with { Heading = LocalizationText.Get("Project.Close.DiscardHeading"),
+                    Message = LocalizationText.Get("Project.Close.DiscardMessage") };
+            var result = AppDialogService.Show(
+                this,
+                title: LocalizationText.Get("Shutdown.Title"),
+                heading: prompt.Heading,
+                message: prompt.Message,
+                kind: AppDialogKind.Warning,
+                buttons: new[]
+                {
+                    new AppDialogButton(LocalizationText.Get(discardAttempt ? "Project.Close.Back" : "Shutdown.KeepWorking"), AppDialogResult.Cancel, IsDefault: true, IsCancel: true),
+                    new AppDialogButton(LocalizationText.Get(discardAttempt ? "Project.Close.DiscardAndClose" : "Shutdown.AbortAndClose"), AppDialogResult.Yes, IsDanger: true)
+                });
+
+            if (result != AppDialogResult.Yes)
+            {
+                CancelApplicationRestartRequest();
+                return;
+            }
+
+            EnsureShutdownPerformanceStarted();
+            _isShutdownInProgress = true;
+            transitionOwner = BeginPipelineUiTransition(discardAttempt ? PipelineUiTransitionKind.Discarding : PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.Primary);
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            StatusText = prompt.ProgressText;
+            ExportProgressText = LocalizationText.Get("Shutdown.ControlledStop");
+            NotifyExportUiStateChanged();
+
+            if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            {
+                if (await CloseProjectFromWindowAsync(confirmIntent: false, cancelActiveWork: true))
+                {
+                    _allowWindowClose = true;
+                    _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+                }
+                else
+                {
+                    _isShutdownInProgress = false;
+                    CancelApplicationRestartRequest();
+                    NotifyExportUiStateChanged();
+                }
+                return;
+            }
+
+            TrySaveActiveProjectSnapshot();
+            RequestActiveOperationCancellation();
+
+            var shutdownWaitPerformancePhase = StartShutdownPerformancePhase("shutdown.wait-for-idle");
+            var shutdownWaitTimer = Stopwatch.StartNew();
+            bool stoppedCleanly;
+            try
+            {
+                stoppedCleanly = await _services.Pipeline.ApplicationShutdownService.WaitForIdleAsync(
+                    () => IsDiscImporting || IsExporting || IsBusy,
+                    TimeSpan.FromSeconds(30));
+                if (stoppedCleanly) await WaitForProjectProducersAsync();
+                shutdownWaitPerformancePhase.Complete();
+            }
+            catch (OperationCanceledException ex)
+            {
+                shutdownWaitPerformancePhase.Cancel();
+                _shutdownPerformanceScope.Cancel();
+                _shutdownPerformanceScope = default;
+                if (Application.Current is App app)
+                    app.TryFinalizeDisabledPerformanceSession();
+                _runtimeServices.DiagnosticLogService.WriteError("Shutdown wait interrupted", ex);
+                stoppedCleanly = false;
+            }
+            catch (Exception ex)
+            {
+                shutdownWaitPerformancePhase.Fail(ex);
+                _shutdownPerformanceScope.Fail(ex);
+                _shutdownPerformanceScope = default;
+                if (Application.Current is App app)
+                    app.TryFinalizeDisabledPerformanceSession();
+                _runtimeServices.DiagnosticLogService.WriteError("Shutdown wait interrupted", ex);
+                stoppedCleanly = false;
+            }
+            finally
+            {
+                shutdownWaitTimer.Stop();
+            }
+
+            _runtimeServices.DiagnosticLogService.WritePerformanceEvent(
+                "ACTIVE WORK SHUTDOWN WAIT",
+                shutdownWaitTimer.Elapsed,
+                $"Activity={activity}; StoppedCleanly={stoppedCleanly}");
+
+            if (!TryCheckpointMetadataBeforeClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+            TrySaveActiveProjectSnapshot();
+
+            if (stoppedCleanly)
+            {
+                CleanupCurrentProjectPartFiles();
+            }
+            else
+            {
+                StatusText = LocalizationText.Get("Shutdown.CleanupNextStart");
+                _isShutdownInProgress = false;
+                CancelApplicationRestartRequest();
+                NotifyExportUiStateChanged();
+                return;
+            }
+
+            _allowWindowClose = true;
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Close));
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Window closing failed", ex);
+            if (_projectMetadataSession.IsAttached && _projectMetadataSession.HasUnpersistedChanges)
+            {
+                e.Cancel = true;
+                _allowWindowClose = false;
+                _isShutdownInProgress = false;
+                CancelApplicationRestartRequest();
+                AppDialogService.Error(this, LocalizationText.Get("MainWindow.Metadata.SaveFailed.Title"),
+                    LocalizationText.Get("MainWindow.Metadata.SaveFailed.Message"), details: new[] { ex.Message });
+                return;
+            }
+            e.Cancel = true;
+            _allowWindowClose = false;
+            _isShutdownInProgress = false;
+            CancelApplicationRestartRequest();
+            NotifyExportUiStateChanged();
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+        }
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        DeveloperToolsCommands.AccessState.PropertyChanged -= DeveloperAccessState_PropertyChanged;
+        DeveloperToolsCommands.AppearancePreview.Changed -= DeveloperAppearancePreview_Changed;
+        RunCloseCleanupStep(() => { CompleteWindowCloseCleanup(); });
+        RunCloseCleanupStep(() => { ConfirmApplicationRestartAfterCloseCleanup(); });
+    }
+
+    private void RequestApplicationRestart()
+    {
+        if (Application.Current is not App app)
             return;
 
-        _isShutdownInProgress = true;
-        StatusText = prompt.ProgressText;
-        ExportProgressText = "Laufender Vorgang wird kontrolliert beendet …";
-        NotifyExportUiStateChanged();
-
-        TrySaveActiveProjectSnapshot();
-        RequestActiveOperationCancellation();
-
-        var stoppedCleanly = await _applicationShutdownService.WaitForIdleAsync(
-            () => IsDiscImporting || IsExporting || IsBusy,
-            TimeSpan.FromSeconds(30));
-
-        TrySaveActiveProjectSnapshot();
-
-        if (stoppedCleanly)
-        {
-            CleanupCurrentProjectPartFiles();
-        }
-        else
-        {
-            StatusText = "BookStitch wird beendet. Verbleibende temporäre Dateien werden beim nächsten Start bereinigt.";
-        }
-
-        _allowWindowClose = true;
+        app.ApplicationRestartService.RequestRestart();
         Close();
     }
 
-    public void PrepareForSessionEnding()
+    private static void CancelApplicationRestartRequest()
     {
-        if (_allowWindowClose)
+        if (Application.Current is App app)
+            app.ApplicationRestartService.CancelRestart();
+    }
+
+    private static void ConfirmApplicationRestartAfterCloseCleanup()
+    {
+        if (Application.Current is App app)
+            app.ApplicationRestartService.ConfirmCloseCompleted();
+    }
+
+    private void EnsureShutdownPerformanceStarted()
+    {
+        if (_shutdownPerformanceScope.IsActive)
             return;
 
+        if (Application.Current is App app)
+            _shutdownPerformanceScope = app.StartPerformanceOperation("app.shutdown");
+    }
+
+    private PerformancePhaseScope StartShutdownPerformancePhase(string phaseName)
+    {
+        if (!_shutdownPerformanceScope.IsActive || Application.Current is not App app)
+            return default;
+
+        return app.StartPerformancePhase(_shutdownPerformanceScope.OperationId, phaseName);
+    }
+
+    private static void RunPerformanceStep(
+        App? app,
+        Guid operationId,
+        string phaseName,
+        Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        RunPerformanceStep(
+            app,
+            operationId,
+            phaseName,
+            () =>
+            {
+                action();
+                return true;
+            });
+    }
+
+    private static T RunPerformanceStep<T>(
+        App? app,
+        Guid operationId,
+        string phaseName,
+        Func<T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        var phase = app is null || operationId == Guid.Empty
+            ? default
+            : app.StartPerformancePhase(operationId, phaseName);
+
+        try
+        {
+            var result = action();
+            phase.Complete();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            phase.Fail(ex);
+            throw;
+        }
+    }
+
+    private void CompleteWindowCloseCleanup()
+    {
+        _driveCircleStatusAnimation?.Dispose();
+        if (_windowCloseCleanupCompleted)
+            return;
+
+        _windowCloseCleanupCompleted = true;
+        EnsureShutdownPerformanceStarted();
+        var cleanupPerformancePhase = StartShutdownPerformancePhase("shutdown.cleanup");
+
+        try
+        {
+            var totalTimer = Stopwatch.StartNew();
+
+            var timerDisposeTimer = Stopwatch.StartNew();
+            RunCloseCleanupStep(() => { _resumeDiscPreview.Clear(); _transientMp3DiscChapterPreview = null; });
+            RunCloseCleanupStep(() => { StopTrackGridAutoScroll(); });
+            RunCloseCleanupStep(() => { _chapterMetadataRefreshTimer.Stop(); });
+            if (_developerToolsWindow is not null)
+            {
+                _developerToolsWindow.Close();
+                _developerToolsWindow = null;
+            }
+            timerDisposeTimer.Stop();
+
+            RunCloseCleanupStep(() => { _maintenanceCoordinator?.StopAsync().GetAwaiter().GetResult(); });
+            RunCloseCleanupStep(() => { _maintenanceCoordinator?.Dispose(); });
+
+            var queueDisposeTimer = Stopwatch.StartNew();
+            _services.Foundation.ProjectIndexService.Catalog.SnapshotChanged -= ProjectCatalog_SnapshotChanged;
+            RunCloseCleanupStep(() => { _services.Foundation.ProjectIndexService.Catalog.Dispose(); });
+            RunCloseCleanupStep(() => { _trackStateUpdateQueueService.Dispose(); });
+            queueDisposeTimer.Stop();
+
+            RunCloseCleanupStep(() => { _services.Foundation.GlobalSettingsManager.Dispose(); });
+            _services.Foundation.GlobalSettingsManager.SaveFailed -= GlobalSettingsManager_SaveFailed;
+            _services.Foundation.GlobalSettingsManager.DriveCircleChanged -= GlobalSettingsManager_DriveCircleChanged;
+            _services.Foundation.GlobalSettingsManager.GenreOptionsChanged -= GlobalSettingsManager_GenreOptionsChanged;
+
+            var notificationDisposeTimer = Stopwatch.StartNew();
+            RunCloseCleanupStep(() => { _runtimeServices.NotificationService.Dispose(); });
+            notificationDisposeTimer.Stop();
+
+            var sleepPreventionDisposeTimer = Stopwatch.StartNew();
+            RunCloseCleanupStep(() => { _services.Foundation.SystemSleepPreventionService.Dispose(); });
+            sleepPreventionDisposeTimer.Stop();
+
+            totalTimer.Stop();
+
+            _runtimeServices.DiagnosticLogService.WritePerformanceEvent(
+                "WINDOW CLOSE CLEANUP",
+                totalTimer.Elapsed,
+                $"TimerStop={FormatPerformanceMilliseconds(timerDisposeTimer.Elapsed)} ms; " +
+                $"TrackQueueDispose={FormatPerformanceMilliseconds(queueDisposeTimer.Elapsed)} ms; " +
+                $"NotificationDispose={FormatPerformanceMilliseconds(notificationDisposeTimer.Elapsed)} ms; " +
+                $"SleepPreventionDispose={FormatPerformanceMilliseconds(sleepPreventionDisposeTimer.Elapsed)} ms; " +
+                $"Tracks={Tracks.Count}; ResumeProjects={ResumeProjects.Count}");
+
+            cleanupPerformancePhase.Complete();
+            _shutdownPerformanceScope.Complete();
+        }
+        catch (Exception ex)
+        {
+            cleanupPerformancePhase.Fail(ex);
+            _shutdownPerformanceScope.Fail(ex);
+            _runtimeServices.DiagnosticLogService.WriteError("Window close cleanup failed", ex);
+        }
+        finally
+        {
+            _shutdownPerformanceScope = default;
+            if (Application.Current is App app)
+                app.TryFinalizeDisabledPerformanceSession();
+        }
+    }
+    private void RunCloseCleanupStep(Action action)
+    {
+        try { action(); }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Window close cleanup step failed", ex);
+        }
+    }
+
+    internal void PrepareForConfirmedSessionEnding(bool logoff)
+    {
+        if (_allowWindowClose) return;
+        // Confirmation is the only entry. Do not checkpoint a large manifest or wait
+        // for producers here; newer file revisions conservatively invalidate the order.
         _isShutdownInProgress = true;
         _allowWindowClose = true;
-        TrySaveActiveProjectSnapshot();
+        RunCloseCleanupStep(() =>
+        {
+            if (_presentationState.IsProjectExtensionRun || _presetReconversionRollbackContext is not null ||
+                ProjectReviewState.Phase == ProjectPipelineState.Merging) return;
+            var phase = ProjectReviewState.Phase;
+            var active = IsBusy || IsDiscImporting || IsExporting || _presentationState.IsPipelinePaused;
+            if (_isResumeLoading || !_sessionProject.CanDeferCompletion(_currentProjectWorkFolder, phase, active)) return;
+            DeferredProjectIdentity? identity = null;
+            if (LoadedProjectState.IsAudioDisc && _activeAudioDiscManifest is { } audio)
+                identity = new(audio.ProjectFolder, ProjectManifestTypes.AudioCdProject, audio.ProjectId);
+            else if (LoadedProjectState.IsMp3Disc && _activeMp3DiscManifest is { } mp3)
+                identity = new(mp3.ProjectFolder, ProjectManifestTypes.Mp3DiscProject, mp3.ProjectId);
+            else if (!_presentationState.IsProjectExtensionRun && _presetReconversionRollbackContext is null)
+                identity = _activeLocalPreparation;
+            if (identity is null || !TrackPathService.PathEquals(identity.Folder, _currentProjectWorkFolder)) return;
+            new DeferredProjectCompletionService(GetWorkingRootFolder(),
+                _services.Foundation.EnvironmentContext.Environment.ToString())
+                .RecordConfirmed(identity, _processingRunId, logoff);
+        });
         RequestActiveOperationCancellation();
     }
 
     private void RequestActiveOperationCancellation()
     {
         if (_discImportCancellation is { IsCancellationRequested: false })
-            _discImportCancellation.Cancel();
+            RunCloseCleanupStep(() => _discImportCancellation.Cancel());
 
         if (_exportCancellation is { IsCancellationRequested: false })
-            _exportCancellation.Cancel();
+            RunCloseCleanupStep(() => _exportCancellation.Cancel());
+
+        if (_trackAnalysisCancellation is { IsCancellationRequested: false })
+            RunCloseCleanupStep(() => _trackAnalysisCancellation.Cancel());
+    }
+
+    private void RefreshSystemSleepPrevention()
+    {
+        var shouldKeepAwake = _services.Foundation.SystemSleepPreventionActivityService.ShouldKeepAwake(
+            new SystemSleepPreventionActivityInput(
+                _settings.KeepComputerAwakeDuringLongOperations,
+                ProjectReviewState.Phase,
+                IsBusy,
+                IsExporting,
+                IsDiscImporting));
+
+        _services.Foundation.SystemSleepPreventionService.SetActive(shouldKeepAwake);
     }
 
     private async Task RequestPipelinePauseAsync()
     {
-        if (_pipelineState is not (ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting))
+        if (_presentationState.PauseRequested || _presentationState.IsPipelinePaused) return;
+        var discCancellation = _discImportCancellation;
+        var exportCancellation = _exportCancellation;
+        var plan = _services.Pipeline.PipelinePauseRequestService.Create(
+            new PipelinePauseRequestInput(
+                ProjectReviewState.Phase,
+                IsDiscImporting,
+                IsExporting,
+                discCancellation is { IsCancellationRequested: false },
+                exportCancellation is { IsCancellationRequested: false }));
+
+        if (!plan.ShouldPause)
             return;
 
-        _pauseRequested = true;
-        StatusText = "Pause wird vorbereitet …";
-        ExportProgressText = "Laufende Vorgänge werden kontrolliert beendet …";
+        var pauseRequestTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreatePauseRequest(
+                _presentationState.IsPipelinePaused,
+                _presentationState.IsPipelineFailed,
+                IsBusy,
+                IsExporting,
+                IsDiscImporting);
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Pausing, PipelineUiTransitionTarget.Primary);
+        ApplyPipelineTransition(pauseRequestTransition);
+        StatusText = plan.StatusText;
+        ExportProgressText = plan.ProgressText;
 
-        var discCancellation = IsDiscImporting ? _discImportCancellation : null;
-        var exportCancellation = IsExporting ? _exportCancellation : null;
+        try
+        {
+            // Let binding/layout/render work run before cancellation callbacks or synchronous cleanup.
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (plan.CancelDiscImport && ReferenceEquals(discCancellation, _discImportCancellation))
+                await discCancellation!.CancelAsync();
+            if (plan.CancelExport && ReferenceEquals(exportCancellation, _exportCancellation))
+                await exportCancellation!.CancelAsync();
+            NotifyExportUiStateChanged();
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Pause request failed", ex);
+            _presentationState.PauseRequested = false;
+            StatusText = LocalizationText.Get("Pipeline.Transition.PauseFailed");
+            EndPipelineUiTransition(transitionOwner);
+        }
+    }
 
-        if (discCancellation is not null && !discCancellation.IsCancellationRequested)
-            await discCancellation.CancelAsync();
+    private bool TryCheckpointMetadataBeforeClose()
+    {
+        if (!_projectMetadataSession.IsAttached ||
+            TryFlushCanonicalMetadataBeforeExtensionSnapshot(_projectMetadataSession.ProjectFolder!)) return true;
+        _allowWindowClose = false;
+        _isShutdownInProgress = false;
+        CancelApplicationRestartRequest();
+        NotifyExportUiStateChanged();
+        return false;
+    }
 
-        if (exportCancellation is not null && !exportCancellation.IsCancellationRequested)
-            await exportCancellation.CancelAsync();
+    private void StopAutomaticMaintenance() =>
+        _maintenanceCoordinator?.StopAsync().GetAwaiter().GetResult();
+
+    private bool TryCheckpointEditableProject()
+    {
+        // An export can still be in the previous Review/Completed phase during analysis.
+        // Its manifest owner must drain before the UI snapshot writes another revision.
+        if (_exportCancellation is not null || _discImportCancellation is not null ||
+            _trackAnalysisCancellation is not null) return true;
+        if (ProjectReviewState.Phase is not (ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
+            || string.IsNullOrWhiteSpace(_currentProjectWorkFolder)) return true;
+        try
+        {
+            StopAutomaticMaintenance();
+            FlushPendingChapterMetadataRefresh();
+            FlushCanonicalMetadataSessionForProject(_currentProjectWorkFolder);
+            var projectType = ResolveCurrentProjectType(ProjectManifestTypes.FolderProject);
+            _services.Workflows.ProjectSnapshotService.SaveEditableProjectSnapshot(
+                _currentProjectWorkFolder, projectType, CreateProjectSnapshotFromUi(), Tracks.ToList(), BuildFinalOutputPath());
+            _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Editable project checkpoint failed", ex);
+            AppDialogService.Error(this, LocalizationText.Get("MainWindow.Project.SaveFailed.Title"),
+                LocalizationText.Get("MainWindow.Project.SaveFailed.Message"), details: new[] { ex.Message });
+            CancelApplicationRestartRequest();
+            return false;
+        }
     }
 
     private void TrySaveActiveProjectSnapshot()
     {
+        if (_isDiscStopSaveInProgress) return;
+        if (new DiscProjectStopSaveService().HasPendingCommit(_currentProjectWorkFolder)) return;
+        if (_projectMetadataSession.IsAttached &&
+            !TryFlushCanonicalMetadataBeforeExtensionSnapshot(_projectMetadataSession.ProjectFolder!)) return;
+
         if (_activeMp3DiscManifest is not null)
             TrySaveCurrentMp3DiscProjectSnapshot(_activeMp3DiscManifest);
 
         if (_activeAudioDiscManifest is not null)
             TrySaveCurrentAudioDiscProjectSnapshot(_activeAudioDiscManifest, force: true);
+    }
+
+    private void TryFlushCanonicalMetadataSession()
+    {
+        if (!_projectMetadataSession.IsAttached)
+            return;
+
+        try
+        {
+            StopAutomaticMaintenance();
+            var saved = _projectMetadataSession.Flush();
+            if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError(
+                "Canonical ProjectMetadata flush failed.",
+                ex);
+        }
+    }
+
+    private void SynchronizeActiveMetadataBindings()
+    {
+        var snapshot = MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences);
+        if (!new ProjectMetadataFieldBindingSynchronizationService().SynchronizeActiveTargets(
+                _projectMetadata.CanonicalMetadata,
+                snapshot))
+        {
+            return;
+        }
+
+        TryFlushCanonicalMetadataSession();
     }
 
     private void CleanupCurrentProjectPartFiles()
@@ -1133,11 +2068,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            _convertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
+            _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
         }
-        catch
+        catch (Exception ex)
         {
-            // Beim nächsten Start beziehungsweise Export werden verbliebene .part-Dateien erneut bereinigt.
+            _runtimeServices.DiagnosticLogService.WriteError("Project part-file cleanup deferred until next start or export", ex);
         }
     }
 
@@ -1164,41 +2099,85 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (IsBusy)
             return;
 
-        RefreshResumeProjects(showStatus: false);
-
-        var dialog = new ResumeProjectDialog(
-            GetWorkingRootFolder(),
-            _projectIndexService,
-            _projectResumePlanService,
-            _settings.ProjectRetentionDays,
-            SelectedResumeProject)
+        try
         {
-            Owner = this
-        };
+            _isProjectBrowserOpen = true;
+            CheckAutomaticMaintenance();
+            StopAutomaticMaintenance();
+            var dialog = new ResumeProjectDialog(
+                GetWorkingRootFolder(),
+                _services.Foundation.ProjectIndexService,
+                _services.Foundation.ProjectResumePlanService,
+                _settings.ProjectRetentionDays,
+                AppearanceSettingsService.GetEffectiveMode(_settings),
+                SelectedResumeProject,
+                _settings.ProjectRetentionMode,
+                _services.Foundation.GlobalSettingsManager, RunProjectRebuild)
+            {
+                Owner = this
+            };
+            AttachDebugWindowPlacement(dialog, DebugWindowPlacementTarget.ResumeProject);
 
-        var result = dialog.ShowDialog();
+            var result = ModalDialogService.ShowDialog(dialog, this);
 
-        if (dialog.SelectedProject is not null)
-            SelectedResumeProject = dialog.SelectedProject;
+            if (dialog.InitialProjectLoadElapsed > TimeSpan.Zero)
+            {
+                _runtimeServices.DiagnosticLogService.WritePerformanceEvent(
+                    "PROJECT DIALOG INITIAL LOAD",
+                    dialog.InitialProjectLoadElapsed,
+                    $"Scan={FormatPerformanceMilliseconds(dialog.InitialProjectScanElapsed)} ms; " +
+                    $"InitialPreview={FormatPerformanceMilliseconds(dialog.InitialSelectionPreviewElapsed)} ms; " +
+                    $"Projects={dialog.InitialProjectCount}");
+            }
 
-        if (result == true && dialog.SelectedResumePlan is not null)
-            await LoadResumeProjectIntoWorkspaceAsync(dialog.SelectedResumePlan);
+            if (dialog.SelectedProject is not null)
+                SelectedResumeProject = dialog.SelectedProject;
+
+            if (result == true && dialog.SelectedResumePlan is not null)
+                await LoadResumeProjectIntoWorkspaceAsync(dialog.SelectedResumePlan);
+        }
+        catch (Exception ex)
+        {
+            AppDialogService.Error(this,
+                LocalizationText.Get("Settings.Projects.LoadFailed.Title"),
+                LocalizationText.Format("Settings.Projects.LoadFailed.Message", ex.Message));
+        }
+        finally
+        {
+            _isProjectBrowserOpen = false;
+            CheckAutomaticMaintenance();
+        }
     }
 
     private void SetPipelineState(ProjectPipelineState state)
     {
-        if (_pipelineState == state)
+        if (state is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or
+            ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Merging or ProjectPipelineState.Completed)
+            SetOriginalAudioColumnsVisible(false);
+        if (ProjectReviewState.Phase == state)
+        {
+            RefreshSystemSleepPrevention();
             return;
+        }
 
-        _pipelineState = state;
+        _projectReviewState = ProjectReviewState.WithPhase(state);
+        if (state is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
+            _sessionProject.Clear();
         if (state is ProjectPipelineState.Preparing or ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Merging or ProjectPipelineState.Completed)
         {
-            _isPipelinePaused = false;
-            _pauseRequested = false;
+            var stableTransition =
+                _services.Pipeline.PipelinePauseTransitionService.CreateStableStateActivation(
+                    _presentationState.IsPipelineFailed,
+                    IsBusy,
+                    IsExporting,
+                    IsDiscImporting);
+            ApplyPipelineTransition(stableTransition);
         }
-        OnPropertyChanged(nameof(PipelineStateDebugText));
         PersistDiscPipelineState(state);
+        if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
         NotifyExportUiStateChanged();
+        RefreshSystemSleepPrevention();
     }
 
     private void PersistDiscPipelineState(ProjectPipelineState state)
@@ -1213,16 +2192,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             var mp3Manifest = _activeMp3DiscManifest;
-            if (mp3Manifest is null && _loadedResumeProjectIsMp3Disc &&
+            if (mp3Manifest is null && LoadedProjectState.IsMp3Disc &&
                 !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
             {
-                mp3Manifest = _mp3DiscProjectService.TryLoad(_currentProjectWorkFolder);
+                mp3Manifest = _services.Foundation.Mp3DiscProjectService.TryLoad(_currentProjectWorkFolder);
             }
 
             if (mp3Manifest is not null)
             {
                 mp3Manifest.PipelineState = state.ToManifestValue();
-                _mp3DiscProjectService.Save(mp3Manifest);
+                StopAutomaticMaintenance();
+                _services.Foundation.Mp3DiscProjectService.Save(mp3Manifest);
+                _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
             }
         }
         catch
@@ -1231,12 +2212,113 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private async Task<bool> EnsureResumeDiscPreviewAsync()
+    {
+        if (!_resumeDiscSourceSelectionRequired)
+            return true;
+        if (_trackAnalysisCancellation is not null)
+            return false;
+        var selected = ShowDiscSourceSelectionDialog();
+        if (string.IsNullOrWhiteSpace(selected))
+            return false;
+
+        using var previewCancellation = new CancellationTokenSource();
+        _trackAnalysisCancellation = previewCancellation;
+        var token = previewCancellation.Token;
+        var wasBusy = IsBusy;
+        IsBusy = true;
+        try
+        {
+            if (_activeAudioDiscManifest is { } audioManifest)
+            {
+                var next = _services.Foundation.AudioDiscProjectService.GetNextRequiredDiscNumber(audioManifest);
+                if (next is null) return true;
+                var prepared = await WaitForNextAudioDiscAsync(audioManifest, next.Value, token,
+                    startWithSelectedDrive: true, previewOnly: true, selectedSource: selected);
+                if (prepared is null) return false;
+                token.ThrowIfCancellationRequested();
+                _resumeDiscPreview.Set(prepared);
+                Tracks.ReplaceAll(DiscResumePreviewState.AppendAudioTracks(Tracks,
+                    _services.Foundation.AudioDiscProjectService.CreateTrackPreview(audioManifest, prepared)));
+                selected = prepared.SourceDriveRoot;
+            }
+            else
+            {
+                var manifest = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false);
+                if (manifest is null) return false;
+                var next = _services.Foundation.Mp3DiscProjectService.BuildResumePlan(manifest).NextMissingDiscNumber;
+                if (next is null) return true;
+                var workflow = _services.Workflows.Mp3DiscImportWorkflowService;
+                var signatures = workflow.BuildCompletedDiscSignatureSet(manifest);
+                var outcome = await WaitForNextDiscAsync(selected, next.Value, manifest.TotalDiscs,
+                    signatures, token, acceptedSource => selected = acceptedSource, startWithSelectedDrive: true, previewOnly: true);
+                if (outcome is not (DiscWaitDialogOutcome.Ready or DiscWaitDialogOutcome.ReadyWithDuplicateOverride))
+                    return false;
+                var precheck = await Task.Run(() => workflow.AnalyzeDiscForImport(selected, signatures, token), token);
+                if (!precheck.Analysis.IsSupportedDataDisc ||
+                    (precheck.IsAlreadyImported && outcome != DiscWaitDialogOutcome.ReadyWithDuplicateOverride))
+                    return false;
+                var sources = workflow.ReuseExistingSourceIds(manifest.ProjectFolder, next.Value,
+                    precheck.PlannedSources, manifest);
+                var prepared = new Mp3DiscPendingChapterDisc(next.Value, precheck.Signature, sources);
+                var previewTracks = await _services.Media.FolderScanner.ScanAsync(selected, TrackNumberPreference.FileName,
+                    cancellationToken: token);
+                token.ThrowIfCancellationRequested();
+                _services.Discs.Mp3DiscTrackReconciliationService.NormalizeProjectDiscNumber(previewTracks, next.Value);
+                _services.Discs.Mp3DiscTrackReconciliationService.ApplyPlannedSourceIds(previewTracks, selected, next.Value, sources);
+                _resumeDiscPreview.Set(prepared, outcome == DiscWaitDialogOutcome.ReadyWithDuplicateOverride);
+                _transientMp3DiscChapterPreview = prepared;
+                AppendDiscPreviewTracks(previewTracks, selected, next.Value, clearExistingTracks: false);
+            }
+
+            _resumeDiscStartDriveRoot = selected;
+            SelectedFolder = selected;
+            _resumeDiscSourceSelectionRequired = false;
+            UpdateIndexes();
+            RefreshTrackPresentationViews();
+            AutoFitTrackColumnsAfterRender();
+            NotifyExportUiStateChanged();
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("DiscResumePreview", ex);
+            EnterPipelinePause(LocalizationText.Get("MainWindow.Project.Paused"));
+            return false;
+        }
+        finally
+        {
+            _trackAnalysisCancellation = null;
+            IsBusy = wasBusy;
+            NotifyExportUiStateChanged();
+        }
+    }
+
+    private void DiscardChangedResumeDiscPreview(int discNumber)
+    {
+        if (_resumeDiscPreview.DiscNumber != discNumber) return;
+        Tracks.ReplaceAll(Tracks.Where(track => track.DiscNumber != discNumber).ToList());
+        _resumeDiscPreview.Clear();
+        _resumeDiscStartDriveRoot = null;
+        _transientMp3DiscChapterPreview = null;
+        PersistTrackListState();
+    }
+
     private void ResetLoadedResumeProjectState()
     {
-        _loadedResumeProjectNeedsDiscImport = false;
-        _loadedResumeProjectIsMp3Disc = false;
-        _loadedResumeProjectIsAudioDisc = false;
-        _loadedResumeProjectIsLocal = false;
+        if (!_isDiscStopSaveInProgress && !_isProjectCloseInProgress && !_isShutdownInProgress)
+            _presentationState.ClearUiTransition();
+        _lockedDiscResumePreset = null;
+        _resumeDiscSourceSelectionRequired = false;
+        _resumeDiscStartDriveRoot = null;
+        _resumeDiscPreview.Clear();
+        _mp3DiscChapterSourceCatalog.Clear();
+        _transientMp3DiscChapterPreview = null;
+        ApplyLoadedProjectState(LoadedProjectStateSnapshot.None);
         _activeAudioDiscManifest = null;
         _pendingAudioDisc = null;
         _isAudioDiscProjectAwaitingRip = false;
@@ -1247,14 +2329,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetManualMergeReviewState()
     {
-        var hadManualMergeReviewState = _isWaitingForManualMergeReview ||
+        var hadManualMergeReviewState = ProjectReviewState.IsWaitingForManualMergeReview ||
                                         _manualMergeReviewNeedsReconversion ||
+                                        _manualMergeReviewHasPreparedTracks ||
                                         !string.IsNullOrWhiteSpace(_manualMergeReviewPreparedPreset);
 
-        _isWaitingForManualMergeReview = false;
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(false);
         _manualMergeReviewPreparedPreset = "";
         _manualMergeReviewNeedsReconversion = false;
-        _isCurrentProjectCompleted = false;
+        _manualMergeReviewHasPreparedTracks = false;
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
+        ClearPresetReconversionPauseContext();
 
         if (!hadManualMergeReviewState)
             return;
@@ -1265,45 +2350,56 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UpdateManualMergeReviewPresetState(bool forceRefresh = false, bool updateStatusText = true)
     {
-        if (!_isWaitingForManualMergeReview)
+        if (!ProjectReviewState.IsReviewBeforeMerge && !ProjectReviewState.IsCompleted)
             return;
 
         var includedTracks = Tracks.Where(track => !track.IsExcluded).ToList();
-        var hasCompletePreparedPreset = includedTracks.Count > 0 &&
-                                        includedTracks.All(track =>
-                                            _trackPreparedStateRefreshService.IsReusablePreparedConvertedTrack(track, _selectedExportPreset));
+        var preparation = _services.Workflows.TrackPreparedStateRefreshService.GetPreparationProgress(
+            includedTracks,
+            SelectedExportPreset);
+        var hasCompletePreparedPreset = preparation.TotalCount > 0 && preparation.PendingCount == 0;
         var needsReconversion = !hasCompletePreparedPreset;
+        var hasPreparedTracks = preparation.PreparedCount > 0;
 
-        if (!forceRefresh && _manualMergeReviewNeedsReconversion == needsReconversion)
-            return;
+        IsProgressIndeterminate = false;
+        ExportProgressPercent = preparation.Percent;
 
-        _manualMergeReviewNeedsReconversion = needsReconversion;
-        SetTrackActionDisplayOverride(needsReconversion ? "Neu konvertieren" : "Zusammenfügen");
-        NotifyExportUiStateChanged();
+        var reconversionStateChanged = _manualMergeReviewNeedsReconversion != needsReconversion;
+        var preparedStateChanged = _manualMergeReviewHasPreparedTracks != hasPreparedTracks;
+        if (reconversionStateChanged || preparedStateChanged || forceRefresh)
+        {
+            _manualMergeReviewNeedsReconversion = needsReconversion;
+            _manualMergeReviewHasPreparedTracks = hasPreparedTracks;
+            SetTrackActionDisplayOverride(needsReconversion
+                ? LocalizationText.Get("MainWindow.Action.Reconvert")
+                : LocalizationText.Get("MainWindow.Action.Merge"));
+            NotifyExportUiStateChanged();
+        }
 
         if (!updateStatusText)
             return;
 
-        if (needsReconversion && (_loadedResumeProjectIsLocal || _loadedResumeProjectIsMp3Disc))
+        if (needsReconversion && (LoadedProjectState.IsLocal || LoadedProjectState.IsMp3Disc))
         {
             var preset = ExportPreset.Parse(SelectedExportPreset);
             var total = includedTracks.Count;
-            var projectKind = _loadedResumeProjectIsMp3Disc
+            var totalChapters = ExportPreviewMetricsService.CountPlannedChapters(includedTracks);
+            var projectKind = LoadedProjectState.IsMp3Disc
                 ? WorkflowProjectKind.Mp3Disc
                 : WorkflowProjectKind.Folder;
-            var totalDiscs = _loadedResumeProjectIsMp3Disc
+            var totalDiscs = LoadedProjectState.IsMp3Disc
                 ? Math.Max(1, includedTracks.Select(track => track.DiscNumber ?? 1).DefaultIfEmpty(1).Max())
                 : 0;
 
-            ApplyWorkflowStatusViewState(_workflowStatusFormatter.Format(new WorkflowStatusSnapshot
+            ApplyWorkflowStatusViewState(new WorkflowStatusFormatter().Format(new WorkflowStatusSnapshot
             {
                 ProjectId = _currentProjectWorkFolder,
                 ProjectKind = projectKind,
-                ProjectState = _pipelineState,
+                ProjectState = ProjectReviewState.Phase,
                 IsPresetChangePending = true,
                 TotalSourceItems = total,
-                TotalChapters = total,
-                SourceProgress = _loadedResumeProjectIsMp3Disc
+                TotalChapters = totalChapters,
+                SourceProgress = LoadedProjectState.IsMp3Disc
                     ? new SourceAcquisitionProgress(
                         SourceAcquisitionKind.Copying,
                         total,
@@ -1317,9 +2413,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         AllSourcesFinished: true)
                     : null,
                 ConversionProgress = new ConversionActivityProgress(
-                    0,
+                    preparation.PreparedCount,
                     total,
-                    0,
+                    preparation.Percent,
                     Array.Empty<int>(),
                     preset.BitrateKbps,
                     preset.Channels == 1,
@@ -1328,129 +2424,474 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (needsReconversion)
         {
-            StatusText = "Das Export-Preset wurde geändert. Die Tracks müssen für das neue Preset neu konvertiert werden.";
-            ExportProgressText = "Neues Preset gewählt. Klicke auf „Neu konvertieren“ und prüfe die Tracks danach erneut.";
+            UpdateFinalStatus(Tracks.Count);
+            ExportProgressText = LocalizationText.Format("MainWindow.Progress.Prepared", preparation.Percent, preparation.PreparedCount, preparation.TotalCount);
         }
         else
         {
-            StatusText = "Die Tracks sind für das gewählte Preset vorbereitet und können zusammengefügt werden.";
-            ExportProgressText = "Konvertierung abgeschlossen. Trackliste prüfen und anschließend zusammenfügen.";
+            StatusText = LocalizationText.Get("Workflow.Review.PreparedStatus");
+            ExportProgressText = LocalizationText.Get("Workflow.Review.AudioProgress");
         }
+    }
+
+    private void InitializeResumedManualMergeReviewPresetBaseline(
+        ProjectResumePlan plan,
+        ProjectResumeLoadResult loadResult)
+    {
+        _manualMergeReviewPreparedPreset = string.Empty;
+
+        if (loadResult.PipelineState is not (ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed))
+            return;
+
+        var preparedPreset = ResolveResumedPreparedPreset(plan);
+        if (string.IsNullOrWhiteSpace(preparedPreset))
+            return;
+
+        if (string.IsNullOrWhiteSpace(plan.SelectedPreset) &&
+            !string.Equals(SelectedExportPreset, preparedPreset, StringComparison.OrdinalIgnoreCase))
+        {
+            SetSelectedExportPresetSilently(preparedPreset);
+        }
+
+        _manualMergeReviewPreparedPreset = preparedPreset;
+    }
+
+    private static string ResolveResumedPreparedPreset(ProjectResumePlan plan)
+    {
+        if (!string.IsNullOrWhiteSpace(plan.SelectedPreset))
+            return plan.SelectedPreset.Trim();
+
+        var preparedPresets = plan.Tracks
+            .Select(track => track.Preset?.Trim() ?? string.Empty)
+            .Where(preset => !string.IsNullOrWhiteSpace(preset))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return preparedPresets.Length == 1
+            ? preparedPresets[0]
+            : string.Empty;
     }
 
     private void SetTrackActionDisplayOverride(string value)
     {
         foreach (var track in Tracks)
-            track.DisplayProcessingActionOverride = track.IsExcluded ? "Ausgeschlossen" : value;
+            track.DisplayProcessingActionOverride = track.IsExcluded
+                ? LocalizationText.Get("StatusExcluded")
+                : value;
 
-        TracksGrid?.Items.Refresh();
+        RefreshTrackPresentationViews();
+    }
+
+    private bool TryCheckpointWorkspaceReplacement(int expectedVersion)
+    {
+        if (expectedVersion != _workspaceReplacementVersion || _isWorkspaceReplacementInProgress ||
+            _isProjectCloseInProgress || _isDiscStopSaveInProgress || _isShutdownInProgress || IsBusy) return false;
+        if (_sessionProject.IsUnstartedAudio(_currentProjectWorkFolder) && !TryDiscardAudioPreparation()) return false;
+        if (!TryCheckpointEditableProject()) return false;
+        _workspaceReplacementVersion++;
+        return true;
+    }
+
+    private bool TryDiscardAudioPreparation()
+    {
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isDiscStopSaveInProgress ||
+            IsBusy || IsDiscImporting || IsExporting || _discImportCancellation is not null ||
+            _exportCancellation is not null || _trackAnalysisCancellation is not null) return false;
+        var folder = _currentProjectWorkFolder;
+        _isWorkspaceReplacementInProgress = true;
+        try
+        {
+            if (_isShutdownInProgress || _allowWindowClose || IsBusy || IsDiscImporting || IsExporting ||
+                _discImportCancellation is not null || _exportCancellation is not null || _trackAnalysisCancellation is not null)
+                throw new IOException(LocalizationText.Get("Project.Preparation.Unsafe"));
+            _sessionProject.ValidateAudioDiscard(GetWorkingRootFolder(),
+                GetProjectFolderStructure().AudioDiscProjectsFolder, _currentProjectWorkFolder);
+            if (!TrackPathService.PathEquals(folder, _currentProjectWorkFolder)) return false;
+            // No producer or asynchronous gap exists in this never-started workspace.
+            // Temporarily release only the active-folder guard; restore it on any failure.
+            _currentProjectWorkFolder = string.Empty;
+            var deletion = _services.Foundation.ProjectIndexService.DeleteProject(GetWorkingRootFolder(), folder);
+            if (!deletion.Deleted) throw new IOException(deletion.ErrorMessage);
+            ClearCurrentProjectWorkspace();
+            _workspaceReplacementVersion++;
+            RefreshResumeProjects(showStatus: false);
+            return true;
+        }
+        catch (Exception error)
+        {
+            _currentProjectWorkFolder = folder;
+            _runtimeServices.DiagnosticLogService.WriteError("Unstarted audio preparation cleanup failed", error);
+            AppDialogService.Error(this, LocalizationText.Get("MainWindow.Project.DeleteFailed.Title"), LocalizationText.Get("Common.OperationFailed"), details: new[] { error.Message });
+            return false;
+        }
+        finally { _isWorkspaceReplacementInProgress = false; }
     }
 
     private async Task LoadResumeProjectIntoWorkspaceAsync(ProjectResumePlan plan)
     {
+        var replacementVersion = _workspaceReplacementVersion;
+        if (!TryCheckpointWorkspaceReplacement(replacementVersion)) return;
+        var resumeLoadTimer = Stopwatch.StartNew();
+        var prepareElapsed = TimeSpan.Zero;
+        var ffprobeElapsed = TimeSpan.Zero;
+        var resumeRefreshElapsed = TimeSpan.Zero;
+        var loadSucceeded = false;
+        var previousStatusText = _statusText;
+        var previousProgressText = ExportProgressText;
+        var loadingText = LocalizationText.Get("MainWindow.Project.ResumeLoading");
+        var performanceApp = Application.Current as App;
+        PerformanceOperationScope resumePerformanceScope = default;
+        if (performanceApp is not null)
+        {
+            resumePerformanceScope = performanceApp.StartPerformanceOperation(
+                "project.resume",
+                PerformanceProjectType.Resume,
+                new PerformanceWorkloadSnapshot
+                {
+                    ProjectType = PerformanceProjectType.Resume,
+                    TrackCount = plan.Tracks.Count,
+                    FileCount = plan.Tracks.Count,
+                    DiscCount = plan.TotalDiscs > 0 ? plan.TotalDiscs : null
+                });
+        }
+
+        void MeasureResumePhase(string name, Action action)
+        {
+            var phase = performanceApp is null ? default(PerformancePhaseScope) :
+                performanceApp.StartPerformancePhase(resumePerformanceScope.OperationId, name);
+            try { action(); phase.Complete(); }
+            catch (OperationCanceledException) { phase.Cancel(); throw; }
+            catch (Exception error) { phase.Fail(error); throw; }
+        }
+
         IsBusy = true;
+        _isResumeLoading = true;
+        StatusText = loadingText;
+        ExportProgressText = loadingText;
+        IsProgressIndeterminate = true;
+        OnPropertyChanged(nameof(ExportProgressVisibility));
 
         try
         {
-            var loadResult = _projectResumeLoadWorkflowService.Prepare(plan);
-            if (!loadResult.Success)
+            // Paint feedback before beginning the actual workspace load.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            var phaseTimer = Stopwatch.StartNew();
+            var preparePerformancePhase = performanceApp is null
+                ? default(PerformancePhaseScope)
+                : performanceApp.StartPerformancePhase(resumePerformanceScope.OperationId, "resume.prepare");
+            ProjectResumeLoadResult loadResult;
+            try
             {
-                AppDialogService.Error(
-                    this,
-                    "Audio-CD-Projekt konnte nicht geladen werden",
-                    loadResult.ErrorMessage);
-                ResetLoadedResumeProjectState();
-                _currentProjectWorkFolder = string.Empty;
-                _currentFolderPath = string.Empty;
-                return;
+                loadResult = await Task.Run(() => _services.Workflows.ProjectResumeLoadWorkflowService.Prepare(plan));
+                prepareElapsed = phaseTimer.Elapsed;
+                if (!loadResult.Success)
+                {
+                    var failure = new InvalidOperationException("Resume preparation returned an unsuccessful result.");
+                    preparePerformancePhase.Fail(failure);
+                    resumePerformanceScope.Fail(failure);
+                    AppDialogService.Error(
+                        this,
+                        LocalizationText.Get("MainWindow.Resume.AudioLoadFailed.Title"),
+                        loadResult.ErrorMessage);
+                    return;
+                }
+
+                preparePerformancePhase.Complete();
+            }
+            catch (OperationCanceledException)
+            {
+                prepareElapsed = phaseTimer.Elapsed;
+                preparePerformancePhase.Cancel();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                prepareElapsed = phaseTimer.Elapsed;
+                preparePerformancePhase.Fail(ex);
+                throw;
             }
 
-            _currentProjectWorkFolder = plan.ProjectFolder;
-            _pendingDiscProjectSourceFolder = string.Empty;
-            _pendingAudioDisc = null;
-            _loadedResumeProjectIsMp3Disc = loadResult.IsMp3DiscProject;
-            _loadedResumeProjectIsAudioDisc = loadResult.IsAudioDiscProject;
-            _loadedResumeProjectIsLocal = !loadResult.IsMp3DiscProject && !loadResult.IsAudioDiscProject;
-            _loadedResumeProjectNeedsDiscImport = loadResult.NeedsMp3DiscImport;
-            _activeAudioDiscManifest = loadResult.AudioDiscManifest;
-            _isAudioDiscProjectAwaitingRip = loadResult.IsAudioDiscProjectAwaitingRip;
-            _isWaitingForManualMergeReview = loadResult.IsWaitingForManualMergeReview;
-            _isCurrentProjectCompleted = loadResult.IsCompletedProject;
-            SetPipelineState(loadResult.PipelineState);
-            SetMetadataEditingAvailable(true);
-            _currentFolderPath = loadResult.CurrentFolderPath;
-            SelectedFolder = loadResult.SelectedFolder;
-            SetSelectedSourceDisplayOverride(
-                SelectedResumeProject?.ListDisplayName ?? plan.DisplayName,
-                loadResult.SelectedFolder);
-            if (loadResult.IsAudioDiscProject)
-                SetAudioDiscSourceDisplayOverride(loadResult.AudioDiscManifest);
+            MeasureResumePhase("resume.source-metadata-backfill",
+                () => BackfillMissingSourceMetadataSnapshots(plan.ProjectFolder));
 
-            if (!string.IsNullOrWhiteSpace(plan.OutputFolder))
-                OutputFolder = plan.OutputFolder;
+            BeginWorkspaceTransition();
+            try
+            {
+                MeasureResumePhase("resume.workspace-state", () =>
+                {
+                    _resumeDiscPreview.Clear();
+                    _transientMp3DiscChapterPreview = null;
+                    _sessionProject.Clear();
+                    _currentProjectWorkFolder = plan.ProjectFolder;
+                    _pendingDiscProjectSourceFolder = string.Empty;
+                    _pendingAudioDisc = null;
+                    ApplyLoadedProjectState(
+                        LoadedProjectStateSnapshot.Create(
+                            loadResult.NeedsMp3DiscImport,
+                            loadResult.IsMp3DiscProject,
+                            loadResult.IsAudioDiscProject,
+                            !loadResult.IsMp3DiscProject && !loadResult.IsAudioDiscProject));
+                    _activeAudioDiscManifest = loadResult.AudioDiscManifest;
+                    _isAudioDiscProjectAwaitingRip = loadResult.IsAudioDiscProjectAwaitingRip;
+                    ApplyProjectReviewState(
+                        new ProjectReviewStateSnapshot(
+                            loadResult.PipelineState,
+                            loadResult.IsWaitingForManualMergeReview,
+                            loadResult.IsCompletedProject));
+                    SetMetadataEditingAvailable(true);
+                    _currentFolderPath = loadResult.CurrentFolderPath;
+                    SelectedFolder = loadResult.SelectedFolder;
+                    SetSelectedSourceDisplayOverride(
+                        SelectedResumeProject?.ListDisplayName ?? plan.DisplayName,
+                        loadResult.SelectedFolder);
+                    if (loadResult.IsAudioDiscProject)
+                        SetAudioDiscSourceDisplayOverride(loadResult.AudioDiscManifest);
 
-            if (!string.IsNullOrWhiteSpace(plan.OutputExtension))
-                OutputExtension = plan.OutputExtension;
+                    if (!string.IsNullOrWhiteSpace(plan.OutputExtension))
+                        OutputExtension = plan.OutputExtension;
 
-            if (!string.IsNullOrWhiteSpace(plan.FileNameTemplate))
-                FileNameTemplate = plan.FileNameTemplate;
+                    if (!string.IsNullOrWhiteSpace(plan.FileNameTemplate))
+                        FileNameTemplate = plan.FileNameTemplate;
 
-            if (!string.IsNullOrWhiteSpace(plan.SelectedPreset))
-                SetSelectedExportPresetSilently(plan.SelectedPreset);
+                    if (!string.IsNullOrWhiteSpace(plan.SelectedPreset))
+                    {
+                        _lockedDiscResumePreset = null;
+                        SetSelectedExportPresetSilently(plan.SelectedPreset);
+                    }
+                    _lockedDiscResumePreset = plan.IsStoppedDiscProject ? plan.SelectedPreset : null;
+                    _resumeDiscSourceSelectionRequired = loadResult.IsAudioDiscProjectAwaitingRip || loadResult.NeedsMp3DiscImport;
+                    _resumeDiscStartDriveRoot = null;
 
-            if (!string.IsNullOrWhiteSpace(plan.ParallelJobs))
-                SetParallelJobsInput(plan.ParallelJobs, showMessage: false);
+                    InitializeResumedManualMergeReviewPresetBaseline(plan, loadResult);
 
-            ApplyLoadedTitleAndAlbum(plan.BookTitle, plan.Album);
-            Author = plan.Author;
-            Narrator = plan.Narrator;
+                    // ParallelJobsInput is a global user setting and intentionally survives project resume.
 
-            if (!string.IsNullOrWhiteSpace(plan.Genre))
-                Genre = plan.Genre;
+                });
 
-            LoadResumeCover(plan);
-            Tracks.Clear();
-            foreach (var track in loadResult.Tracks)
-                Tracks.Add(track);
-            UpdateIndexes();
+                MeasureResumePhase("resume.metadata", () =>
+                {
+                    _projectMetadataSession.Discard();
+                    _projectMetadata.Clear("");
+                    if (loadResult.CanonicalMetadata is not null)
+                    {
+                        var canonicalMetadata = _projectMetadataSession.OpenExisting(plan.ProjectFolder);
+                        _projectMetadata.ApplyCanonicalMetadata(canonicalMetadata);
+                    }
+                    else
+                    {
+                        // Defensive fallback for externally constructed/stale resume plans.
+                        // Normal ProjectResumePlanService plans already own a canonical metadata store.
+                        ApplyLoadedTitleAndAlbum(plan.BookTitle, plan.Album);
+                        Author = plan.Author;
+                        Narrator = plan.Narrator;
+
+                        if (!string.IsNullOrWhiteSpace(plan.Genre))
+                            Genre = plan.Genre;
+
+                        var fallbackMetadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.None);
+                        _projectMetadataSession.BeginNew(fallbackMetadata);
+                        _projectMetadataSession.AttachNewProject(plan.ProjectFolder);
+                    }
+
+                    ApplySourceMetadataAggregation(
+                        plan.ProjectFolder,
+                        ProjectMetadataInitializationState.ProjectMetadataInitialized,
+                        !loadResult.IsMp3DiscProject && !loadResult.IsAudioDiscProject
+                            ? CreateLocalFolderAggregationOptions(loadResult.SelectedFolder)
+                            : loadResult.IsMp3DiscProject
+                                ? CreateMp3DiscProjectAggregationOptions()
+                                : CreateAudioDiscProjectAggregationOptions());
+
+                });
+                MeasureResumePhase("resume.cover", () => LoadResumeCover(plan));
+                MeasureResumePhase("resume.track-replace", () => Tracks.ReplaceAll(loadResult.Tracks));
+                SetOriginalAudioColumnsVisible(false, force: true);
+            }
+            finally
+            {
+                EndWorkspaceTransition();
+            }
+
+            _chapterGridColumnLayoutState.MarkAutoFitPending();
+            MeasureResumePhase("resume.update-indexes.initial", UpdateIndexes);
 
             if (_ffmpegStatus.IsComplete)
-                await EnrichResumeTracksWithFfprobeAsync();
+            {
+                phaseTimer.Restart();
+                var ffprobePerformancePhase = performanceApp is null
+                    ? default(PerformancePhaseScope)
+                    : performanceApp.StartPerformancePhase(resumePerformanceScope.OperationId, "resume.ffprobe");
+                try
+                {
+                    var ffprobePerformanceContext = performanceApp?.CreatePerformanceExternalProcessContext(
+                        resumePerformanceScope.OperationId,
+                        ffprobePerformancePhase.PhaseId,
+                        "resume.ffprobe");
+                    using var resumeAnalysisCancellation = new CancellationTokenSource();
+                    _trackAnalysisCancellation = resumeAnalysisCancellation;
+                    _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.ResumeLoad;
+                    NotifyExportUiStateChanged();
+                    bool resumeProbeCompleted;
+                    try
+                    {
+                        resumeProbeCompleted = await EnrichResumeTracksWithFfprobeAsync(
+                            ffprobePerformanceContext,
+                            resumeAnalysisCancellation.Token);
+                    }
+                    finally
+                    {
+                        _trackAnalysisCancellation = null;
+                        _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.None;
+                        NotifyExportUiStateChanged();
+                    }
 
-            RecalculateProcessingActionsForCurrentPreset();
-            UpdateIndexes();
-            UpdateFinalStatus(Tracks.Count);
-            ExportProgressPercent = 0;
-            ExportProgressText = string.IsNullOrWhiteSpace(loadResult.ProgressText)
-                ? BuildIdleExportProgressText()
-                : loadResult.ProgressText;
-            StatusText = loadResult.StatusText;
-            UpdateManualMergeReviewPresetState(forceRefresh: true, updateStatusText: false);
-            PublishLoadedProjectStatus(loadResult);
+                    if (!resumeProbeCompleted)
+                    {
+                        ffprobeElapsed = phaseTimer.Elapsed;
+                        ffprobePerformancePhase.Cancel();
+                        ResetWorkspaceAfterCanceledTrackAnalysis(TrackAnalysisCancellationScope.ResumeLoad);
+                        return;
+                    }
 
-            NotifyExportUiStateChanged();
-            OnPropertyChanged(nameof(CoverHintVisibility));
-            OnExportPreviewChanged();
-            AutoFitTrackColumnsAfterRender();
-            RefreshResumeProjects(showStatus: false);
+                    ffprobeElapsed = phaseTimer.Elapsed;
+                    ffprobePerformancePhase.Complete();
+                }
+                catch (OperationCanceledException)
+                {
+                    ffprobeElapsed = phaseTimer.Elapsed;
+                    ffprobePerformancePhase.Cancel();
+                    ResetWorkspaceAfterCanceledTrackAnalysis(TrackAnalysisCancellationScope.ResumeLoad);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ffprobeElapsed = phaseTimer.Elapsed;
+                    ffprobePerformancePhase.Fail(ex);
+                    throw;
+                }
+            }
+
+            MeasureResumePhase("resume.processing-actions",
+                () => RecalculateProcessingActionsForCurrentPreset(requestTrackStateRefresh: false));
+            MeasureResumePhase("resume.update-indexes.final", UpdateIndexes);
+            MeasureResumePhase("resume.final-ui", () =>
+            {
+                _isResumeLoading = false;
+                IsProgressIndeterminate = false;
+                OnPropertyChanged(nameof(IsProgressIndeterminate));
+                OnPropertyChanged(nameof(ExportProgressVisibility));
+                UpdateFinalStatus(Tracks.Count);
+                ExportProgressPercent = 0;
+                ExportProgressText = string.IsNullOrWhiteSpace(loadResult.ProgressText)
+                    ? BuildIdleExportProgressText()
+                    : loadResult.ProgressText;
+                StatusText = loadResult.StatusText;
+                PublishLoadedProjectStatus(loadResult);
+                UpdateManualMergeReviewPresetState(forceRefresh: true, updateStatusText: false);
+                RefreshPartialPresetProgressText();
+
+                NotifyExportUiStateChanged();
+                OnPropertyChanged(nameof(CoverHintVisibility));
+                OnExportPreviewChanged();
+                AutoFitTrackColumnsAfterRender();
+            });
+
+            phaseTimer.Restart();
+            var refreshPerformancePhase = performanceApp is null
+                ? default(PerformancePhaseScope)
+                : performanceApp.StartPerformancePhase(resumePerformanceScope.OperationId, "resume.refresh");
+            try
+            {
+                RefreshResumeProjects(showStatus: false);
+                resumeRefreshElapsed = phaseTimer.Elapsed;
+                refreshPerformancePhase.Complete();
+            }
+            catch (Exception ex)
+            {
+                resumeRefreshElapsed = phaseTimer.Elapsed;
+                refreshPerformancePhase.Fail(ex);
+                throw;
+            }
+
+            loadSucceeded = true;
+            resumePerformanceScope.Complete();
+        }
+        catch (OperationCanceledException)
+        {
+            resumePerformanceScope.Cancel();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            resumePerformanceScope.Fail(ex);
+            throw;
         }
         finally
         {
+            _isResumeLoading = false;
+            IsProgressIndeterminate = false;
+            OnPropertyChanged(nameof(IsProgressIndeterminate));
+            OnPropertyChanged(nameof(ExportProgressVisibility));
+            if (!loadSucceeded && ExportProgressText == loadingText)
+            {
+                StatusText = previousStatusText;
+                ExportProgressText = previousProgressText;
+            }
+            resumeLoadTimer.Stop();
+
+            _runtimeServices.DiagnosticLogService.WritePerformanceEvent(
+                "RESUME PROJECT LOAD",
+                resumeLoadTimer.Elapsed,
+                $"Success={loadSucceeded}; " +
+                $"Prepare={FormatPerformanceMilliseconds(prepareElapsed)} ms; " +
+                $"Ffprobe={FormatPerformanceMilliseconds(ffprobeElapsed)} ms; " +
+                $"ResumeRefresh={FormatPerformanceMilliseconds(resumeRefreshElapsed)} ms; " +
+                $"Tracks={Tracks.Count}");
+
             IsBusy = false;
             NotifyExportUiStateChanged();
+            performanceApp?.TryFinalizeDisabledPerformanceSession();
         }
+        if (loadSucceeded && plan.IsMergePaused)
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+
+        if (loadSucceeded && LoadedProjectState.IsMp3Disc && !plan.IsStoppedDiscProject &&
+            ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+
+        if (loadSucceeded)
+            ConfirmLoadedPresetBitrateIfNeeded();
+
+        if (loadSucceeded && plan.IsStoppedDiscProject && !plan.IsMergePaused)
+        {
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+            NotifyExportUiStateChanged();
+            await ShowCurrentProjectSetupDialogAsync();
+        }
+    }
+
+    private void BeginWorkspaceTransition()
+    {
+        if (_isWorkspaceTransitioning)
+            throw new InvalidOperationException("A workspace transition is already active.");
+
+        _isWorkspaceTransitioning = true;
+        _chapterMetadataRefreshTimer.Stop();
+        NotifyExportUiStateChanged();
+    }
+
+    private void EndWorkspaceTransition()
+    {
+        _chapterMetadataRefreshTimer.Stop();
+        _isWorkspaceTransitioning = false;
+        NotifyExportUiStateChanged();
     }
 
     private void ApplyLoadedTitleAndAlbum(string? title, string? album)
     {
-        var state = TitleAlbumLoadPolicy.Resolve(title, album, _settings.KeepAlbumLinkedToTitle);
-        _isSynchronizingTitleAndAlbum = true;
+        var state = TitleAlbumLoadPolicy.Resolve(title, album);
         BookTitle = state.Title;
         Album = state.Album;
-        _isSynchronizingTitleAndAlbum = false;
-
-        OnPropertyChanged(nameof(AlbumLinkToggleToolTip));
-        OnPropertyChanged(nameof(IsAlbumTabStop));
     }
 
 
@@ -1466,20 +2907,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void LoadResumeCover(ProjectResumePlan plan)
     {
-        _coverSourcePath = plan.CoverSourcePath ?? "";
-        _processedCoverPath = plan.ProcessedCoverPath ?? "";
+        _projectMetadata.ApplyCoverMetadata(
+            plan.CoverSourcePath,
+            plan.ProcessedCoverPath,
+            _projectMetadata.CanonicalMetadata.Cover.Origin);
 
-        if (!string.IsNullOrWhiteSpace(_processedCoverPath) && File.Exists(_processedCoverPath))
+        if (!string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath) && File.Exists(_projectMetadata.ProcessedCoverPath))
         {
-            CoverPreviewSource = _processedCoverPath;
+            CoverPreviewSource = _projectMetadata.ProcessedCoverPath;
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(_coverSourcePath) && File.Exists(_coverSourcePath))
+        if (!string.IsNullOrWhiteSpace(_projectMetadata.CoverSourcePath) && File.Exists(_projectMetadata.CoverSourcePath))
         {
             try
             {
-                SetCoverFromFile(_coverSourcePath);
+                SetCoverFromFile(_projectMetadata.CoverSourcePath);
                 return;
             }
             catch
@@ -1488,28 +2931,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        _coverSourcePath = "";
-        _processedCoverPath = "";
+        _projectMetadata.ApplyCoverMetadata("", "", MetadataOrigin.None);
         CoverPreviewSource = "";
     }
 
     private void LoadResumeTracks(ProjectResumePlan plan)
     {
-        var loadResult = _projectResumeLoadWorkflowService.Prepare(plan);
+        var loadResult = _services.Workflows.ProjectResumeLoadWorkflowService.Prepare(plan);
         if (!loadResult.Success)
             return;
 
-        Tracks.Clear();
-        foreach (var track in loadResult.Tracks)
-            Tracks.Add(track);
+        Tracks.ReplaceAll(loadResult.Tracks);
+        SetOriginalAudioColumnsVisible(false, force: true);
         UpdateIndexes();
     }
 
-    private void RefreshLoadedProjectTrackStateFromPersistedProject(string projectFolder)
+    private void RefreshLoadedProjectTrackStateFromPersistedProject(string projectFolder, ProjectResumePlan? preparedPlan = null)
     {
-        var statusText = StatusText;
+        var statusText = _statusText;
         var progressText = ExportProgressText;
-        var plan = _projectResumePlanService.BuildFromProjectFolder(projectFolder);
+        var plan = preparedPlan ?? _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(projectFolder);
         if (plan is null || plan.Tracks.Count == 0)
             return;
 
@@ -1533,6 +2974,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             refreshedTrack.TagTitle = previousTrack.TagTitle;
             refreshedTrack.Artist = previousTrack.Artist;
             refreshedTrack.BitrateKbps = previousTrack.BitrateKbps;
+            refreshedTrack.SampleRateHz = previousTrack.SampleRateHz;
             refreshedTrack.Channels = previousTrack.Channels;
             refreshedTrack.ChannelLayout = previousTrack.ChannelLayout;
             refreshedTrack.Codec = previousTrack.Codec;
@@ -1552,7 +2994,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RecalculateProcessingActionsForCurrentPreset();
         UpdateIndexes();
         UpdateFinalStatus(Tracks.Count);
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
         OnExportPreviewChanged();
         StatusText = statusText;
         ExportProgressText = progressText;
@@ -1579,22 +3021,381 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return string.Empty;
     }
 
-    private async Task EnrichResumeTracksWithFfprobeAsync()
+    private static void ApplySourceIdFromCopiedFile(TrackInfo track, LocalProjectCopiedFile copiedFile)
+    {
+        if (copiedFile.SourceIdentity?.SourceId is { } sourceId && sourceId != Guid.Empty)
+            track.SourceId = sourceId;
+    }
+
+    private static void ApplySourceIdFromCopiedFile(TrackInfo track, DiscCopiedFile copiedFile)
+    {
+        if (copiedFile.SourceIdentity?.SourceId is { } sourceId && sourceId != Guid.Empty)
+            track.SourceId = sourceId;
+    }
+
+    private void PublishSourceMetadataSnapshot(
+        string projectFolder,
+        string sourcePath,
+        TrackInfo track,
+        AudioProbeInfo? probeInfo = null,
+        string evidence = "")
+    {
+        if (string.IsNullOrWhiteSpace(projectFolder) ||
+            string.IsNullOrWhiteSpace(sourcePath) ||
+            track.SourceId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            _services.Media.SourceMetadataCaptureService.PublishIfMissing(
+                projectFolder,
+                new SourceMetadataCaptureRequest(
+                    track.SourceId,
+                    sourcePath,
+                    track,
+                    probeInfo,
+                    evidence));
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("SourceMetadata capture failed.", ex);
+        }
+    }
+
+    private void BackfillMissingSourceMetadataSnapshots(string projectFolder)
+    {
+        if (string.IsNullOrWhiteSpace(projectFolder))
+            return;
+
+        try
+        {
+            _services.Media.SourceMetadataCaptureService.BackfillMissingSnapshots(projectFolder);
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("SourceMetadata backfill failed.", ex);
+        }
+    }
+
+    private void ApplySourceMetadataAggregation(
+        string projectFolder,
+        ProjectMetadataInitializationState state,
+        ProjectMetadataInitializationOptions? options = null,
+        bool refreshUi = true)
+    {
+        if (string.IsNullOrWhiteSpace(projectFolder))
+            return;
+
+        try
+        {
+            var canonicalMetadata = RequireCanonicalMetadataSessionForProject(projectFolder);
+            var result = _services.Media.ProjectMetadataAggregationPersistenceService.Apply(
+                canonicalMetadata,
+                new ProjectMetadataAggregationPersistenceRequest(projectFolder, state, options));
+            _latestMetadataFieldDecisions = result.FieldDecisions;
+            _latestMetadataDiagnosisProjectFolder = projectFolder;
+
+            foreach (var diagnostic in result.Diagnostics)
+            {
+                if (diagnostic.Code is
+                    MetadataAggregationDiagnosticCode.StrongIdentityConflict or
+                    MetadataAggregationDiagnosticCode.AmbiguousMajority)
+                {
+                    _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+                        "ProjectMetadata aggregation warning",
+                        diagnostic.Message);
+                }
+            }
+
+            if (!ReferenceEquals(result.CanonicalMetadata, canonicalMetadata))
+            {
+                throw new InvalidOperationException(
+                    "ProjectMetadata aggregation replaced the caller-owned canonical metadata instance.");
+            }
+
+            if (!result.Changed)
+                return;
+
+            if (refreshUi)
+            {
+                _projectMetadata.ApplyCanonicalMetadata(canonicalMetadata);
+                if (result.AppliedFields.Contains(ProjectMetadataField.Series))
+                {
+                    OnPropertyChanged(nameof(Series));
+                    OnPropertyChanged(nameof(OutputFileNamePreview));
+                    OnExportPreviewChanged();
+                }
+            }
+
+            StopAutomaticMaintenance();
+            var saved = _projectMetadataSession.Flush();
+            if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("ProjectMetadata aggregation failed.", ex);
+        }
+    }
+
+    private void OpenMetadataDialog_Click(object sender, RoutedEventArgs e)
+    {
+        ShowMetadataDialog(this);
+        e.Handled = true;
+    }
+
+    internal static bool CanOpenMetadataDialog(bool canChangeBookMetadata, bool allowDuringProjectSetup) =>
+        canChangeBookMetadata || allowDuringProjectSetup;
+
+    private void ShowMetadataDialog(Window owner, bool allowDuringProjectSetup = false)
+    {
+        var canOpenMetadataDialog = CanOpenMetadataDialog(CanChangeBookMetadata, allowDuringProjectSetup);
+        if (!canOpenMetadataDialog)
+            return;
+
+        if (_developmentMetadataDialog is { } existingDialog)
+        {
+            existingDialog.RefreshForExternalChanges();
+            ActivateDevelopmentMetadataDialog(existingDialog);
+            return;
+        }
+
+        RefreshMetadataDependentUi();
+
+        var dialog = new MetadataDialog(
+            usePrivateGenreList: _settings.UsePrivateGenreList,
+            genreSettingsManager: _services.Foundation.GlobalSettingsManager,
+            openSettings: settingsOwner => ShowSettingsDialog(settingsOwner),
+            metadataState: _projectMetadata,
+            appSettings: _settings,
+            canChooseCover: canOpenMetadataDialog,
+            chooseCover: coverOwner => ChooseCover(coverOwner),
+            removeCover: RemoveCover,
+            refreshUi: RefreshMetadataDependentUi,
+            appSettingsChanged: SaveSettingsIfReady,
+            metadataPreferences: _settings.MetadataPreferences,
+            metadataPreferencesChanged: _ => SaveSettingsIfReady(),
+            projectFolderProvider: () =>
+                !string.IsNullOrWhiteSpace(_currentProjectWorkFolder) &&
+                Directory.Exists(_currentProjectWorkFolder)
+                    ? _currentProjectWorkFolder
+                    : null,
+            sourceSnapshotsProvider: () =>
+                _services.Media.ProjectMetadataPreviewAggregationService.CreateSourceSnapshots(Tracks.ToArray()),
+            metadataFieldDecisionsProvider: () =>
+                string.Equals(
+                    _latestMetadataDiagnosisProjectFolder,
+                    _currentProjectWorkFolder,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? _latestMetadataFieldDecisions
+                    : [],
+            saveMetadata: SaveMetadataDialogCanonicalMetadata,
+            compatibilityPreviewProvider: CreateCurrentCompatibilityPreviewTagData,
+            compatibilityDescriptionEnabledProvider: () => _settings.CompatibilityDescriptionEnabled,
+            compatibilityDescriptionEnabledChanged: enabled =>
+            {
+                _settings.CompatibilityDescriptionEnabled = enabled;
+                SaveSettingsIfReady();
+            },
+            tracks: Tracks,
+            refreshChapterTimelinePresentation: RefreshChapterTimelinePresentation,
+            chapterSettingsChanged: ApplySharedChapterSettingsEditorChange,
+            chapterGridColumnLayoutState: _chapterGridColumnLayoutState,
+            coverImageService: _services.Media.CoverImageService,
+            coverPickerService: _coverPickerService)
+        {
+            Owner = ResolveDevelopmentMetadataDialogOwner(owner)
+        };
+        _developmentMetadataDialog = dialog;
+        dialog.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_developmentMetadataDialog, dialog))
+                _developmentMetadataDialog = null;
+        };
+        dialog.Loaded += (_, _) => { ++_openMetadataContexts; CheckAutomaticMaintenance(); };
+        dialog.Closed += (_, _) => { _openMetadataContexts = Math.Max(0, _openMetadataContexts - 1); CheckAutomaticMaintenance(); };
+        AttachDebugWindowPlacement(dialog, DebugWindowPlacementTarget.MetadataDialog);
+
+        ModalDialogService.ShowDialog(dialog, dialog.Owner);
+    }
+
+    private Window ResolveDevelopmentMetadataDialogOwner(Window owner) =>
+        ReferenceEquals(owner, this) || ReferenceEquals(owner, _developmentMetadataDialog)
+            ? this
+            : owner;
+
+    private void RefreshOpenDevelopmentMetadataForExternalChanges()
+    {
+        _developmentMetadataDialog?.RefreshForExternalChanges();
+    }
+
+    private static void ActivateDevelopmentMetadataDialog(Window dialog)
+    {
+        if (dialog.WindowState == WindowState.Minimized)
+            dialog.WindowState = WindowState.Normal;
+
+        if (!dialog.IsVisible)
+            dialog.Show();
+
+        dialog.Activate();
+        dialog.Focus();
+    }
+
+    private void RefreshMetadataDependentUi()
+    {
+        OnPropertyChanged(nameof(BookTitle));
+        OnPropertyChanged(nameof(Album));
+        OnPropertyChanged(nameof(Author));
+        OnPropertyChanged(nameof(Narrator));
+        OnPropertyChanged(nameof(Genre));
+        OnPropertyChanged(nameof(Series));
+        OnPropertyChanged(nameof(MetadataSummaryTitle));
+        OnPropertyChanged(nameof(MetadataSummaryDetails));
+        OnPropertyChanged(nameof(OutputFileNamePreview));
+        OnPropertyChanged(nameof(CoverPreviewSource));
+        OnPropertyChanged(nameof(CoverHintVisibility));
+        OnPropertyChanged(nameof(CanRemoveCover));
+        OnExportPreviewChanged();
+
+        ApplyChapterSettingsImmediately();
+        RefreshActiveAudioDiscPreviewMetadata();
+        RefreshActiveMp3DiscPreviewMetadata(BookTitle);
+        RefreshTrackPresentationViews();
+        NotifyExportUiStateChanged();
+
+        if (_projectMetadataSession.IsAttached)
+        {
+            StopAutomaticMaintenance();
+            var saved = _projectMetadataSession.Flush();
+            if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        }
+    }
+
+    private void SaveMetadataDialogCanonicalMetadata(ProjectMetadata metadata)
+    {
+        if (!ReferenceEquals(_projectMetadataSession.Current, metadata))
+        {
+            throw new InvalidOperationException(
+                "Concept attempted to persist a non-canonical ProjectMetadata instance.");
+        }
+
+        if (_projectMetadataSession.IsAttached)
+        {
+            StopAutomaticMaintenance();
+            var saved = _projectMetadataSession.Flush();
+            if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        }
+    }
+
+    private ProjectMetadataInitializationOptions CreateLocalFolderAggregationOptions(
+        string sourceFolder,
+        IReadOnlyCollection<string>? sourceFiles = null) =>
+        new(
+            LastUsedGenre: _settings.DefaultGenre,
+            ReplaceableGenreSeed: _replaceableGenreSeed,
+            IsGenrePreferenceFixed: _settings.MetadataPreferences.GenrePreferenceLocked,
+            PreferredGenres: _settings.MetadataPreferences.PreferredGenres,
+            PreferredLanguages: _settings.MetadataPreferences.PreferredLanguages,
+            IsLanguagePreferenceFixed: _settings.MetadataPreferences.LanguagePreferenceLocked,
+            PreferredAudioWorkType: _settings.MetadataPreferences.PreferredAudioWorkType,
+            IsAudioWorkTypePreferenceFixed: _settings.MetadataPreferences.AudioWorkTypePreferenceLocked,
+            PreferredOutputTrackNumber: _settings.MetadataPreferences.PreferredOutputTrackNumber,
+            IsOutputTrackNumberPreferenceFixed: _settings.MetadataPreferences.OutputTrackNumberPreferenceLocked,
+            PreferredOutputTrackTotal: _settings.MetadataPreferences.PreferredOutputTrackTotal,
+            IsOutputTrackTotalPreferenceFixed: _settings.MetadataPreferences.OutputTrackTotalPreferenceLocked,
+            BookFolderCandidate: GetDirectoryNameOrEmpty(sourceFolder),
+            ParentFolderCandidate: GetParentDirectoryNameOrEmpty(sourceFolder),
+            SingleFileNameCandidate: sourceFiles?.Count == 1
+                ? Path.GetFileNameWithoutExtension(sourceFiles.First())
+                : null,
+            IsSingleFile: sourceFiles?.Count == 1,
+            SourceFileNameCandidates: sourceFiles?
+                .Select(Path.GetFileName)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToArray(),
+            AllowFilenameTitleFallback: true,
+            AllowFolderStructureFallbacks: true,
+            AllowSingleFileNameFallback: true);
+
+    private ProjectMetadataInitializationOptions CreateMp3DiscProjectAggregationOptions() =>
+        new(
+            LastUsedGenre: _settings.DefaultGenre,
+            ReplaceableGenreSeed: _replaceableGenreSeed,
+            IsGenrePreferenceFixed: _settings.MetadataPreferences.GenrePreferenceLocked,
+            PreferredGenres: _settings.MetadataPreferences.PreferredGenres,
+            PreferredLanguages: _settings.MetadataPreferences.PreferredLanguages,
+            IsLanguagePreferenceFixed: _settings.MetadataPreferences.LanguagePreferenceLocked,
+            PreferredAudioWorkType: _settings.MetadataPreferences.PreferredAudioWorkType,
+            IsAudioWorkTypePreferenceFixed: _settings.MetadataPreferences.AudioWorkTypePreferenceLocked,
+            PreferredOutputTrackNumber: _settings.MetadataPreferences.PreferredOutputTrackNumber,
+            IsOutputTrackNumberPreferenceFixed: _settings.MetadataPreferences.OutputTrackNumberPreferenceLocked,
+            PreferredOutputTrackTotal: _settings.MetadataPreferences.PreferredOutputTrackTotal,
+            IsOutputTrackTotalPreferenceFixed: _settings.MetadataPreferences.OutputTrackTotalPreferenceLocked,
+            AllowFilenameTitleFallback: true,
+            AllowFolderStructureFallbacks: false,
+            AllowSingleFileNameFallback: false);
+
+    private ProjectMetadataInitializationOptions CreateAudioDiscProjectAggregationOptions() =>
+        new(
+            LastUsedGenre: _settings.DefaultGenre,
+            ReplaceableGenreSeed: _replaceableGenreSeed,
+            IsGenrePreferenceFixed: _settings.MetadataPreferences.GenrePreferenceLocked,
+            PreferredGenres: _settings.MetadataPreferences.PreferredGenres,
+            PreferredLanguages: _settings.MetadataPreferences.PreferredLanguages,
+            IsLanguagePreferenceFixed: _settings.MetadataPreferences.LanguagePreferenceLocked,
+            PreferredAudioWorkType: _settings.MetadataPreferences.PreferredAudioWorkType,
+            IsAudioWorkTypePreferenceFixed: _settings.MetadataPreferences.AudioWorkTypePreferenceLocked,
+            PreferredOutputTrackNumber: _settings.MetadataPreferences.PreferredOutputTrackNumber,
+            IsOutputTrackNumberPreferenceFixed: _settings.MetadataPreferences.OutputTrackNumberPreferenceLocked,
+            PreferredOutputTrackTotal: _settings.MetadataPreferences.PreferredOutputTrackTotal,
+            IsOutputTrackTotalPreferenceFixed: _settings.MetadataPreferences.OutputTrackTotalPreferenceLocked,
+            AllowFilenameTitleFallback: false,
+            AllowFolderStructureFallbacks: false,
+            AllowSingleFileNameFallback: false);
+
+    private static string GetDirectoryNameOrEmpty(string path)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(path) ? string.Empty : new DirectoryInfo(path).Name;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string GetParentDirectoryNameOrEmpty(string path)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(path) ? string.Empty : Directory.GetParent(path)?.Name ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private async Task<bool> EnrichResumeTracksWithFfprobeAsync(
+        PerformanceExternalProcessContext? performanceContext = null,
+        CancellationToken token = default)
     {
         if (string.IsNullOrWhiteSpace(_ffmpegStatus.FfprobePath))
-            return;
+            return true;
 
         var trackSnapshot = Tracks.ToList();
         var total = trackSnapshot.Count;
-        var processed = 0;
         var failed = 0;
         var preset = ExportPreset.Parse(SelectedExportPreset);
+        var probeResults = new AudioProbeInfo?[total];
+        var probeRequests = new List<(int Index, string Path)>();
 
-        foreach (var track in trackSnapshot)
+        for (var index = 0; index < trackSnapshot.Count; index++)
         {
-            processed++;
-            StatusText = $"Projekt wird geladen. Technische Audiodaten werden geprüft … {processed}/{total}";
-
+            var track = trackSnapshot[index];
             var trackPath = !string.IsNullOrWhiteSpace(track.FilePath)
                 ? track.FilePath
                 : TrackPathService.GetTrackPath(_currentFolderPath, track);
@@ -1602,7 +3403,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (string.IsNullOrWhiteSpace(trackPath) || !File.Exists(trackPath))
             {
                 if (_isAudioDiscProjectAwaitingRip &&
-                    string.Equals(track.ProcessingAction, "FLAC rippen", StringComparison.OrdinalIgnoreCase))
+                    ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.RipFlac)
                 {
                     track.Warning = string.Empty;
                 }
@@ -1610,44 +3411,81 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 continue;
             }
 
-            var probeInfo = await _audioInfoService.ProbeAsync(trackPath, _ffmpegStatus.FfprobePath);
+            probeRequests.Add((index, trackPath));
+        }
+
+        var completed = total - probeRequests.Count;
+        IProgress<int> progress = new Progress<int>(value =>
+        {
+            if (_isResumeLoading && !token.IsCancellationRequested)
+                StatusText = LocalizationText.Format("MainWindow.Project.LoadingTechnicalData", value, total);
+        });
+
+        if (completed > 0)
+            progress.Report(completed);
+
+        if (probeRequests.Count > 0)
+        {
+            var batchResults = await _services.Media.AudioProbeBatchService.ProbeAsync(
+                probeRequests
+                    .Select(request => new AudioProbeBatchRequest(request.Index, request.Path))
+                    .ToArray(),
+                _ffmpegStatus.FfprobePath,
+                ParallelJobsInput,
+                performanceContext,
+                new Progress<int>(value =>
+                {
+                    if (value % 10 == 0 || value == total)
+                        progress.Report(value);
+                }),
+                completed,
+                token);
+
+            if (token.IsCancellationRequested)
+                return false;
+
+            for (var index = 0; index < Math.Min(probeResults.Length, batchResults.Length); index++)
+                probeResults[index] = batchResults[index];
+        }
+
+        for (var index = 0; index < trackSnapshot.Count; index++)
+        {
+            if (token.IsCancellationRequested)
+                return false;
+
+            var probeInfo = probeResults[index];
+            if (probeInfo is null)
+                continue;
+
+            var track = trackSnapshot[index];
 
             if (!probeInfo.Success)
             {
                 failed++;
                 if (string.IsNullOrWhiteSpace(track.Warning))
-                    SetTrackValue(track, "Warning", "Audiodaten konnten nicht geprüft werden");
-
-                if (processed % 10 == 0 || processed == total)
-                    OnExportPreviewChanged();
+                    SetTrackValue(track, "Warning", LocalizationText.Get("MainWindow.AudioCheck.Warning"));
 
                 continue;
             }
 
-            SetTrackDuration(track, probeInfo.Duration);
-            track.EmbeddedChapters = probeInfo.Chapters.ToList();
-            SetTrackValue(track, "BitrateKbps", probeInfo.BitrateKbps);
-            SetTrackValue(track, "Channels", probeInfo.Channels);
-            SetTrackValue(track, "ChannelLayout", AudioProcessingService.FormatChannelLayout(probeInfo.Channels));
-            SetTrackValue(track, "Codec", AudioProcessingService.NormalizeCodecName(probeInfo.CodecName));
-            SetTrackValue(track, "ProcessingAction", AudioProcessingService.DetermineProcessingAction(probeInfo, preset));
-
-            if (processed % 10 == 0 || processed == total)
-                OnExportPreviewChanged();
+            _services.Media.TrackAudioProbeApplicationService.ApplySuccessfulProbe(
+                track,
+                probeInfo,
+                preset,
+                markAudioValidationPassed: false);
         }
 
-        _trackListWarningService.Apply(Tracks);
-        TracksGrid.Items.Refresh();
-        OnExportPreviewChanged();
+        UpdateIndexes();
 
         if (failed > 0)
         {
-            StatusText = failed == 1
-                ? "Projekt geladen. 1 Datei konnte nicht vollständig geprüft werden."
-                : $"Projekt geladen. {failed} Dateien konnten nicht vollständig geprüft werden.";
+            StatusText = LocalizationText.Format(
+                failed == 1 ? "MainWindow.AudioCheck.ProjectLoaded.One" : "MainWindow.AudioCheck.ProjectLoaded.Many",
+                failed);
         }
-    }
 
+        return true;
+    }
     private void RefreshResumeProjects_Click(object sender, RoutedEventArgs e)
     {
         if (IsBusy)
@@ -1661,41 +3499,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (IsBusy || SelectedResumeProject is null)
             return;
 
-        var plan = _projectResumePlanService.BuildFromProjectFolder(SelectedResumeProject.ProjectFolder);
+        var plan = _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(SelectedResumeProject.ProjectFolder);
         if (plan is null)
         {
             AppDialogService.Warning(
                 this,
-                "Projekt nicht gelesen",
-                "Das ausgewählte Projekt konnte nicht mehr gelesen werden. Aktualisiere die Projektliste und prüfe den Projektordner.");
+                LocalizationText.Get("MainWindow.Resume.ProjectUnreadable.Title"),
+                LocalizationText.Get("MainWindow.Resume.ProjectUnreadable.Message"));
             RefreshResumeProjects(showStatus: true);
             return;
         }
 
         var details = new List<string>
         {
-            "Projekt: " + plan.DisplayName,
-            "Typ: " + plan.ProjectType,
-            "Status: " + plan.Status,
-            "Tracks im Plan: " + plan.Tracks.Count.ToString(CultureInfo.InvariantCulture),
-            "Trackliste bearbeitbar: " + (plan.CanEditTrackOrder ? "Ja" : "Nein"),
-            "Disc-Import fortsetzbar: " + (plan.CanContinueDiscImport ? "Ja" : "Nein")
+            LocalizationText.Format("MainWindow.Resume.Detail.Project", plan.DisplayName),
+            LocalizationText.Format("MainWindow.Resume.Detail.Type", plan.ProjectType),
+            LocalizationText.Format("MainWindow.Resume.Detail.Status", plan.Status),
+            LocalizationText.Format("MainWindow.Resume.Detail.TrackCount", plan.Tracks.Count),
+            LocalizationText.Format("MainWindow.Resume.Detail.TrackListEditable", LocalizationText.Get(plan.CanEditTrackOrder ? "Common.Yes" : "Common.No")),
+            LocalizationText.Format("MainWindow.Resume.Detail.DiscImportContinuable", LocalizationText.Get(plan.CanContinueDiscImport ? "Common.Yes" : "Common.No"))
         };
 
         if (plan.NextMissingDiscNumber.HasValue)
-            details.Add($"Nächste fehlende CD: {plan.NextMissingDiscNumber.Value} von {plan.TotalDiscs}");
+            details.Add(LocalizationText.Format("MainWindow.Resume.Detail.NextMissingDisc", plan.NextMissingDiscNumber.Value, plan.TotalDiscs));
 
         if (!string.IsNullOrWhiteSpace(plan.SourceFolder))
-            details.Add("Quelle: " + plan.SourceFolder);
+            details.Add(LocalizationText.Format("MainWindow.Resume.Detail.Source", plan.SourceFolder));
 
         if (!string.IsNullOrWhiteSpace(plan.OutputFolder))
-            details.Add("Ausgabe: " + plan.OutputFolder);
+            details.Add(LocalizationText.Format("MainWindow.Resume.Detail.Output", plan.OutputFolder));
 
         AppDialogService.Show(
             this,
-            title: "Resume-Projekt erkannt",
-            heading: "Resume-Projekt erkannt",
-            message: "BookStitch kann dieses Projekt grundsätzlich wieder öffnen. Das tatsächliche Laden in die Oberfläche kommt im nächsten Schritt.",
+            title: LocalizationText.Get("MainWindow.Resume.Detected.Title"),
+            heading: LocalizationText.Get("MainWindow.Resume.Detected.Title"),
+            message: LocalizationText.Get("MainWindow.Resume.Detected.Message"),
             kind: AppDialogKind.Information,
             details: details,
             buttons: new[]
@@ -1706,57 +3544,88 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RefreshResumeProjects(bool showStatus)
     {
-        var selectedProjectFolder = SelectedResumeProject?.ProjectFolder ?? "";
+        _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        _ = RefreshProjectCatalogAsync(showStatus);
+    }
 
-        ResumeProjects.Clear();
-
-        foreach (var project in _projectIndexService.ScanSelectableProjects(
-                     GetWorkingRootFolder(),
-                     _settings.ProjectRetentionDays))
+    private async Task RefreshProjectCatalogAsync(bool showStatus)
+    {
+        try
         {
-            ResumeProjects.Add(project);
+            var snapshot = await _services.Foundation.ProjectIndexService.Catalog.RefreshAsync(
+                GetWorkingRootFolder(), _settings.ProjectRetentionDays, force: showStatus);
+            if (_windowCloseCleanupCompleted || snapshot.IsDirty ||
+                _services.Foundation.ProjectIndexService.Catalog.Snapshot?.Generation != snapshot.Generation) return;
+            ApplyProjectCatalogSnapshot(snapshot);
+            if (showStatus)
+                StatusText = ResumeProjects.Count switch
+                {
+                    0 => LocalizationText.Get("MainWindow.Resume.NoneFound"),
+                    1 => LocalizationText.Format("MainWindow.Resume.Found.One", ResumeProjects.Count),
+                    _ => LocalizationText.Format("MainWindow.Resume.Found.Many", ResumeProjects.Count)
+                };
         }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { _runtimeServices.DiagnosticLogService.WriteError("Project catalog refresh failed", error); }
+    }
 
+    private void ProjectCatalog_SnapshotChanged(object? sender, EventArgs e)
+    {
+        if (_windowCloseCleanupCompleted || Dispatcher.HasShutdownStarted) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            var snapshot = _services.Foundation.ProjectIndexService.Catalog.Snapshot;
+            if (!_windowCloseCleanupCompleted && snapshot is not null && !snapshot.IsDirty &&
+                string.Equals(snapshot.WorkingRoot, Path.GetFullPath(GetWorkingRootFolder()), StringComparison.OrdinalIgnoreCase))
+                ApplyProjectCatalogSnapshot(snapshot);
+        }));
+    }
+
+    private void ApplyProjectCatalogSnapshot(ProjectCatalogSnapshot snapshot)
+    {
+        if (_displayedProjectCatalogGeneration == snapshot.Generation) return;
+        _displayedProjectCatalogGeneration = snapshot.Generation;
+        ProjectCoverThumbnailCache.Shared.InvalidateDeletedFiles();
+        var selectedProjectFolder = SelectedResumeProject?.ProjectFolder ?? "";
+        ResumeProjects.Clear();
+        foreach (var project in snapshot.ProjectIndexItems.Where(project => project.IsSelectableProject))
+            ResumeProjects.Add(project);
         SelectedResumeProject = ResumeProjects.FirstOrDefault(project =>
             string.Equals(project.ProjectFolder, selectedProjectFolder, StringComparison.OrdinalIgnoreCase))
             ?? ResumeProjects.FirstOrDefault();
-
         OnPropertyChanged(nameof(ResumeProjectSummary));
         OnPropertyChanged(nameof(CanInspectSelectedResumeProject));
-
-        if (showStatus)
-            StatusText = ResumeProjects.Count == 0
-                ? "Keine vollständigen Projekte gefunden."
-                : $"{ResumeProjects.Count} vollständige Projekt(e) gefunden.";
     }
-
 
     private void RefreshActiveMp3DiscPreviewMetadata(string? previousTitle)
     {
+        if (_isWorkspaceTransitioning)
+            return;
+        if (_isDiscStopSaveInProgress)
+            return;
+
         var manifest = _activeMp3DiscManifest;
         if (manifest is null)
             return;
 
-        _projectSnapshotService.UpdateMp3DiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
+        _services.Workflows.ProjectSnapshotService.UpdateMp3DiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
 
-        if (_trackListActionService.UpdateGeneratedChapterTitles(
-                Tracks,
-                previousTitle,
-                BookTitle,
-                _settings.UseLeadingZerosInChapterSuggestions) == 0)
-            return;
-
-        TracksGrid.Items.Refresh();
+        UpdateIndexes();
         PersistTrackListState();
     }
 
     private void RefreshActiveAudioDiscPreviewMetadata()
     {
+        if (_isWorkspaceTransitioning)
+            return;
+        if (_isDiscStopSaveInProgress)
+            return;
+
         var manifest = _activeAudioDiscManifest;
         if (manifest is null)
             return;
 
-        _projectSnapshotService.UpdateAudioDiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
+        _services.Workflows.ProjectSnapshotService.UpdateAudioDiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
 
         var manifestTracks = manifest.Discs
             .SelectMany(disc => disc.Tracks)
@@ -1766,8 +3635,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!manifestTracks.TryGetValue(track.Index, out var manifestTrack))
                 continue;
 
-            track.Artist = manifest.Author;
-            track.ChapterTitle = manifestTrack.ChapterTitle;
+            track.Artist = Author;
         }
 
         UpdateIndexes();
@@ -1780,21 +3648,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SelectedExportPreset,
             ParallelJobsInput,
             OutputExtension,
-            OutputFolder,
+            EffectiveOutputFolder,
             FileNameTemplate,
             BookTitle,
             Author,
             Album,
             Narrator,
             Genre,
-            _coverSourcePath,
-            _processedCoverPath,
+            _projectMetadata.CoverSourcePath,
+            _projectMetadata.ProcessedCoverPath,
             OutputFileNamePreview);
     }
 
     private void SaveCurrentMp3DiscProjectSnapshot(Mp3DiscProjectManifest manifest)
     {
-        _projectSnapshotService.SaveMp3DiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
+        StopAutomaticMaintenance();
+        _services.Workflows.ProjectSnapshotService.SaveMp3DiscProjectSnapshot(manifest, CreateProjectSnapshotFromUi());
+        _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
     }
 
     private void TrySaveCurrentMp3DiscProjectSnapshot(Mp3DiscProjectManifest manifest)
@@ -1813,10 +3683,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AudioDiscProjectManifest manifest,
         bool force = false)
     {
-        return _projectSnapshotService.SaveAudioDiscProjectSnapshot(
+        StopAutomaticMaintenance();
+        var saved = _services.Workflows.ProjectSnapshotService.SaveAudioDiscProjectSnapshot(
             manifest,
             CreateProjectSnapshotFromUi(),
             force);
+        if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+        return saved;
     }
 
     private void TrySaveCurrentAudioDiscProjectSnapshot(
@@ -1835,12 +3708,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MarkMp3DiscImportCanceled(string progressText, bool preserveWorkflowStatus = false)
     {
-        _loadedResumeProjectNeedsDiscImport = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(true));
         EnterPipelinePause(progressText, preserveWorkflowStatus);
     }
 
 
-    private void CancelMp3DiscImportAndShowResumeDialog(
+    private async Task CancelMp3DiscImportAndShowResumeDialogAsync(
         Mp3DiscProjectManifest manifest,
         string progressText,
         bool cleanupPartFiles = false,
@@ -1850,10 +3723,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (cleanupPartFiles)
         {
-            _convertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
+            _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
         }
 
-        RefreshLoadedProjectTrackStateFromPersistedProject(manifest.ProjectFolder);
+        var preparedPlan = await Task.Run(() =>
+            _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(manifest.ProjectFolder));
+        if (preparedPlan is not null)
+            RefreshLoadedProjectTrackStateFromPersistedProject(manifest.ProjectFolder, preparedPlan);
         MarkMp3DiscImportCanceled(progressText, preserveWorkflowStatus);
     }
 
@@ -1864,11 +3740,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         AppDialogService.Info(
             this,
-            "Projekt abgebrochen",
-            "Der Vorgang wurde durch den Benutzer abgebrochen.\n\n" +
-            "Bereits vorbereitete Dateien bleiben erhalten.\n" +
-            "Das Projekt kann über „Projekte“ fortgesetzt werden.",
-            title: "Projekt abgebrochen");
+            LocalizationText.Get("MainWindow.Project.Canceled.Title"),
+            LocalizationText.Get("MainWindow.Project.Canceled.Message"),
+            title: LocalizationText.Get("MainWindow.Project.Canceled.Title"));
     }
 
     private Mp3DiscProjectManifest? TryLoadCurrentMp3DiscProjectManifest(bool resetStateWhenFolderMissing)
@@ -1877,8 +3751,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "Projekt nicht gefunden",
-                "Der Projektordner konnte nicht gefunden werden. Öffne das Projekt bitte erneut über „Projekte“.");
+                LocalizationText.Get("MainWindow.Resume.ProjectMissing.Title"),
+                LocalizationText.Get("MainWindow.Resume.ProjectMissing.Message"));
 
             if (resetStateWhenFolderMissing)
                 ResetLoadedResumeProjectState();
@@ -1886,13 +3760,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return null;
         }
 
-        var manifest = _mp3DiscProjectService.TryLoad(_currentProjectWorkFolder);
+        var manifest = _services.Foundation.Mp3DiscProjectService.TryLoad(_currentProjectWorkFolder);
         if (manifest is null)
         {
             AppDialogService.Warning(
                 this,
-                "Projekt nicht gelesen",
-                "Die MP3-CD-Projektdatei konnte nicht gelesen werden. Öffne das Projekt bitte erneut über „Projekte“.");
+                LocalizationText.Get("MainWindow.Resume.ProjectUnreadable.Title"),
+                LocalizationText.Get("MainWindow.Resume.Mp3ManifestUnreadable.Message"));
             return null;
         }
 
@@ -1929,21 +3803,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var result = AppDialogService.Show(
             this,
-            "Export-Preset prüfen",
-            "Gewähltes Preset ist höher als die Quelldateien",
-            $"Die höchste erkannte Quell-Bitrate liegt bei {maxSourceBitrate.Value} kbps.\n" +
-            $"Ausgewählt ist {requested.BitrateKbps} kbps. Hochkonvertieren macht die Datei größer, aber nicht hörbar besser.",
+            LocalizationText.Get("Disc.Setup.PresetWarning.Title"),
+            LocalizationText.Get("Disc.Setup.PresetWarning.Heading"),
+            LocalizationText.Format("Disc.Setup.PresetWarning.Message", maxSourceBitrate.Value, requested.BitrateKbps),
             AppDialogKind.Warning,
             details: new[]
             {
-                $"Empfohlen: {recommended.DisplayName}",
-                $"Gewählt: {requested.DisplayName}"
+                LocalizationText.Format("Disc.Setup.PresetWarning.Recommended", recommended.DisplayName),
+                LocalizationText.Format("Disc.Setup.PresetWarning.Selected", requested.DisplayName)
             },
             buttons: new[]
             {
-                new AppDialogButton($"Auf {recommended.DisplayName} stellen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Trotzdem verwenden", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Format("Disc.Setup.PresetWarning.UseRecommended", recommended.DisplayName), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Disc.Setup.PresetWarning.UseAnyway"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         return result switch
@@ -1954,16 +3827,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
     }
 
-    private int? GetMaxTrackBitrateKbps()
+    private void ConfirmLoadedPresetBitrateIfNeeded()
     {
-        var values = Tracks
-            .Select(track => track.BitrateKbps)
-            .Where(value => value is > 0)
-            .Select(value => value!.Value)
-            .ToList();
+        if (IsBusy || IsExporting || IsDiscImporting || _isResumeLoading || _isLoadingSettings ||
+            _isShutdownInProgress || _allowWindowClose || !string.IsNullOrWhiteSpace(_lockedDiscResumePreset))
+            return;
 
-        return values.Count == 0 ? null : values.Max();
+        var requestedPreset = SelectedExportPreset;
+        var included = Tracks.Where(track => !track.IsExcluded).ToArray();
+        var preparation = _services.Workflows.TrackPreparedStateRefreshService.GetPreparationProgress(included, requestedPreset);
+        var fullyPrepared = preparation.TotalCount > 0 && preparation.PendingCount == 0;
+        if (!PresetBitrateWarningService.ShouldWarnAfterLoad(Tracks, requestedPreset, fullyPrepared))
+            return;
+
+        var confirmedPreset = ConfirmPresetBitrateIfNeeded(requestedPreset);
+        if (!string.Equals(confirmedPreset, requestedPreset, StringComparison.Ordinal))
+            ApplyExportPresetSelectionToUi(confirmedPreset);
     }
+
+    private int? GetMaxTrackBitrateKbps() => PresetBitrateWarningService.GetMaxSourceBitrateKbps(Tracks);
 
     private string FindBestPresetForSourceBitrate(int maxSourceBitrateKbps, int preferredChannels)
     {
@@ -2063,10 +3945,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (TracksGrid is null || TracksGrid.SelectedItems.Count == 0)
+        // The custom caption replaces non-client window chrome, not workspace interaction.
+        if (e.OriginalSource is DependencyObject captionSource &&
+            FindVisualAncestor<LargeResizableWindowHeader>(captionSource) is not null)
+            return;
+
+        if (_isTrackGridAutoScrollActive && e.ChangedButton != MouseButton.Middle)
+            StopTrackGridAutoScroll();
+
+        if (HandleTrackGridAutoScrollMouseDown(e))
+            return;
+
+        if (TracksGrid is null || (TracksGrid.SelectedItems.Count == 0 && _activeEmbeddedChapterRow is null))
             return;
 
         if (e.OriginalSource is not DependencyObject source)
+            return;
+
+        // Scrolling is navigation, not a request to change the selected tracks.
+        // Preserve the current row selection while the user clicks or drags either
+        // TrackGrid scrollbar so they can inspect columns/rows away from the selection.
+        if (FindVisualAncestor<ScrollBar>(source) is not null)
             return;
 
         if (FindVisualAncestor<DataGrid>(source) == TracksGrid)
@@ -2087,7 +3986,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ClearTrackSelection();
     }
 
+    private void MainWindow_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle)
+            return;
+
+        if (_isTrackGridAutoScrollActive)
+            e.Handled = true;
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!_isTrackGridAutoScrollActive || e.Key != Key.Escape)
+            return;
+
+        StopTrackGridAutoScroll();
+        e.Handled = true;
+    }
+
+    private void MainWindow_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isTrackGridAutoScrollActive || TracksGrid is null)
+            return;
+
+        _trackGridAutoScrollCurrent = e.GetPosition(TracksGrid);
+    }
+
     private void ClearTrackSelection()
+    {
+        ClearEmbeddedChapterSelection();
+        ClearParentTrackSelection();
+    }
+
+    private void ClearParentTrackSelection()
     {
         TracksGrid.SelectedItems.Clear();
         TracksGrid.SelectedItem = null;
@@ -2181,17 +4112,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var result = AppDialogService.Show(
             this,
-            "FFmpeg einrichten",
-            "FFmpeg einrichten",
-            "BookStitch benötigt FFmpeg und FFprobe zum Konvertieren und Prüfen von Audiodateien.\n\n" +
-            "Automatische Reparatur:\nVorhandenes WinGet-Paket wird entfernt und FFmpeg anschließend vollständig neu installiert.",
+            LocalizationText.Get("MainWindow.Ffmpeg.Setup.Title"),
+            LocalizationText.Get("MainWindow.Ffmpeg.Setup.Title"),
+            LocalizationText.Get("MainWindow.Ffmpeg.Setup.Message"),
             AppDialogKind.Question,
             null,
             new[]
             {
-                new AppDialogButton("Automatisch installieren", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Manuell auswählen", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("MainWindow.Ffmpeg.InstallAutomatically"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("MainWindow.Ffmpeg.SelectManually"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         if (result == AppDialogResult.Cancel)
@@ -2199,28 +4129,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (result == AppDialogResult.Yes)
         {
-            StatusText = "FFmpeg Installation über winget wurde gestartet. Bitte CMD Fenster beachten.";
+            StatusText = LocalizationText.Get("MainWindow.Ffmpeg.InstallStarted");
 
-            var exitCode = await _ffmpegService.InstallWithWingetAsync();
+            var exitCode = await _services.Media.FfmpegService.InstallWithWingetAsync();
 
-            _ffmpegStatus = _ffmpegService.DetectTools(_settings);
+            _ffmpegStatus = _services.Media.FfmpegService.DetectTools(_settings);
             ApplyFfmpegStatusToSettingsAndUi();
 
             if (_ffmpegStatus.IsComplete)
             {
                 AppDialogService.Info(
                     this,
-                    "FFmpeg bereit",
-                    "FFmpeg wurde gefunden und ist bereit.");
+                    LocalizationText.Get("MainWindow.Ffmpeg.Ready.Title"),
+                    LocalizationText.Get("MainWindow.Ffmpeg.Ready.AfterInstall"));
             }
             else
             {
                 AppDialogService.Warning(
                     this,
-                    "FFmpeg noch nicht gefunden",
-                    "FFmpeg wurde nach der Installation noch nicht gefunden.\n\n" +
-                    "Falls die Installation erfolgreich war, starte Visual Studio oder BookStitch einmal neu.\n\n" +
-                    $"Installationsprozess ExitCode: {(exitCode?.ToString() ?? "unbekannt")}");
+                    LocalizationText.Get("MainWindow.Ffmpeg.NotFound.Title"),
+                    LocalizationText.Format("MainWindow.Ffmpeg.NotFound.Message", exitCode?.ToString() ?? LocalizationText.Get("Common.Unknown")));
             }
 
             return;
@@ -2233,7 +4161,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var dialog = new OpenFileDialog
         {
-            Title = "ffmpeg.exe auswählen",
+            Title = LocalizationText.Get("MainWindow.Ffmpeg.SelectExecutable"),
             Filter = "ffmpeg.exe|ffmpeg.exe|EXE Dateien (*.exe)|*.exe|Alle Dateien (*.*)|*.*",
             CheckFileExists = true,
             Multiselect = false
@@ -2248,34 +4176,34 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (dialog.ShowDialog(this) != true)
             return;
 
-        _ffmpegStatus = _ffmpegService.DetectToolsFromFfmpegPath(dialog.FileName);
+        _ffmpegStatus = _services.Media.FfmpegService.DetectToolsFromFfmpegPath(dialog.FileName);
         ApplyFfmpegStatusToSettingsAndUi();
 
         if (_ffmpegStatus.IsComplete)
         {
             AppDialogService.Info(
                 this,
-                "FFmpeg bereit",
-                "FFmpeg und FFprobe wurden gefunden und gespeichert.");
+                    LocalizationText.Get("MainWindow.Ffmpeg.Ready.Title"),
+                    LocalizationText.Get("MainWindow.Ffmpeg.Ready.Manual"));
         }
         else
         {
             AppDialogService.Warning(
                 this,
-                "FFmpeg unvollständig",
-                "ffmpeg.exe wurde ausgewählt, aber ffprobe.exe wurde im selben Ordner nicht gefunden oder konnte nicht gestartet werden.\n\n" +
-                "Bitte wähle den Ordner aus, in dem beide Dateien liegen:\nffmpeg.exe und ffprobe.exe");
+                LocalizationText.Get("MainWindow.Ffmpeg.Incomplete.Title"),
+                LocalizationText.Get("MainWindow.Ffmpeg.Incomplete.Message"));
         }
     }
 
     private async void SelectFolder_Click(object sender, RoutedEventArgs e)
     {
-        if (IsBusy)
+        var replacementVersion = _workspaceReplacementVersion;
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isShutdownInProgress || IsBusy)
             return;
 
         var dialog = new OpenFolderDialog
         {
-            Title = "Hörbuch-Ordner auswählen",
+            Title = LocalizationText.Get("MainWindow.Folder.SelectAudiobook"),
             Multiselect = false,
             InitialDirectory = GetExistingFolderOrDefault(_settings.LastLocalProjectFolder, GetDesktopFolder())
         };
@@ -2287,12 +4215,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "CD über den CD-Button öffnen",
-                "Ein optisches Laufwerk kann nicht als lokales Ordnerprojekt geöffnet werden. Verwende dafür bitte oben den Button für MP3- oder Audio-CD-Projekte.");
+                LocalizationText.Get("MainWindow.Disc.OpenWithButton.Title"),
+                LocalizationText.Get("MainWindow.Disc.OpenWithButton.Message"));
             return;
         }
 
+        if (!TryCheckpointWorkspaceReplacement(replacementVersion)) return;
+
         ClearSelectedSourceDisplayOverride();
+        ResetProjectSourceModeStateForNewSource();
         ResetLoadedResumeProjectState();
         ResetMetadataForNewFolderProject();
         Tracks.Clear();
@@ -2304,72 +4235,38 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _settings.LastLocalProjectFolder = dialog.FolderName;
         SaveSettingsIfReady();
 
-        await LoadFolderAsync(dialog.FolderName);
+        await LoadFolderAsync(
+            dialog.FolderName,
+            captureLocalImportPerformance: true,
+            analysisCancellationScope: TrackAnalysisCancellationScope.LocalFolderImport);
 
         if (Tracks.Count == 0)
             return;
 
-        var setupDialog = CreateProjectSetupDialog(new ProjectSetupDialogRequest(
-            SourceKind: ProjectSetupSourceKind.Folder,
-            WindowTitle: "Ordnerprojekt vorbereiten",
-            SourceInformation: $"Die Auswahl enthält {Tracks.Count} Audiodateien mit einer Gesamtdauer von {BuildProjectSetupDurationText(Tracks)}.",
-            Instruction: "Prüfe die Projektdaten und ergänze sie bei Bedarf.",
-            DefaultDiscCount: 1,
-            MinimumDiscs: 1,
-            MaximumDiscs: 1,
-            ExportPresets: ExportPresets,
-            SelectedExportPreset: SelectedExportPreset,
-            ParallelJobs: ParallelJobsInput,
-            OutputExtension: OutputExtension,
-            OutputFolder: OutputFolder,
-            BookTitle: BookTitle,
-            Album: Album,
-            Author: Author,
-            Narrator: Narrator,
-            Genre: Genre,
-            FileNameTemplate: FileNameTemplate,
-            CoverSourcePath: GetCoverSourcePathForProjectSetup(),
-            CoverPreviewSource: CoverPreviewSource,
-            CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
-            AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
-            KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
-            UsePrivateGenreList: _settings.UsePrivateGenreList,
-            SourceFolder: dialog.FolderName,
-            MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
-            LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Folder, dialog.FolderName)));
-
         SetMetadataEditingAvailable(true);
-        var startProject = setupDialog.ShowDialog() == true;
-        ApplyDiscProjectSetup(setupDialog.Result);
-        if (!startProject)
-            return;
-
-        _pauseBeforeMergeOverride = !setupDialog.Result.AutoMergeAfterConversion;
-        try
-        {
-            await RunCurrentExportPlanAsync();
-        }
-        finally
-        {
-            _pauseBeforeMergeOverride = null;
-        }
+        NotifyExportUiStateChanged();
     }
 
     private async void SelectDiscSource_Click(object sender, RoutedEventArgs e)
     {
-        if (IsBusy)
+        var replacementVersion = _workspaceReplacementVersion;
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isShutdownInProgress || IsBusy)
             return;
 
-        var selectedPath = ShowDiscSourceSelectionDialog();
+        var selectedPath = ShowDiscSourceSelectionDialog(updateWorkspace: false);
         if (string.IsNullOrWhiteSpace(selectedPath))
             return;
 
-        selectedPath = ResolveSelectedDiscSource(selectedPath);
+        selectedPath = await ResolveSelectedDiscSourceAsync(selectedPath, updateWorkspace: false);
         if (string.IsNullOrWhiteSpace(selectedPath))
             return;
+
+        if (!TryCheckpointWorkspaceReplacement(replacementVersion)) return;
 
         ClearSelectedSourceDisplayOverride();
         SelectedFolder = selectedPath;
+        _settings.LastSelectedOpticalDrive = Path.GetPathRoot(selectedPath) ?? selectedPath;
+        SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(selectedPath), selectedPath);
 
         _settings.LastDiscSourceFolder = selectedPath;
         SaveSettingsIfReady();
@@ -2378,33 +4275,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await StartMp3DiscProjectAsync(selectedPath);
     }
 
-    private string ResolveSelectedDiscSource(string selectedPath)
+    private async Task<string> ResolveSelectedDiscSourceAsync(string selectedPath, bool updateWorkspace = true)
     {
         var currentPath = selectedPath;
 
         while (true)
         {
-            if (!_discDriveService.IsCdDrivePath(currentPath))
+            if (!await _services.Discs.DiscDriveService.IsCdDrivePathAsync(currentPath))
                 return currentPath;
 
-            if (_discDriveService.IsDiscSourceReady(currentPath))
+            if (await _services.Discs.DiscDriveService.IsDiscSourceReadyAsync(currentPath))
                 return currentPath;
 
-            _discDriveService.TryEjectDisc(currentPath);
+            await _services.Discs.DiscDriveService.TryEjectDiscAsync(currentPath);
             var driveLetter = (Path.GetPathRoot(currentPath) ?? currentPath)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
             var result = AppDialogService.Show(
                 this,
-                title: "CD-Laufwerk",
-                heading: $"Bitte CD in Laufwerk {driveLetter} einlegen",
-                message: $"Das ausgewählte Laufwerk {driveLetter} ist leer. Lege eine CD ein und klicke anschließend auf „Erneut prüfen“.\n\nDu kannst alternativ zur vollständigen Laufwerksauswahl zurückkehren.",
+                title: LocalizationText.Get("Disc.Source.EmptyDriveTitle"),
+                heading: LocalizationText.Format("Disc.Source.EmptyDriveHeading", driveLetter),
+                message: LocalizationText.Format("Disc.Source.EmptyDriveMessage", driveLetter),
                 kind: AppDialogKind.Information,
                 buttons:
                 [
-                    new AppDialogButton("Erneut prüfen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                    new AppDialogButton("Anderes Laufwerk wählen", AppDialogResult.No),
-                    new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                    new AppDialogButton(LocalizationText.Get("Disc.Source.Retry"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                    new AppDialogButton(LocalizationText.Get("Disc.Source.OtherDrive"), AppDialogResult.No),
+                    new AppDialogButton(LocalizationText.Get("UiAbbrechen"), AppDialogResult.Cancel, IsCancel: true)
                 ]);
 
             if (result == AppDialogResult.Yes)
@@ -2412,7 +4309,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (result == AppDialogResult.No)
             {
-                currentPath = ShowDiscSourceSelectionDialog();
+                currentPath = ShowDiscSourceSelectionDialog(updateWorkspace);
                 if (string.IsNullOrWhiteSpace(currentPath))
                     return string.Empty;
 
@@ -2423,21 +4320,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private string ShowDiscSourceSelectionDialog()
+    private string ShowDiscSourceSelectionDialog(bool updateWorkspace = true)
     {
         var dialog = new DiscSourceSelectionDialog(
-            _discDriveService.GetCdDriveShells(),
-            GetExistingFolderOrDefault(_settings.LastDiscSourceFolder, GetDesktopFolder()),
-            _settings.LastSelectedOpticalDrive)
+            [],
+            string.Empty,
+            _settings.LastSelectedOpticalDrive,
+            _settings.DiscDriveOrder,
+            _services.Discs.DiscDriveService,
+            respectDriveCircleEnabled: _settings.ExperimentalDriveRoundEnabled)
         {
             Owner = this
         };
 
-        if (dialog.ShowDialog() != true)
+        if (ModalDialogService.ShowDialog(dialog, this) != true)
             return string.Empty;
 
-        if (_discDriveService.IsCdDrivePath(dialog.SelectedPath))
+        if (updateWorkspace && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
         {
+            if (!LoadedProjectState.IsLocal)
+                SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(dialog.SelectedPath), dialog.SelectedPath);
             _settings.LastSelectedOpticalDrive = Path.GetPathRoot(dialog.SelectedPath) ?? dialog.SelectedPath;
             SaveSettingsIfReady();
         }
@@ -2445,28 +4347,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return dialog.SelectedPath;
     }
 
-    private string GetDiscSourceInitialDirectory()
-    {
-        if (!string.IsNullOrWhiteSpace(_settings.LastDiscSourceFolder) &&
-            Directory.Exists(_settings.LastDiscSourceFolder))
-        {
-            return _settings.LastDiscSourceFolder;
-        }
-
-        var preferredDiscFolder = _discDriveService.GetPreferredDiscInitialDirectory();
-        if (!string.IsNullOrWhiteSpace(preferredDiscFolder) &&
-            Directory.Exists(preferredDiscFolder))
-        {
-            return preferredDiscFolder;
-        }
-
-        return Directory.Exists(@"C:\") ? @"C:\" : GetDesktopFolder();
-    }
-
     private async Task StartMp3DiscProjectAsync(string sourceFolder)
     {
+        var sourceVersion = _workspaceReplacementVersion;
         SelectedFolder = sourceFolder;
-        ClearPendingMp3DiscPreparation();
+        ResetProjectSourceModeStateForNewSource();
 
         ResetMetadataForNewDiscProject();
         Tracks.Clear();
@@ -2485,53 +4370,82 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Error(
                 this,
-                "CD nicht gelesen",
-                "Das ausgewählte CD-Laufwerk konnte nicht vollständig gelesen werden.",
+                LocalizationText.Get("MainWindow.Disc.ReadFailed.Title"),
+                LocalizationText.Get("MainWindow.Disc.ReadFailed.Message"),
                 details: new[] { ex.Message });
-            StatusText = "CD-Analyse fehlgeschlagen.";
+            StatusText = LocalizationText.Get("MainWindow.DiscAnalysis.Failed");
             ExportProgressText = BuildIdleExportProgressText();
             return;
         }
 
+        if (sourceVersion != _workspaceReplacementVersion || _isShutdownInProgress || _allowWindowClose) return;
         if (!analysis.IsSupportedDataDisc)
         {
             if (analysis.IsProbablyAudioCd && await TryShowAudioDiscContentsAsync(sourceFolder))
                 return;
 
             ShowUnsupportedDiscSourceMessage(analysis);
-            StatusText = "Keine unterstützte MP3-CD / Daten-CD erkannt.";
+            StatusText = LocalizationText.Get("MainWindow.Mp3Analysis.Unsupported");
             ExportProgressText = BuildIdleExportProgressText();
             return;
         }
 
         // CD 1 sofort vor dem Kopieren anzeigen, damit Titel, Autor und Trackliste direkt sichtbar sind.
+        // Die Preview ist bereits ein echter MP3-CD-Chapter-Kontext, bleibt aber rein transient:
+        // keine Persistenz und kein Runtime-Catalog-Eintrag, bevor der User den Import startet.
         try
         {
-            AppendDiscPreviewTracks(previewTracks, discNumber: 1, clearExistingTracks: true);
+            var plannedPreviewSources = Mp3DiscSourceIdentityPlanner.Create(
+                sourceFolder,
+                sourceStructureSignature,
+                analysis.SupportedAudioFiles);
+            _transientMp3DiscChapterPreview = new Mp3DiscPendingChapterDisc(
+                1,
+                sourceStructureSignature,
+                plannedPreviewSources);
+            _services.Discs.Mp3DiscTrackReconciliationService.NormalizeProjectDiscNumber(
+                previewTracks,
+                discNumber: 1);
+            _services.Discs.Mp3DiscTrackReconciliationService.ApplyPlannedSourceIds(
+                previewTracks,
+                sourceFolder,
+                discNumber: 1,
+                plannedPreviewSources);
+
+            AppendDiscPreviewTracks(
+                previewTracks,
+                sourceFolder,
+                discNumber: 1,
+                clearExistingTracks: true,
+                refreshChapterProjection: true);
             TryApplyFirstEmbeddedCover(previewTracks);
-            SuggestMetadataFromTracksAndFolder(sourceFolder, sourceFolder);
+            SuggestMetadataFromTracksAndFolder(sourceFolder);
             UpdateFinalStatus(Tracks.Count);
             _pendingDiscProjectSourceFolder = sourceFolder;
-            ExportProgressText = $"MP3-CD erkannt: {Tracks.Count} Tracks. Bereit zum Kopieren.";
+            NotifyExportUiStateChanged();
+            ExportProgressText = LocalizationText.Format("MainWindow.Mp3Analysis.Ready", Tracks.Count);
             AutoFitTrackColumnsAfterRender();
         }
         catch (Exception ex)
         {
+            _transientMp3DiscChapterPreview = null;
             AppDialogService.Error(
                 this,
-                "MP3-CD nicht gelesen",
-                "Die Audiodateien auf der CD konnten nicht vollständig gelesen werden.",
+                LocalizationText.Get("MainWindow.Mp3Disc.ReadFailed.Title"),
+                LocalizationText.Get("MainWindow.Mp3Disc.ReadFailed.Message"),
                 details: new[] { ex.Message });
-            StatusText = "MP3-CD-Analyse fehlgeschlagen.";
-            ExportProgressText = "MP3-CD-Analyse fehlgeschlagen.";
+            StatusText = LocalizationText.Get("MainWindow.Mp3Analysis.Failed");
+            ExportProgressText = LocalizationText.Get("MainWindow.Mp3Analysis.Failed");
             return;
         }
 
+        ConfirmLoadedPresetBitrateIfNeeded();
         var setupDialog = CreateProjectSetupDialog(new ProjectSetupDialogRequest(
             SourceKind: ProjectSetupSourceKind.Mp3Disc,
-            WindowTitle: "MP3-CD-Projekt vorbereiten",
-            SourceInformation: $"Die eingelegte MP3-CD enthält {analysis.SupportedAudioFiles.Count} Audiodateien mit einer Gesamtdauer von {BuildProjectSetupDurationText(previewTracks)}.",
-            Instruction: "Gib die Gesamtzahl der CDs an, prüfe die Projektdaten und ergänze sie bei Bedarf.",
+            ConfirmDiscCountOnStart: true,
+            WindowTitle: LocalizationText.Get("MainWindow.Setup.Mp3Prepare"),
+            SourceInformation: LocalizationText.Format("MainWindow.Setup.Mp3SourceInformation", analysis.SupportedAudioFiles.Count, BuildProjectSetupDurationText(previewTracks)),
+            Instruction: LocalizationText.Get("MainWindow.Setup.DiscInstruction"),
             DefaultDiscCount: 1,
             MinimumDiscs: 1,
             MaximumDiscs: 99,
@@ -2550,14 +4464,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverPreviewSource: CoverPreviewSource,
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
-            KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
             UsePrivateGenreList: _settings.UsePrivateGenreList,
+            GenreOptions: GenreListService.GetGenres(_settings),
             SourceFolder: sourceFolder,
             MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
-            LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Mp3Disc, sourceFolder)));
+            LastCoverFolder: _settings.LastCoverFolder ?? string.Empty));
 
+        if (sourceVersion != _workspaceReplacementVersion || _isShutdownInProgress || _allowWindowClose) return;
         SetMetadataEditingAvailable(true);
-        var startProject = setupDialog.ShowDialog() == true;
+        var startProject = ModalDialogService.ShowDialog(setupDialog, this) == true;
+        FlushProjectSetupDiscCountPreviewRefresh();
         ApplyDiscProjectSetup(setupDialog.Result);
 
         var setup = setupDialog.Result;
@@ -2599,13 +4515,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _pendingMp3DiscStructureSignature = "";
     }
 
+    private void ResetProjectSourceModeStateForNewSource()
+    {
+        SetOriginalAudioColumnsVisible(true);
+        _folderRatePreview = new();
+        _sessionProject.Clear();
+        _activeLocalPreparation = null;
+        ClearPendingMp3DiscPreparation();
+        _resumeDiscPreview.Clear();
+        _mp3DiscChapterSourceCatalog.Clear();
+        _transientMp3DiscChapterPreview = null;
+        _activeMp3DiscManifest = null;
+        _pendingAudioDisc = null;
+        _pendingAudioDiscTotalDiscs = 1;
+        _activeAudioDiscManifest = null;
+        _isAudioDiscProjectAwaitingRip = false;
+        ApplyLoadedProjectState(LoadedProjectStateSnapshot.None);
+    }
+
     private DiscProjectSetupResult CreateMp3DiscSetupFromCurrentUi(DiscProjectSetupResult baseSetup) =>
         baseSetup with
         {
             SelectedExportPreset = SelectedExportPreset,
             ParallelJobs = ParallelJobsInput,
             OutputExtension = OutputExtension,
-            OutputFolder = OutputFolder,
+            OutputFolder = EffectiveOutputFolder,
             BookTitle = BookTitle,
             Album = Album,
             Author = Author,
@@ -2613,7 +4547,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Genre = Genre,
             FileNameTemplate = FileNameTemplate,
             CoverSourcePath = GetCoverSourcePathForProjectSetup(),
-            ProcessedCoverPath = _processedCoverPath,
+            ProcessedCoverPath = _projectMetadata.ProcessedCoverPath,
             AutoMergeAfterConversion = _settings.MergeAutomaticallyAfterConversion
         };
 
@@ -2623,6 +4557,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DiscSourceQuickIdentity sourceQuickIdentity,
         string sourceStructureSignature)
     {
+        var sourceVersion = _workspaceReplacementVersion;
         Activate();
         Focus();
         await Dispatcher.InvokeAsync(
@@ -2644,15 +4579,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         sourceFolder = validatedSourceFolder;
         SelectedFolder = sourceFolder;
+        SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(sourceFolder), sourceFolder);
         ClearPendingMp3DiscPreparation();
         _settings.LastDiscSourceFolder = sourceFolder;
         SaveSettingsIfReady();
-        var projectFolder = _mp3DiscImportService.CreateDiscProjectFolder(sourceFolder, GetProjectFolderStructure().Mp3DiscProjectsFolder);
+        var sourceDriveInfo = await _services.Discs.DiscDriveService.GetDriveDiagnosticsForPathAsync(sourceFolder);
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isShutdownInProgress || _allowWindowClose ||
+            sourceVersion != _workspaceReplacementVersion) return;
+        _workspaceReplacementVersion++;
+        var projectFolder = _services.Discs.Mp3DiscImportService.CreateDiscProjectFolder(sourceFolder, GetProjectFolderStructure().Mp3DiscProjectsFolder);
+        _sessionProject.Register(projectFolder, ProjectManifestTypes.Mp3DiscProject, startAccepted: true);
         _currentProjectWorkFolder = projectFolder;
+        AttachCanonicalMetadataSessionToNewProject(projectFolder);
 
-        var sourceDriveInfo = await Task.Run(() =>
-            _discDriveService.GetDriveDiagnosticsForPath(sourceFolder));
-        var projectManifest = _mp3DiscProjectService.LoadOrCreate(
+        var projectManifest = _services.Foundation.Mp3DiscProjectService.LoadOrCreate(
             projectFolder,
             sourceFolder,
             totalDiscs,
@@ -2661,9 +4601,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             setup.OutputExtension,
             setup.OutputFolder,
             setup.FileNameTemplate,
-            sourceDriveInfo);
+            sourceDriveInfo, targetSampleRateHz: _settings.DefaultSampleRateHz);
 
         SaveCurrentMp3DiscProjectSnapshot(projectManifest);
+        _activeMp3DiscManifest = projectManifest;
 
         await ImportMp3DiscProjectAsync(
             projectFolder,
@@ -2671,8 +4612,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             projectManifest,
             startDiscNumber: 1,
             firstDiscAlreadyReady: true,
-            autoExportWhenComplete: true,
-            pauseBeforeMergeOverride: setup.AutoMergeAfterConversion ? false : true);
+            autoExportWhenComplete: true);
     }
 
     private async Task<string> EnsurePreparedMp3DiscSourceAsync(
@@ -2685,7 +4625,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         while (true)
         {
             var quickCheck = await Task.Run(() =>
-                _mp3DiscImportService.CheckQuickIdentity(candidateSourceFolder, expectedQuickIdentity));
+                _services.Discs.Mp3DiscImportService.CheckQuickIdentity(candidateSourceFolder, expectedQuickIdentity));
 
             var candidateChanged = !AreSameDiscSourcePath(candidateSourceFolder, originalSourceFolder);
 
@@ -2702,25 +4642,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var driveLetter = (Path.GetPathRoot(candidateSourceFolder) ?? candidateSourceFolder)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var heading = quickCheck.Status == DiscSourceQuickCheckStatus.Unavailable
-                ? $"CD in Laufwerk {driveLetter} nicht verfügbar"
-                : "Andere oder veränderte CD erkannt";
+                ? LocalizationText.Format("Disc.Source.PreviousDiscUnavailableHeading", driveLetter)
+                : LocalizationText.Get("Disc.Source.DifferentDiscHeading");
             var message = quickCheck.Status == DiscSourceQuickCheckStatus.Unavailable
-                ? $"Die zuvor eingelesene CD in Laufwerk {driveLetter} wurde entfernt oder ist noch nicht lesbar.\n\n" +
-                  "Lege die CD wieder ein und klicke auf „Erneut prüfen“. Es wurde noch kein Projektordner angelegt."
-                : "Die aktuell eingelegte CD entspricht nicht eindeutig der zuvor eingelesenen CD.\n\n" +
-                  "Lege die ursprüngliche CD wieder ein oder wähle das Laufwerk aus, in dem sie eingelegt ist.";
+                ? LocalizationText.Format("Disc.Source.PreviousDiscUnavailableMessage", driveLetter)
+                : LocalizationText.Get("Disc.Source.DifferentDiscMessage");
 
             var result = AppDialogService.Show(
                 this,
-                title: "MP3-CD-Projekt",
+                title: LocalizationText.Get("Disc.Source.Mp3ProjectTitle"),
                 heading: heading,
                 message: message,
                 kind: AppDialogKind.Warning,
                 buttons:
                 [
-                    new AppDialogButton("Erneut prüfen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                    new AppDialogButton("Anderes Laufwerk wählen", AppDialogResult.No),
-                    new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                    new AppDialogButton(LocalizationText.Get("Disc.Source.Retry"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                    new AppDialogButton(LocalizationText.Get("Disc.Source.OtherDrive"), AppDialogResult.No),
+                    new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
                 ]);
 
             if (result == AppDialogResult.Yes)
@@ -2732,7 +4670,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (string.IsNullOrWhiteSpace(selectedSource))
                     return string.Empty;
 
-                selectedSource = ResolveSelectedDiscSource(selectedSource);
+                selectedSource = await ResolveSelectedDiscSourceAsync(selectedSource);
                 if (string.IsNullOrWhiteSpace(selectedSource))
                     return string.Empty;
 
@@ -2766,8 +4704,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         IsBusy = true;
         IsProgressIndeterminate = true;
         IsDiscSourceAnalysisActive = true;
-        DiscSourceAnalysisText = "CD wird überprüft …";
-        var previousStatusText = StatusText;
+        DiscSourceAnalysisText = LocalizationText.Get("MainWindow.DiscAnalysis.Checking");
+        var previousStatusText = _statusText;
         var previousExportProgressText = ExportProgressText;
         StatusText = string.Empty;
         ExportProgressPercent = 0;
@@ -2778,15 +4716,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            return await Task.Run(() =>
-            {
-                var analysis = _mp3DiscImportService.AnalyzeSource(sourceFolder);
-                if (!analysis.IsSupportedDataDisc)
-                    return false;
+            return await _services.Discs.DiscDriveService.MeasureOperationAsync(
+                sourceFolder,
+                "drive.data-analysis",
+                () =>
+                {
+                    var analysis = _services.Discs.Mp3DiscImportService.AnalyzeSource(sourceFolder, DiscDriveOperationService.CurrentCancellationToken);
+                    if (!analysis.IsSupportedDataDisc)
+                        return false;
 
-                var currentSignature = _mp3DiscImportService.CreateDiscStructureSignature(sourceFolder, analysis);
-                return string.Equals(currentSignature, expectedStructureSignature, StringComparison.OrdinalIgnoreCase);
-            });
+                    var currentSignature = _services.Discs.Mp3DiscImportService.CreateDiscStructureSignature(sourceFolder, analysis);
+                    return string.Equals(currentSignature, expectedStructureSignature, StringComparison.OrdinalIgnoreCase);
+                });
         }
         catch
         {
@@ -2814,7 +4755,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         IsProgressIndeterminate = true;
         IsDiscSourceAnalysisActive = true;
         DiscSourceAnalysisText = DiscAnalysisReadingText;
-        var previousStatusText = StatusText;
+        var previousStatusText = _statusText;
         var previousExportProgressText = ExportProgressText;
         StatusText = string.Empty;
         ExportProgressPercent = 0;
@@ -2825,19 +4766,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            return await Task.Run(() =>
-            {
-                var analysis = _mp3DiscImportService.AnalyzeSource(sourceFolder);
-                var previewTracks = analysis.IsSupportedDataDisc
-                    ? _folderScanner.Scan(sourceFolder, TrackNumberPreference.FileName)
-                    : [];
-                var quickIdentity = _mp3DiscImportService.CreateQuickIdentity(sourceFolder, analysis);
-                var signature = analysis.IsSupportedDataDisc
-                    ? _mp3DiscImportService.CreateDiscStructureSignature(sourceFolder, analysis)
-                    : string.Empty;
+            return await _services.Discs.DiscDriveService.MeasureOperationAsync(
+                sourceFolder,
+                "drive.data-analysis",
+                () =>
+                {
+                    var analysis = _services.Discs.Mp3DiscImportService.AnalyzeSource(sourceFolder, DiscDriveOperationService.CurrentCancellationToken);
+                    var previewTracks = analysis.IsSupportedDataDisc
+                        ? _services.Media.FolderScanner.Scan(sourceFolder, TrackNumberPreference.FileName, cancellationToken: DiscDriveOperationService.CurrentCancellationToken)
+                        : [];
+                    var quickIdentity = _services.Discs.Mp3DiscImportService.CreateQuickIdentity(sourceFolder, analysis);
+                    var signature = analysis.IsSupportedDataDisc
+                        ? _services.Discs.Mp3DiscImportService.CreateDiscStructureSignature(sourceFolder, analysis)
+                        : string.Empty;
 
-                return (analysis, previewTracks, quickIdentity, signature);
-            });
+                    return (analysis, previewTracks, quickIdentity, signature);
+                });
         }
         finally
         {
@@ -2854,11 +4798,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task<bool> TryShowAudioDiscContentsAsync(string sourceFolder)
     {
+        var sourceVersion = _workspaceReplacementVersion;
         IsBusy = true;
         IsProgressIndeterminate = true;
         IsDiscSourceAnalysisActive = true;
-        DiscSourceAnalysisText = "Audio-CD wird gelesen …";
-        var previousStatusText = StatusText;
+        DiscSourceAnalysisText = LocalizationText.Get("MainWindow.DiscAnalysis.AudioReading");
+        var previousStatusText = _statusText;
         var previousExportProgressText = ExportProgressText;
         StatusText = string.Empty;
         ExportProgressPercent = 0;
@@ -2870,7 +4815,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AudioDiscReadResult result;
         try
         {
-            result = await Task.Run(() => _audioDiscReaderService.ReadDisc(sourceFolder));
+            result = await Task.Run(() => _services.Discs.AudioDiscReaderService.ReadDisc(sourceFolder));
         }
         finally
         {
@@ -2882,15 +4827,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             IsBusy = false;
         }
 
+        if (_isShutdownInProgress || _allowWindowClose || _windowCloseCleanupCompleted) return true;
+
+        if (result.IsMixedModeUnsupported)
+        {
+            AppDialogService.Warning(this, LocalizationText.Get("MainWindow.DiscSource.AudioUnreadable.Title"), result.ErrorMessage);
+            StatusText = result.ErrorMessage;
+            return true;
+        }
+
         if (!result.IsAudioDisc || result.Disc is null)
             return false;
 
         ResetMetadataForNewDiscProject();
+        SetOriginalAudioColumnsVisible(true);
+        _pendingAudioDisc = result.Disc;
 
-        var previewWorkingFormat = AudioDiscSettingsService.NormalizeWorkingFormat(_settings.AudioDiscWorkingFormat);
-        Tracks.Clear();
-        foreach (var track in _audioDiscProjectService.CreateTrackPreview(result.Disc, BookTitle, Author, previewWorkingFormat))
-            Tracks.Add(track);
+        const AudioDiscWorkingFormat previewWorkingFormat = AudioDiscWorkingFormat.Flac;
+        Tracks.ReplaceAll(_services.Foundation.AudioDiscProjectService.CreateTrackPreview(result.Disc, BookTitle, Author, previewWorkingFormat));
         UpdateIndexes();
         UpdateFinalStatus(Tracks.Count);
         AutoFitTrackColumnsAfterRender();
@@ -2900,11 +4854,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CreateDiscDriveDisplayName(result.Disc.DriveRoot),
             result.Disc.DriveRoot);
 
+        ConfirmLoadedPresetBitrateIfNeeded();
         var setupDialog = CreateProjectSetupDialog(new ProjectSetupDialogRequest(
             SourceKind: ProjectSetupSourceKind.AudioDisc,
-            WindowTitle: "Audio-CD-Projekt vorbereiten",
-            SourceInformation: $"Die eingelegte Audio-CD enthält {result.Disc.TrackCount} Tracks mit einer Gesamtdauer von {result.Disc.TotalDurationText}.",
-            Instruction: "Gib die Gesamtzahl der CDs an, prüfe die Projektdaten und ergänze sie bei Bedarf.",
+            ConfirmDiscCountOnStart: true,
+            WindowTitle: LocalizationText.Get("MainWindow.Setup.AudioPrepare"),
+            SourceInformation: LocalizationText.Format("MainWindow.Setup.AudioSourceInformation", result.Disc.TrackCount, result.Disc.TotalDurationText),
+            Instruction: LocalizationText.Get("MainWindow.Setup.DiscInstruction"),
             DefaultDiscCount: 1,
             MinimumDiscs: 1,
             MaximumDiscs: 99,
@@ -2923,13 +4879,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverPreviewSource: CoverPreviewSource,
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
-            KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
             UsePrivateGenreList: _settings.UsePrivateGenreList,
+            GenreOptions: GenreListService.GetGenres(_settings),
             SourceFolder: sourceFolder,
-            LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.AudioDisc, sourceFolder)));
+            LastCoverFolder: _settings.LastCoverFolder ?? string.Empty));
 
+        if (sourceVersion != _workspaceReplacementVersion || _isShutdownInProgress || _allowWindowClose) return true;
         SetMetadataEditingAvailable(true);
-        var startProject = setupDialog.ShowDialog() == true;
+        var startProject = ModalDialogService.ShowDialog(setupDialog, this) == true;
+        FlushProjectSetupDiscCountPreviewRefresh();
         ApplyDiscProjectSetup(setupDialog.Result);
         _pendingAudioDisc = result.Disc;
         _pendingAudioDiscTotalDiscs = setupDialog.Result.TotalDiscs;
@@ -2938,68 +4896,63 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            var workingFormat = AudioDiscSettingsService.NormalizeWorkingFormat(_settings.AudioDiscWorkingFormat);
-            var projectFolder = _audioDiscProjectService.CreateProjectFolder(
+            var sourceDriveInfo = await _services.Discs.DiscDriveService.GetDriveDiagnosticsForPathAsync(result.Disc.DriveRoot);
+            if (_isShutdownInProgress || _allowWindowClose || _windowCloseCleanupCompleted ||
+                sourceVersion != _workspaceReplacementVersion) return true;
+            _workspaceReplacementVersion++;
+
+            const AudioDiscWorkingFormat workingFormat = AudioDiscWorkingFormat.Flac;
+            var projectFolder = _services.Foundation.AudioDiscProjectService.CreateProjectFolder(
                 GetProjectFolderStructure().AudioDiscProjectsFolder,
                 setupDialog.Result.BookTitle);
-            var sourceDriveInfo = await Task.Run(() =>
-                _discDriveService.GetDriveDiagnosticsForPath(result.Disc.DriveRoot));
-            var manifest = _audioDiscProjectService.CreateInitialManifest(
+            _currentProjectWorkFolder = projectFolder;
+            var manifest = _services.Foundation.AudioDiscProjectService.CreateInitialManifest(
                 projectFolder,
                 result.Disc,
                 discNumber: 1,
                 setup: setupDialog.Result,
                 workingFormat: workingFormat,
-                sourceDriveInfo: sourceDriveInfo);
+                sourceDriveInfo: sourceDriveInfo, targetSampleRateHz: _settings.DefaultSampleRateHz);
 
-            _audioDiscProjectService.Save(manifest);
+            _services.Foundation.AudioDiscProjectService.Save(manifest);
+            _sessionProject.RegisterAudioPreparation(GetWorkingRootFolder(), manifest, startProject);
+            AttachCanonicalMetadataSessionToNewProject(projectFolder);
             _activeAudioDiscManifest = manifest;
-            _loadedResumeProjectIsAudioDisc = true;
-            _loadedResumeProjectIsLocal = false;
-            _currentProjectWorkFolder = projectFolder;
+            ApplyLoadedProjectState(LoadedProjectState.WithAudioDiscState(true));
+            ApplyLoadedProjectState(LoadedProjectState.WithLocalState(false));
             _isAudioDiscProjectAwaitingRip = true;
 
-            Tracks.Clear();
-            foreach (var track in _audioDiscProjectService.CreateTrackPreview(manifest))
-                Tracks.Add(track);
+            Tracks.ReplaceAll(_services.Foundation.AudioDiscProjectService.CreateTrackPreview(manifest));
 
             UpdateIndexes();
             UpdateFinalStatus(Tracks.Count);
             AutoFitTrackColumnsAfterRender();
             NotifyExportUiStateChanged();
 
-            StatusText = "Projekt wird gestartet …";
-            ExportProgressText = "0 % | Initialisierung";
+            StatusText = LocalizationText.Get("MainWindow.Project.Starting");
+            ExportProgressText = LocalizationText.Get("MainWindow.Status.Initializing");
             projectPrepared = true;
         }
         catch (Exception ex)
         {
             AppDialogService.Error(
                 this,
-                "Audio-CD-Projekt nicht angelegt",
-                "Das Audio-CD-Projekt konnte nicht vollständig vorbereitet werden.",
+                LocalizationText.Get("MainWindow.AudioProject.CreateFailed.Title"),
+                LocalizationText.Get("MainWindow.AudioProject.CreateFailed.Message"),
                 details: new[] { ex.Message });
-            StatusText = "Audio-CD-Projekt konnte nicht angelegt werden.";
+            StatusText = LocalizationText.Get("MainWindow.Project.AudioCreateFailed");
             ExportProgressText = BuildIdleExportProgressText();
         }
 
         if (projectPrepared && !startProject)
         {
-            StatusText = $"Audio-CD vorbereitet: {result.Disc.TrackCount} Tracks. Trackliste kann geprüft und sortiert werden.";
-            ExportProgressText = "Zum Starten des Rippings auf „Projekt starten“ klicken.";
+            StatusText = LocalizationText.Format("MainWindow.AudioDisc.Prepared", result.Disc.TrackCount);
+            ExportProgressText = LocalizationText.Get("MainWindow.Project.ClickStartRipping");
         }
 
         if (projectPrepared && startProject)
         {
-            _pauseBeforeMergeOverride = setupDialog.Result.AutoMergeAfterConversion ? false : true;
-            try
-            {
-                await RunPreparedAudioDiscRipAsync();
-            }
-            finally
-            {
-                _pauseBeforeMergeOverride = null;
-            }
+            await RunPreparedAudioDiscRipAsync();
         }
 
         return true;
@@ -3023,7 +4976,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (IsDiscSourceAnalysisActive)
             return;
 
-        var previousStatusText = StatusText;
+        var previousStatusText = _statusText;
         var previousExportProgressText = ExportProgressText;
         var previousProgressPercent = ExportProgressPercent;
         var previousIsProgressIndeterminate = IsProgressIndeterminate;
@@ -3060,33 +5013,49 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ExportProgressText = previousExportProgressText;
     }
 
+    private ProjectExtensionRollbackSnapshot? CaptureAdditionalSourcesBaseline(string projectFolder)
+    {
+        try
+        {
+            return _projectExtensionRollbackSnapshot ??= _services.Pipeline.ProjectExtensionRollbackService.CaptureForAdditionalSources(projectFolder);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or PersistentJsonSchemaException)
+        {
+            _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, projectFolder, SelectedExportPreset);
+            UpdateManualMergeReviewPresetState();
+            AppDialogService.Error(this, LocalizationText.Get("MainWindow.Export.Failed.Title"), LocalizationText.Get("Common.OperationFailed"), details: new[] { error.Message });
+            return null;
+        }
+    }
+
     private async void AddProjectSources_Click(object sender, RoutedEventArgs e)
     {
         if (IsBusy)
             return;
 
-        if (_loadedResumeProjectIsLocal)
+        if (LoadedProjectState.IsLocal)
         {
             await AddMoreLocalSourcesAsync();
             return;
         }
 
-        if (_loadedResumeProjectIsAudioDisc)
+        if (LoadedProjectState.IsAudioDisc)
         {
             await AddMoreAudioDiscsAsync();
             return;
         }
 
-        if (!_loadedResumeProjectIsMp3Disc)
+        if (!LoadedProjectState.IsMp3Disc)
             return;
 
         var manifest = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false);
         if (manifest is null)
             return;
 
-        var additionalImportPlan = _mp3DiscProjectService.BuildAdditionalImportPlan(manifest);
-        var defaultSourceFolder = _discDriveService.ResolveResumeDiscSource(
+        var additionalImportPlan = _services.Foundation.Mp3DiscProjectService.BuildAdditionalImportPlan(manifest);
+        var defaultSourceFolder = await _services.Discs.DiscDriveService.ResolveResumeDiscSourceAsync(
             _currentProjectWorkFolder,
+            default,
             manifest.SourceFolder,
             _settings.LastDiscSourceFolder,
             SelectedFolder);
@@ -3097,44 +5066,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             additionalImportPlan.DefaultTotalDiscs,
             additionalImportPlan.MinimumTotalDiscs,
             additionalImportPlan.MaximumTotalDiscs,
-            _discDriveService.GetCdDrives(),
+            [],
             preferredDriveRoot: defaultSourceFolder,
-            sourceDialogInitialDirectory: GetDiscSourceInitialDirectory())
+            sourceDialogInitialDirectory: string.Empty,
+            configuredDrives: _settings.DiscDriveOrder,
+            discDriveService: _services.Discs.DiscDriveService)
         {
             Owner = this
         };
 
-        if (dialog.ShowDialog() != true)
+        if (ModalDialogService.ShowDialog(dialog, this) != true)
             return;
 
         var addMoreOptions = dialog.Result;
         var sourceFolder = addMoreOptions.SourceFolder.Trim();
+        SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(sourceFolder), sourceFolder);
 
-        if (!_discDriveService.IsValidResumeDiscSource(sourceFolder, _currentProjectWorkFolder))
+        if (!await _services.Discs.DiscDriveService.IsValidResumeDiscSourceAsync(sourceFolder, _currentProjectWorkFolder))
         {
             AppDialogService.Warning(
                 this,
-                "CD-Laufwerk nicht verwendbar",
-                "Bitte wähle ein CD-Laufwerk oder einen Ordner außerhalb des Projektordners aus.");
+                LocalizationText.Get("Disc.AddMore.InvalidDriveTitle"),
+                LocalizationText.Get("Disc.AddMore.InvalidDriveMessage"));
             return;
         }
 
         _settings.LastDiscSourceFolder = sourceFolder;
         SaveSettingsIfReady();
 
-        var extensionSnapshot = _projectExtensionRollbackService.Capture(manifest.ProjectFolder);
-        var returnState = _pipelineState;
-        var returnCompletedState = _isCurrentProjectCompleted;
+        if (!TryFlushCanonicalMetadataBeforeExtensionSnapshot(manifest.ProjectFolder))
+            return;
+
+        var extensionSnapshot = CaptureAdditionalSourcesBaseline(manifest.ProjectFolder);
+        if (extensionSnapshot is null) return;
+        _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, manifest.ProjectFolder, SelectedExportPreset);
+        var returnState = ProjectReviewState.Phase;
+        var returnCompletedState = ProjectReviewState.IsCompleted;
 
         try
         {
-            _mp3DiscProjectService.IncreaseTotalDiscsForAdditionalImport(manifest, addMoreOptions.TotalDiscs);
+            _services.Foundation.Mp3DiscProjectService.IncreaseTotalDiscsForAdditionalImport(manifest, addMoreOptions.TotalDiscs);
         }
         catch (ArgumentOutOfRangeException ex)
         {
+            _services.Pipeline.ProjectExtensionRollbackService.Rollback(extensionSnapshot);
+            _projectExtensionRollbackSnapshot = null;
             AppDialogService.Warning(
                 this,
-                "CD-Anzahl nicht übernommen",
+                LocalizationText.Get("Disc.AddMore.TotalRejected"),
                 ex.Message);
             return;
         }
@@ -3142,76 +5121,95 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         manifest.SourceFolder = sourceFolder;
         SaveCurrentMp3DiscProjectSnapshot(manifest);
 
-        var nextMissingDisc = _mp3DiscProjectService.GetNextMissingDiscNumber(manifest, manifest.TotalDiscs);
+        var nextMissingDisc = _services.Foundation.Mp3DiscProjectService.GetNextMissingDiscNumber(manifest, manifest.TotalDiscs);
         if (nextMissingDisc is null)
         {
-            StatusText = "Alle eingestellten CDs sind bereits importiert.";
-            ExportProgressText = "Keine neue CD zum Importieren gefunden.";
+            StatusText = LocalizationText.Get("Disc.AddMore.AllImported");
+            ExportProgressText = LocalizationText.Get("Disc.AddMore.NoNewDisc");
             return;
         }
 
-        _loadedResumeProjectNeedsDiscImport = true;
-        _loadedResumeProjectIsMp3Disc = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(true));
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
         NotifyExportUiStateChanged();
 
-        StatusText = $"MP3-CD-Projekt wird erweitert. Warte auf CD {nextMissingDisc.Value} von {manifest.TotalDiscs}.";
-        ExportProgressText = "Weitere CDs werden importiert und für das aktuelle Preset konvertiert. Danach bleibt die Trackliste zur Prüfung offen.";
-        _isCurrentProjectCompleted = false;
-
-        var isFirstExtensionRun = true;
+        StatusText = LocalizationText.Format("Disc.AddMore.Mp3ExtensionStatus", nextMissingDisc.Value, manifest.TotalDiscs);
+        ExportProgressText = LocalizationText.Get(_settings.MergeAutomaticallyAfterConversion
+            ? "Disc.AddMore.Mp3ExtensionProgressAutoMerge"
+            : "Disc.AddMore.Mp3ExtensionProgress");
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(false);
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
 
         async Task<bool> RunMp3ExtensionAsync()
         {
-            var firstDiscAlreadyReady = !isFirstExtensionRun;
-            isFirstExtensionRun = false;
             return await ImportMp3DiscProjectAsync(
                 manifest.ProjectFolder,
-                sourceFolder,
+                _resumeDiscStartDriveRoot ?? sourceFolder,
                 manifest,
-                startDiscNumber: _mp3DiscProjectService.GetNextMissingDiscNumber(manifest, manifest.TotalDiscs) ?? nextMissingDisc.Value,
-                firstDiscAlreadyReady: firstDiscAlreadyReady,
-                autoExportWhenComplete: false,
+                startDiscNumber: _services.Foundation.Mp3DiscProjectService.GetNextMissingDiscNumber(manifest, manifest.TotalDiscs) ?? nextMissingDisc.Value,
+                firstDiscAlreadyReady: false,
+                autoExportWhenComplete: true,
                 extensionSnapshot: extensionSnapshot,
                 extensionReturnState: returnState,
-                extensionReturnCompletedState: returnCompletedState);
+                extensionReturnCompletedState: returnCompletedState,
+                startWithSelectedDrive: true);
         }
 
         async Task RunAndFinalizeMp3ExtensionAsync()
         {
             var extensionCanceled = await RunMp3ExtensionAsync();
-            if (extensionCanceled)
+            if (extensionCanceled || _presentationState.IsPipelinePaused)
                 return;
 
             ClearProjectExtensionPauseContext();
-
-            var updatedManifest = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false);
-            if (updatedManifest is not null &&
-                _mp3DiscProjectService.GetNextMissingDiscNumber(updatedManifest, updatedManifest.TotalDiscs) is null &&
-                !_loadedResumeProjectNeedsDiscImport)
-            {
-                PauseBeforeMergeForManualReview();
-            }
         }
 
         BeginProjectExtensionPauseContext(
             RunAndFinalizeMp3ExtensionAsync,
             () =>
             {
-                _projectExtensionRollbackService.Rollback(extensionSnapshot);
-                _convertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
+                _services.Pipeline.ProjectExtensionRollbackService.Rollback(extensionSnapshot);
+                ReloadCanonicalMetadataSessionAfterRollback(manifest.ProjectFolder);
+                _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
                 RefreshLoadedProjectTrackStateFromPersistedProject(manifest.ProjectFolder);
-                _loadedResumeProjectNeedsDiscImport = false;
-                _loadedResumeProjectIsMp3Disc = true;
-                _isCurrentProjectCompleted = returnCompletedState;
-                _isWaitingForManualMergeReview = returnState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed;
-                SetPipelineState(returnState);
-                StatusText = "Hinzufügen weiterer CDs wurde gestoppt. Das bisherige Projekt blieb unverändert.";
-                ExportProgressText = "Alle Dateien des Erweiterungsversuchs wurden entfernt.";
+                ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+                ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
+                _projectReviewState = ProjectReviewState.WithCompletion(returnCompletedState);
+                _projectReviewState = ProjectReviewState.WithManualMergeReview(returnState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed);
+                _projectReviewState = ProjectReviewState.WithPhase(returnState);
+                StatusText = LocalizationText.Get("Disc.AddMore.StoppedStatus");
+                ExportProgressText = LocalizationText.Get("Disc.AddMore.RollbackProgress");
                 NotifyExportUiStateChanged();
                 RefreshResumeProjects(showStatus: false);
             });
 
         await RunAndFinalizeMp3ExtensionAsync();
+    }
+
+    private async Task<List<TrackInfo>?> ScanFolderForExtensionAsync(string root, Func<string, bool>? includeFile = null)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _trackAnalysisCancellation = cancellation;
+        _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.LocalFolderExtension;
+        IsBusy = true;
+        NotifyExportUiStateChanged();
+        try
+        {
+            return await _services.Media.FolderScanner.ScanAsync(root,
+                includeFile: includeFile, cancellationToken: cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            StatusText = LocalizationText.Get("Sources.AddLocal.CanceledStatus");
+            return null;
+        }
+        finally
+        {
+            _trackAnalysisCancellation = null;
+            _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.None;
+            IsBusy = false;
+            NotifyExportUiStateChanged();
+        }
     }
 
     private async Task AddMoreLocalSourcesAsync()
@@ -3221,23 +5219,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "Projektordner nicht gefunden",
-                "Das lokale Projekt kann nicht erweitert werden, weil sein Projektordner nicht gefunden wurde.");
+                LocalizationText.Get("Sources.AddLocal.MissingFolderTitle"),
+                LocalizationText.Get("Sources.AddLocal.MissingFolderMessage"));
             return;
         }
 
         var selection = AppDialogService.Show(
             this,
-            "Lokale Quellen hinzufügen",
-            "Lokale Quellen hinzufügen",
-            "Wähle, ob du einen vollständigen Ordner oder einzelne Audiodateien zum geöffneten Projekt hinzufügen möchtest.",
+            LocalizationText.Get("Sources.AddLocal.Title"),
+            LocalizationText.Get("Sources.AddLocal.Title"),
+            LocalizationText.Get("Sources.AddLocal.ChooseKind"),
             AppDialogKind.Question,
             null,
             new[]
             {
-                new AppDialogButton("Ordner hinzufügen", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Dateien hinzufügen", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("Sources.AddLocal.AddFolder"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Sources.AddLocal.AddFiles"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("UiAbbrechen"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         if (selection == AppDialogResult.Cancel)
@@ -3250,7 +5248,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var folderDialog = new OpenFolderDialog
             {
-                Title = "Ordner zum Projekt hinzufügen",
+                Title = LocalizationText.Get("Sources.AddLocal.FolderPickerTitle"),
                 Multiselect = false,
                 InitialDirectory = GetExistingFolderOrDefault(
                     _settings.LastLocalProjectFolder,
@@ -3264,14 +5262,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Warning(
                     this,
-                    "CD nicht als lokalen Ordner hinzufügen",
-                    "Ein optisches Laufwerk kann einem lokalen Projekt nicht als Ordnerquelle hinzugefügt werden. Verwende für CDs bitte ein MP3- oder Audio-CD-Projekt.");
+                    LocalizationText.Get("Sources.AddLocal.OpticalFolderTitle"),
+                    LocalizationText.Get("Sources.AddLocal.OpticalFolderMessage"));
                 return;
             }
 
             scanRoot = Path.GetFullPath(folderDialog.FolderName);
-            selectedFiles = _folderScanner
-                .Scan(scanRoot)
+            var scannedTracks = await ScanFolderForExtensionAsync(scanRoot);
+            if (scannedTracks is null) return;
+            selectedFiles = scannedTracks
                 .Select(track => TrackPathService.GetTrackPath(scanRoot, track))
                 .ToArray();
 
@@ -3281,8 +5280,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var fileDialog = new OpenFileDialog
             {
-                Title = "Audiodateien zum Projekt hinzufügen",
-                Filter = "Audiodateien|*.mp3;*.m4a;*.m4b;*.aac;*.wav;*.flac;*.wma|Alle Dateien|*.*",
+                Title = LocalizationText.Get("Sources.AddLocal.FilePickerTitle"),
+                Filter = AudioInputFormatCatalog.OpenFileDialogFilter,
                 CheckFileExists = true,
                 Multiselect = true,
                 InitialDirectory = GetExistingFolderOrDefault(
@@ -3302,8 +5301,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Warning(
                     this,
-                    "Dateien nicht übernommen",
-                    "Bitte wähle die Dateien gemeinsam aus einem einzigen Ordner aus.");
+                    LocalizationText.Get("Sources.AddLocal.FilesRejectedTitle"),
+                    LocalizationText.Get("Sources.AddLocal.SingleFolderMessage"));
                 return;
             }
 
@@ -3311,8 +5310,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Warning(
                     this,
-                    "CD nicht als lokale Dateien hinzufügen",
-                    "Audiodateien von einem optischen Laufwerk können einem lokalen Projekt nicht direkt hinzugefügt werden. Verwende für CDs bitte ein MP3- oder Audio-CD-Projekt.");
+                    LocalizationText.Get("Sources.AddLocal.OpticalFilesTitle"),
+                    LocalizationText.Get("Sources.AddLocal.OpticalFilesMessage"));
                 return;
             }
 
@@ -3331,21 +5330,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Info(
                 this,
-                "Keine Audiodateien gefunden",
-                "In der Auswahl wurden keine unterstützten Audiodateien gefunden.");
+                LocalizationText.Get("Sources.AddLocal.NoAudioTitle"),
+                LocalizationText.Get("Sources.AddLocal.NoAudioMessage"));
             return;
         }
 
         var projectFolder = Path.GetFullPath(_currentProjectWorkFolder);
+        var folderTargetRate = FolderSampleRateService.ReadTarget(projectFolder);
         var originalsFolder = ProjectFolderLayout.GetOriginalsFolder(projectFolder);
         var importRoot = Directory.GetParent(scanRoot)?.FullName ?? scanRoot;
         ProjectFolderLayout.EnsureProjectFolders(projectFolder);
-        var manifestPath = ProjectFolderLayout.GetWorkManifestPath(projectFolder);
+        var manifestPath = ProjectFolderLayout.GetExportManifestPath(projectFolder);
         var preset = ExportPreset.Parse(SelectedExportPreset);
         var convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectFolder, preset.GetFolderName());
         Directory.CreateDirectory(convertedFolder);
 
-        var manifest = _workManifestService.LoadOrCreate(
+        var manifest = _services.Foundation.WorkManifestService.LoadOrCreate(
             manifestPath,
             ProjectManifestTypes.FolderProject,
             projectFolder,
@@ -3373,24 +5373,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Info(
                 this,
-                "Keine neuen Quellen",
-                "Alle ausgewählten Audiodateien sind bereits Bestandteil des Projekts.");
+                LocalizationText.Get("Sources.AddLocal.NoNewSourcesTitle"),
+                LocalizationText.Get("Sources.AddLocal.AlreadyPresentMessage"));
             return;
         }
 
         var selectedPathSet = candidates
             .Select(item => item.SourcePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var newTracks = _folderScanner
-            .Scan(scanRoot, includeFile: path => selectedPathSet.Contains(Path.GetFullPath(path)))
-            .ToList();
+        var newTracks = await ScanFolderForExtensionAsync(
+            scanRoot, path => selectedPathSet.Contains(Path.GetFullPath(path)));
+        if (newTracks is null) return;
 
         if (newTracks.Count == 0)
         {
             AppDialogService.Info(
                 this,
-                "Keine neuen Quellen",
-                "Die ausgewählten Dateien konnten nicht als unterstützte Audiotracks eingelesen werden.");
+                LocalizationText.Get("Sources.AddLocal.NoNewSourcesTitle"),
+                LocalizationText.Get("Sources.AddLocal.UnreadableTracksMessage"));
             return;
         }
 
@@ -3406,29 +5406,38 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 item => (item.Index, item.Track),
                 StringComparer.OrdinalIgnoreCase);
 
-        var snapshot = _projectExtensionRollbackService.Capture(projectFolder);
-        var returnState = _pipelineState;
-        var returnCompletedState = _isCurrentProjectCompleted;
+        if (!TryFlushCanonicalMetadataBeforeExtensionSnapshot(projectFolder))
+            return;
+
+        var snapshot = CaptureAdditionalSourcesBaseline(projectFolder);
+        if (snapshot is null) return;
+        manifest = _services.Foundation.WorkManifestService.LoadOrCreate(manifestPath, ProjectManifestTypes.FolderProject,
+            projectFolder, originalsFolder, preset.DisplayName);
+        _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, projectFolder, SelectedExportPreset);
+        var returnState = ProjectReviewState.Phase;
+        var returnCompletedState = ProjectReviewState.IsCompleted;
         var previousTrackCount = Tracks.Count;
         var manifestSyncRoot = new object();
+        var extensionSourceProbes = new System.Collections.Concurrent.ConcurrentDictionary<Guid, AudioProbeInfo>();
         var sourceAcquisitionCompleted = false;
 
         async Task RunLocalExtensionAsync()
         {
         _exportCancellation = new CancellationTokenSource();
 
-        var initialPipelineState = _localProjectExtensionStateService.ResolveInitialState(
+        var initialPipelineState = _services.Pipeline.LocalProjectExtensionStateService.ResolveInitialState(
             candidates.Select(item => item.TargetPath));
         sourceAcquisitionCompleted = initialPipelineState == ProjectPipelineState.Converting;
 
         SetPipelineState(initialPipelineState);
         IsBusy = true;
         IsExporting = true;
-        _isCurrentProjectCompleted = false;
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(false);
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
         var workflowOperationId = BeginWorkflowStatusOperation(projectFolder);
         PublishWorkflowStatus(
             workflowOperationId,
-            _localWorkflowStatusAdapter.CreateRunningSnapshot(
+            _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
                 projectFolder,
                 initialPipelineState,
                 new LocalProjectLivePreparationProgress(
@@ -3440,23 +5449,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     []),
                 preset,
                 isExtension: true,
-                existingConvertedCount: previousTrackCount,
+                existingConvertedCount: 0,
                 conversionTotalOverride: previousTrackCount + candidates.Length,
                 activeTrackNumberOffset: previousTrackCount));
+
+        await using var preparedLifecycle = new PreparedTrackLifecycleSession(
+            _services.Foundation.WorkManifestService, _services.Workflows.AacExportProcessingService,
+            manifest, manifestPath, manifestSyncRoot, _ffmpegStatus.FfprobePath ?? "", ResolveParallelJobCount());
+        preparedLifecycle.QueuePreset(preset, _exportCancellation.Token);
 
         try
         {
             manifest.State.Status = initialPipelineState == ProjectPipelineState.Converting
                 ? ProjectManifestStatuses.Converting
                 : ProjectManifestStatuses.AcquiringSources;
-            _workManifestService.Save(manifestPath, manifest);
+            _services.Foundation.WorkManifestService.Save(manifestPath, manifest);
 
-            var result = await _localProjectLivePreparationService.RunAsync(
+            var result = await _services.Workflows.LocalProjectLivePreparationService.RunAsync(
                 new LocalProjectLivePreparationRequest(
                     importRoot,
                     candidates.Select(item => item.SourcePath).ToArray(),
                     projectFolder,
-                    ResolveParallelJobCount()),
+                    ResolveParallelJobCount(), preparedLifecycle.DrainAsync),
                 async (copiedFile, trackPreparationProgress, token) =>
                 {
                     var sourcePath = Path.GetFullPath(copiedFile.SourceFile);
@@ -3466,6 +5480,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             $"Die hinzugefügte Quelldatei konnte keinem Track zugeordnet werden: {copiedFile.SourceFile}");
                     }
 
+                    mappedTrack.Track.TargetSampleRateHz = folderTargetRate;
+                    mappedTrack.Track.AllowAacReuse = ProjectSampleRateService.AllowsAacReuse(projectFolder);
+                    ApplySourceIdFromCopiedFile(mappedTrack.Track, copiedFile);
+                    var probeInfo = await _services.Media.AudioInfoService.ProbeAsync(
+                        copiedFile.TargetFile,
+                        _ffmpegStatus.FfprobePath,
+                        token: token);
+                    token.ThrowIfCancellationRequested();
+                    if (probeInfo.HasPlausibleAudioProperties)
+                    {
+                        extensionSourceProbes[mappedTrack.Track.SourceId] = probeInfo;
+                        _services.Media.TrackAudioProbeApplicationService.ApplySuccessfulProbe(
+                            mappedTrack.Track,
+                            probeInfo,
+                            preset,
+                            markAudioValidationPassed: true);
+                    }
+                    PublishSourceMetadataSnapshot(
+                        projectFolder,
+                        copiedFile.TargetFile,
+                        mappedTrack.Track,
+                        evidence: "local-project-copy");
                     var trackIndex = previousTrackCount + mappedTrack.Index;
                     var convertedPath = ConvertedTrackPathService.GetConvertedTrackPath(
                         convertedFolder,
@@ -3475,7 +5511,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     var canReuseConvertedTrack = false;
                     lock (manifestSyncRoot)
                     {
-                        canReuseConvertedTrack = _workManifestService.CanReuseConvertedTrack(
+                        canReuseConvertedTrack = _services.Foundation.WorkManifestService.CanReuseConvertedTrack(
                             manifest,
                             trackIndex,
                             mappedTrack.Track,
@@ -3486,30 +5522,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                     if (!canReuseConvertedTrack)
                     {
-                        var durationTicks = TrackDurationService.GetEffectiveDurationTicks(mappedTrack.Track);
-                        await _aacExportProcessingService.PrepareTrackForExportAsync(
-                            mappedTrack.Track,
-                            copiedFile.TargetFile,
-                            convertedPath,
-                            preset,
-                            _ffmpegStatus.FfmpegPath ?? string.Empty,
-                            token,
-                            ffmpegProgress => trackPreparationProgress.Report(
-                                durationTicks <= 0
-                                    ? 0
-                                    : Math.Clamp(ffmpegProgress.Ticks / (double)durationTicks, 0d, 0.999d)));
-
-                        lock (manifestSyncRoot)
+                        preparedLifecycle.MarkStarted(trackIndex, mappedTrack.Track, copiedFile.TargetFile, convertedPath, preset, token);
+                        try
                         {
-                            _workManifestService.UpdateTrack(
-                                manifest,
-                                trackIndex,
+                            var durationTicks = TrackDurationService.GetEffectiveDurationTicks(mappedTrack.Track);
+                            await _services.Workflows.AacExportProcessingService.PrepareTrackForExportAsync(
                                 mappedTrack.Track,
                                 copiedFile.TargetFile,
                                 convertedPath,
-                                preset);
-                            _workManifestService.Save(manifestPath, manifest);
+                                preset,
+                                _ffmpegStatus.FfmpegPath ?? string.Empty,
+                                token,
+                                ffmpegProgress => trackPreparationProgress.Report(
+                                    durationTicks <= 0
+                                        ? 0
+                                        : Math.Clamp(ffmpegProgress.Ticks / (double)durationTicks, 0d, 0.999d)));
                         }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (ExportTrackException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new ExportTrackException(
+                                mappedTrack.Track.Index > 0 ? mappedTrack.Track.Index : previousTrackCount + mappedTrack.Index + 1,
+                                mappedTrack.Track.FileName,
+                                copiedFile.SourceFile,
+                                ex);
+                        }
+
+                        preparedLifecycle.Complete(trackIndex, mappedTrack.Track,
+                            copiedFile.TargetFile, convertedPath, preset, token);
                     }
                 },
                 new Progress<LocalProjectLivePreparationProgress>(progress =>
@@ -3522,14 +5569,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         lock (manifestSyncRoot)
                         {
                             manifest.State.Status = ProjectManifestStatuses.Converting;
-                            _workManifestService.Save(manifestPath, manifest);
+                            _services.Foundation.WorkManifestService.Save(manifestPath, manifest);
                         }
                         SetPipelineState(ProjectPipelineState.Converting);
                     }
 
                     PublishWorkflowStatus(
                         workflowOperationId,
-                        _localWorkflowStatusAdapter.CreateRunningSnapshot(
+                        _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
                             projectFolder,
                             sourceAcquisitionCompleted
                                 ? ProjectPipelineState.Converting
@@ -3537,7 +5584,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             progress,
                             preset,
                             isExtension: true,
-                            existingConvertedCount: previousTrackCount,
+                            existingConvertedCount: 0,
                             conversionTotalOverride: previousTrackCount + candidates.Length,
                             activeTrackNumberOffset: previousTrackCount));
                 }),
@@ -3545,11 +5592,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (result.ImportResult.WasCanceled || _exportCancellation.IsCancellationRequested)
             {
-                if (_pauseRequested)
+                if (_presentationState.PauseRequested)
                 {
                     PublishWorkflowStatus(
                         workflowOperationId,
-                        _localWorkflowStatusAdapter.CreateRunningSnapshot(
+                        _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
                             projectFolder,
                             sourceAcquisitionCompleted
                                 ? ProjectPipelineState.Converting
@@ -3564,7 +5611,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             preset,
                             isExtension: true,
                             isPaused: true,
-                            existingConvertedCount: previousTrackCount,
+                            existingConvertedCount: 0,
                             conversionTotalOverride: previousTrackCount + candidates.Length,
                             activeTrackNumberOffset: previousTrackCount));
                     EndWorkflowStatusOperation(workflowOperationId);
@@ -3578,32 +5625,34 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
             }
 
-            _workManifestService.MarkConversionCompleted(manifest, preset.DisplayName);
-            _workManifestService.Save(manifestPath, manifest);
+            _services.Foundation.WorkManifestService.MarkConversionPreparationStarted(manifest);
+            _services.Foundation.WorkManifestService.Save(manifestPath, manifest);
+
+            ApplySourceMetadataAggregation(
+                projectFolder,
+                ProjectMetadataInitializationState.SubsequentSource,
+                CreateLocalFolderAggregationOptions(scanRoot, candidates.Select(item => item.SourcePath).ToArray()));
 
             RefreshLoadedProjectTrackStateFromPersistedProject(projectFolder);
+            _services.Media.TrackAudioProbeApplicationService.ApplySuccessfulProbesBySourceId(
+                Tracks,
+                extensionSourceProbes,
+                preset);
             _currentFolderPath = originalsFolder;
             SelectedFolder = scanRoot;
-            _loadedResumeProjectIsLocal = true;
-            _isWaitingForManualMergeReview = true;
-            _isCurrentProjectCompleted = false;
-            SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
-            PublishWorkflowStatus(
-                workflowOperationId,
-                _localWorkflowStatusAdapter.CreateReadySnapshot(
-                    projectFolder,
-                    previousTrackCount + candidates.Length,
-                    preset));
+            ApplyLoadedProjectState(LoadedProjectState.WithLocalState(true));
+            _projectReviewState = ProjectReviewState.WithCompletion(false);
             EndWorkflowStatusOperation(workflowOperationId);
-            ClearProjectExtensionPauseContext();
             NotifyExportUiStateChanged();
             RefreshResumeProjects(showStatus: false);
+            await RunCurrentExportPlanAsync(projectFolder, ProjectManifestTypes.FolderProject,
+                manualMergeRequested: false);
         }
         catch (OperationCanceledException) when (_exportCancellation?.IsCancellationRequested == true)
         {
-            if (_pauseRequested)
+            if (_presentationState.PauseRequested)
             {
-                var last = _workflowStatusCoordinator.Snapshot;
+                var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
                 PublishWorkflowStatus(workflowOperationId, last with { IsPaused = true });
                 EndWorkflowStatusOperation(workflowOperationId);
                 EnterPipelinePause(string.Empty, preserveWorkflowStatus: true);
@@ -3626,8 +5675,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             AppDialogService.Error(
                 this,
-                "Lokale Erweiterung fehlgeschlagen",
-                "Die zusätzlichen lokalen Quellen konnten nicht vollständig übernommen werden.",
+                LocalizationText.Get("Sources.AddLocal.FailedTitle"),
+                LocalizationText.Get("Sources.AddLocal.FailedMessage"),
                 details: new[] { ex.Message });
         }
         finally
@@ -3652,19 +5701,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ProjectPipelineState returnState,
         bool returnCompletedState)
     {
-        _projectExtensionRollbackService.Rollback(snapshot);
+        _services.Pipeline.ProjectExtensionRollbackService.Rollback(snapshot);
+        ReloadCanonicalMetadataSessionAfterRollback(projectFolder);
         ClearProjectExtensionPauseContext();
-        _convertedFileCleanupService.DeletePartFiles(projectFolder);
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
         RefreshLoadedProjectTrackStateFromPersistedProject(projectFolder);
 
-        _loadedResumeProjectIsLocal = true;
-        _loadedResumeProjectIsMp3Disc = false;
-        _loadedResumeProjectIsAudioDisc = false;
-        _isCurrentProjectCompleted = returnCompletedState;
-        _isWaitingForManualMergeReview = returnState == ProjectPipelineState.ReviewBeforeMerge;
-        SetPipelineState(returnState);
-        StatusText = "Hinzufügen lokaler Quellen wurde abgebrochen. Das bisherige Projekt blieb unverändert.";
-        ExportProgressText = "Neu hinzugefügte Originaldateien und Konvertierungen wurden entfernt.";
+        ApplyLoadedProjectState(LoadedProjectState.WithLocalState(true));
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(false));
+        ApplyLoadedProjectState(LoadedProjectState.WithAudioDiscState(false));
+        _projectReviewState = ProjectReviewState.WithCompletion(returnCompletedState);
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(returnState == ProjectPipelineState.ReviewBeforeMerge);
+        _projectReviewState = ProjectReviewState.WithPhase(returnState);
+        StatusText = LocalizationText.Get("Sources.AddLocal.CanceledStatus");
+        ExportProgressText = LocalizationText.Get("Sources.AddLocal.RollbackProgress");
         NotifyExportUiStateChanged();
         RefreshResumeProjects(showStatus: false);
     }
@@ -3673,11 +5723,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var manifest = _activeAudioDiscManifest;
         if (manifest is null && !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
-            manifest = _audioDiscProjectService.TryLoad(_currentProjectWorkFolder);
+            manifest = _services.Foundation.AudioDiscProjectService.TryLoad(_currentProjectWorkFolder);
         if (manifest is null)
             return;
 
-        var completedDiscs = _audioDiscProjectService.CountCompletedDiscs(manifest);
+        var completedDiscs = _services.Foundation.AudioDiscProjectService.CountCompletedDiscs(manifest);
         var minimumTotal = Math.Max(manifest.TotalDiscs + 1, completedDiscs + 1);
         var dialog = new AddMoreDiscsDialog(
             completedDiscs,
@@ -3685,44 +5735,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             minimumTotal,
             minimumTotal,
             99,
-            _discDriveService.GetCdDrives(),
+            [],
             preferredDriveRoot: manifest.SourceDriveRoot,
-            sourceDialogInitialDirectory: GetDiscSourceInitialDirectory())
+            sourceDialogInitialDirectory: string.Empty,
+            configuredDrives: _settings.DiscDriveOrder,
+            discDriveService: _services.Discs.DiscDriveService,
+            isAudioDiscProject: true)
         {
             Owner = this
         };
 
-        if (dialog.ShowDialog() != true)
+        if (ModalDialogService.ShowDialog(dialog, this) != true)
             return;
 
-        var snapshot = _projectExtensionRollbackService.Capture(manifest.ProjectFolder);
-        var returnState = _pipelineState;
-        var returnCompletedState = _isCurrentProjectCompleted;
+        if (!TryFlushCanonicalMetadataBeforeExtensionSnapshot(manifest.ProjectFolder))
+            return;
+
+        var snapshot = CaptureAdditionalSourcesBaseline(manifest.ProjectFolder);
+        if (snapshot is null) return;
+        _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, manifest.ProjectFolder, SelectedExportPreset);
+        var returnState = ProjectReviewState.Phase;
+        var returnCompletedState = ProjectReviewState.IsCompleted;
 
         try
         {
-            _audioDiscProjectService.IncreaseTotalDiscsForAdditionalRip(manifest, dialog.Result.TotalDiscs);
+            _services.Foundation.AudioDiscProjectService.IncreaseTotalDiscsForAdditionalRip(manifest, dialog.Result.TotalDiscs);
             manifest.SourceDriveRoot = dialog.Result.SourceFolder.Trim();
+            SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(manifest.SourceDriveRoot), manifest.SourceDriveRoot);
             _activeAudioDiscManifest = manifest;
-            _loadedResumeProjectIsAudioDisc = true;
+            ApplyLoadedProjectState(LoadedProjectState.WithAudioDiscState(true));
             _isAudioDiscProjectAwaitingRip = true;
-            _isWaitingForManualMergeReview = false;
-            _isCurrentProjectCompleted = false;
+            _projectReviewState = ProjectReviewState.WithManualMergeReview(false);
+            _projectReviewState = ProjectReviewState.WithCompletion(false);
             SaveCurrentAudioDiscProjectSnapshot(manifest, force: true);
             BeginProjectExtensionPauseContext(
                 () => RunPreparedAudioDiscRipAsync(snapshot, returnState, returnCompletedState),
                 () =>
                 {
-                    _projectExtensionRollbackService.Rollback(snapshot);
-                    _convertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
-                    _activeAudioDiscManifest = _audioDiscProjectService.TryLoad(manifest.ProjectFolder);
+                    _services.Pipeline.ProjectExtensionRollbackService.Rollback(snapshot);
+                    ReloadCanonicalMetadataSessionAfterRollback(manifest.ProjectFolder);
+                    _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(manifest.ProjectFolder);
+                    _activeAudioDiscManifest = _services.Foundation.AudioDiscProjectService.TryLoad(manifest.ProjectFolder);
                     _isAudioDiscProjectAwaitingRip = false;
-                    _isCurrentProjectCompleted = returnCompletedState;
-                    _isWaitingForManualMergeReview = returnState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed;
-                    SetPipelineState(returnState);
+                    _projectReviewState = ProjectReviewState.WithCompletion(returnCompletedState);
+                    _projectReviewState = ProjectReviewState.WithManualMergeReview(returnState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed);
+                    _projectReviewState = ProjectReviewState.WithPhase(returnState);
                     RefreshLoadedProjectTrackStateFromPersistedProject(manifest.ProjectFolder);
-                    StatusText = "Hinzufügen weiterer Audio-CDs wurde gestoppt. Das bisherige Projekt blieb unverändert.";
-                    ExportProgressText = "Alle Dateien des Erweiterungsversuchs wurden entfernt.";
+                    StatusText = LocalizationText.Get("Disc.AddMore.AudioStoppedStatus");
+                    ExportProgressText = LocalizationText.Get("Disc.AddMore.RollbackProgress");
                     NotifyExportUiStateChanged();
                     RefreshResumeProjects(showStatus: false);
                 });
@@ -3730,7 +5790,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            AppDialogService.Warning(this, "CD-Anzahl nicht übernommen", ex.Message);
+            _services.Pipeline.ProjectExtensionRollbackService.Rollback(snapshot);
+            _projectExtensionRollbackSnapshot = null;
+            AppDialogService.Warning(this, LocalizationText.Get("Disc.AddMore.TotalRejected"), LocalizationText.Get("Common.OperationFailed"), details: new[] { ex.Message });
         }
     }
 
@@ -3748,14 +5810,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         FileNameTemplate = setup.FileNameTemplate;
         MergeAutomaticallyAfterConversion = setup.AutoMergeAfterConversion;
 
-        _coverSourcePath = setup.CoverSourcePath;
-        _processedCoverPath = !string.IsNullOrWhiteSpace(setup.ProcessedCoverPath) &&
-                              File.Exists(setup.ProcessedCoverPath)
+        var processedCoverPath = !string.IsNullOrWhiteSpace(setup.ProcessedCoverPath) &&
+                                 File.Exists(setup.ProcessedCoverPath)
             ? setup.ProcessedCoverPath
             : "";
-        CoverPreviewSource = _processedCoverPath;
+        _projectMetadata.ApplyCoverMetadata(setup.CoverSourcePath, processedCoverPath, MetadataOrigin.User);
+        CoverPreviewSource = processedCoverPath;
 
         OnExportPreviewChanged();
+        FlushPendingChapterMetadataRefresh();
     }
 
     private async Task ContinueLoadedMp3DiscProjectAsync()
@@ -3763,10 +5826,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var manifest = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: true);
         if (manifest is null)
             return;
+        if (_resumeDiscSourceSelectionRequired)
+        {
+            await ShowCurrentProjectSetupDialogAsync();
+            return;
+        }
 
-        var resumePlan = _mp3DiscProjectService.BuildResumePlan(manifest);
-        var sourceFolder = _discDriveService.ResolveResumeDiscSource(
+        var resumePlan = _services.Foundation.Mp3DiscProjectService.BuildResumePlan(manifest);
+        var sourceFolder = await _services.Discs.DiscDriveService.ResolveResumeDiscSourceAsync(
             _currentProjectWorkFolder,
+            default,
             manifest.SourceFolder,
             _settings.LastDiscSourceFolder,
             SelectedFolder);
@@ -3777,16 +5846,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (string.IsNullOrWhiteSpace(sourceFolder))
                 return;
 
-            sourceFolder = ResolveSelectedDiscSource(sourceFolder);
+            sourceFolder = await ResolveSelectedDiscSourceAsync(sourceFolder);
             if (string.IsNullOrWhiteSpace(sourceFolder))
                 return;
         }
 
         var setupDialog = CreateProjectSetupDialog(new ProjectSetupDialogRequest(
             SourceKind: ProjectSetupSourceKind.Mp3Disc,
-            WindowTitle: "MP3-CD-Projekt fortsetzen",
+            WindowTitle: LocalizationText.Get("MainWindow.Setup.Mp3Continue"),
             SourceInformation: resumePlan.SetupMessage,
-            Instruction: "Prüfe die Projektdaten und ergänze sie bei Bedarf.",
+            Instruction: LocalizationText.Get("MainWindow.Setup.FolderInstruction"),
             DefaultDiscCount: resumePlan.CurrentTotalDiscs,
             MinimumDiscs: resumePlan.MinimumTotalDiscs,
             MaximumDiscs: 99,
@@ -3805,39 +5874,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CoverPreviewSource: CoverPreviewSource,
             CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
             AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
-            KeepAlbumLinkedToTitle: _settings.KeepAlbumLinkedToTitle,
             UsePrivateGenreList: _settings.UsePrivateGenreList,
+            GenreOptions: GenreListService.GetGenres(_settings),
             SourceFolder: sourceFolder,
             MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
-            LastCoverFolder: ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind.Mp3Disc, sourceFolder)));
+            LastCoverFolder: _settings.LastCoverFolder ?? string.Empty));
 
         SetMetadataEditingAvailable(true);
-        var startProject = setupDialog.ShowDialog() == true;
+        var startProject = ModalDialogService.ShowDialog(setupDialog, this) == true;
+        FlushProjectSetupDiscCountPreviewRefresh();
         var setup = setupDialog.Result;
         ApplyDiscProjectSetup(setup);
         if (!startProject)
             return;
 
-        _mp3DiscProjectService.UpdateResumeDiscPlan(manifest, setup.TotalDiscs, sourceFolder);
+        _services.Foundation.Mp3DiscProjectService.UpdateResumeDiscPlan(manifest, setup.TotalDiscs, sourceFolder);
         SaveCurrentMp3DiscProjectSnapshot(manifest);
 
-        resumePlan = _mp3DiscProjectService.BuildResumePlan(manifest);
+        resumePlan = _services.Foundation.Mp3DiscProjectService.BuildResumePlan(manifest);
 
         if (resumePlan.NextMissingDiscNumber is null)
         {
             if (!await PrepareCompletedMp3DiscProjectForCurrentPresetAsync(manifest.ProjectFolder))
                 return;
 
-            _loadedResumeProjectNeedsDiscImport = false;
-            _loadedResumeProjectIsMp3Disc = true;
+            ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+            ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
             OnPropertyChanged(nameof(CanStartExport));
             OnPropertyChanged(nameof(ExportButtonText));
+            OnPropertyChanged(nameof(ExportButtonVisibility));
             RefreshResumeProjects(showStatus: false);
             await RunCurrentExportPlanAsync(manifest.ProjectFolder, ProjectManifestTypes.Mp3DiscProject);
             return;
         }
 
-        _loadedResumeProjectNeedsDiscImport = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(true));
         NotifyExportUiStateChanged();
 
         await ImportMp3DiscProjectAsync(
@@ -3846,7 +5917,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             manifest,
             startDiscNumber: resumePlan.NextMissingDiscNumber.Value,
             firstDiscAlreadyReady: false,
-            autoExportWhenComplete: false);
+            autoExportWhenComplete: true);
     }
 
     private async Task<bool> ImportMp3DiscProjectAsync(
@@ -3856,12 +5927,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int startDiscNumber,
         bool firstDiscAlreadyReady,
         bool autoExportWhenComplete,
-        bool? pauseBeforeMergeOverride = null,
         ProjectExtensionRollbackSnapshot? extensionSnapshot = null,
         ProjectPipelineState? extensionReturnState = null,
         bool extensionReturnCompletedState = false,
-        bool isDeveloperShortTest = false,
-        string? expectedFirstDiscSignature = null)
+        bool startWithSelectedDrive = false)
     {
         var totalDiscs = projectManifest.TotalDiscs;
         _currentProjectWorkFolder = projectFolder;
@@ -3870,16 +5939,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Sobald ein MP3-CD-Projekt angelegt wurde, muss seine Identität auch nach
         // automatischem Import und Export in der aktuellen Sitzung erhalten bleiben.
         // Andernfalls würde ein anschließender Presetwechsel den lokalen Projektpfad verwenden.
-        _loadedResumeProjectIsMp3Disc = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
         NotifyExportUiStateChanged();
 
         var livePreset = ExportPreset.Parse(SelectedExportPreset);
         var liveConvertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectFolder, livePreset.GetFolderName());
         Directory.CreateDirectory(liveConvertedFolder);
-        _convertedFileCleanupService.DeletePartFiles(projectFolder);
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
 
-        var liveConversionQueue = new LiveConversionQueueService();
+        var liveConversionQueue = _services.Pipeline.LiveConversionQueueFactory();
+        var mp3RequestedParallelJobs = ParallelJobsInput;
         using var liveConversionSemaphore = new SemaphoreSlim(liveConversionQueue.GetLiveWorkerLimit(ParallelJobsInput));
+        var mp3EffectiveWorkerLimit = liveConversionSemaphore.CurrentCount;
         var liveConversionTasks = new List<Task>();
         var liveConversionTasksLock = new object();
         var extensionGeneratedConvertedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -3892,7 +5963,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var activeConversionTrackNumbers = new HashSet<int>();
         var activeConversionTrackNumbersLock = new object();
         var mp3StatusProgressLock = new object();
-        var totalCopiedFiles = _mp3DiscImportWorkflowService.CountCompletedCopiedFiles(projectManifest);
+        var totalCopiedFiles = _services.Workflows.Mp3DiscImportWorkflowService.CountCompletedCopiedFiles(projectManifest);
         var latestStatusDiscNumber = startDiscNumber;
         var latestCopiedBeforeCurrentDisc = totalCopiedFiles;
         var latestCopiedCurrentDisc = 0;
@@ -3901,16 +5972,111 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var latestAllDiscsFinished = false;
         var workflowOperationId = BeginWorkflowStatusOperation(projectFolder);
 
-        var workManifest = _workManifestService.LoadOrCreate(
-            ProjectFolderLayout.ResolveWorkManifestPath(projectFolder),
+        var mp3PerformanceApp = Application.Current as App;
+        PerformanceOperationScope activeMp3DiscPerformanceScope = default;
+        PerformancePhaseScope activeMp3DiscPerformancePhase = default;
+
+        void CompleteActiveMp3PerformancePhase()
+        {
+            activeMp3DiscPerformancePhase.Complete();
+            activeMp3DiscPerformancePhase = default;
+        }
+
+        void StartActiveMp3PerformancePhase(string phaseName)
+        {
+            CompleteActiveMp3PerformancePhase();
+            if (mp3PerformanceApp is null || !activeMp3DiscPerformanceScope.IsActive)
+                return;
+
+            activeMp3DiscPerformancePhase = mp3PerformanceApp.StartPerformancePhase(
+                activeMp3DiscPerformanceScope.OperationId,
+                phaseName);
+        }
+
+        void CompleteActiveMp3PerformanceOperation()
+        {
+            CompleteActiveMp3PerformancePhase();
+            activeMp3DiscPerformanceScope.Complete();
+            activeMp3DiscPerformanceScope = default;
+            mp3PerformanceApp?.TryFinalizeDisabledPerformanceSession();
+        }
+
+        void CancelActiveMp3PerformanceOperation()
+        {
+            activeMp3DiscPerformancePhase.Cancel(_presentationState.PauseRequested);
+            activeMp3DiscPerformancePhase = default;
+            activeMp3DiscPerformanceScope.Cancel(_presentationState.PauseRequested);
+            activeMp3DiscPerformanceScope = default;
+            mp3PerformanceApp?.TryFinalizeDisabledPerformanceSession();
+        }
+
+        string ImportCancellationReason() => _presentationState.PauseRequested
+            ? LocalizationText.Get("MainWindow.Status.Paused")
+            : "Benutzerabbruch";
+
+        void FailActiveMp3PerformanceOperation(Exception exception)
+        {
+            activeMp3DiscPerformancePhase.Fail(exception);
+            activeMp3DiscPerformancePhase = default;
+            activeMp3DiscPerformanceScope.Fail(exception);
+            activeMp3DiscPerformanceScope = default;
+            mp3PerformanceApp?.TryFinalizeDisabledPerformanceSession();
+        }
+
+        void StartMp3DiscPerformanceOperation(string sourcePath)
+        {
+            if (mp3PerformanceApp is null || activeMp3DiscPerformanceScope.IsActive)
+                return;
+
+            activeMp3DiscPerformanceScope = mp3PerformanceApp.StartPerformanceOperation(
+                "disc.mp3.import",
+                PerformanceProjectType.Mp3Disc,
+                new PerformanceWorkloadSnapshot
+                {
+                    ProjectType = PerformanceProjectType.Mp3Disc,
+                    DiscCount = 1
+                });
+
+            if (!activeMp3DiscPerformanceScope.IsActive)
+                return;
+
+            mp3PerformanceApp.PerformanceTraceService?.RecordParallelism(
+                activeMp3DiscPerformanceScope.OperationId, mp3RequestedParallelJobs, mp3EffectiveWorkerLimit);
+
+            mp3PerformanceApp.RecordPerformanceDriveRole(
+                activeMp3DiscPerformanceScope.OperationId,
+                sourcePath,
+                PerformanceDriveRole.Source | PerformanceDriveRole.OpticalSource);
+            mp3PerformanceApp.RecordPerformanceDriveRole(
+                activeMp3DiscPerformanceScope.OperationId,
+                projectFolder,
+                PerformanceDriveRole.ProjectWorking);
+            var performanceOutputFolder = EffectiveOutputFolder;
+            if (!string.IsNullOrWhiteSpace(performanceOutputFolder))
+            {
+                mp3PerformanceApp.RecordPerformanceDriveRole(
+                    activeMp3DiscPerformanceScope.OperationId,
+                    performanceOutputFolder,
+                    PerformanceDriveRole.Output);
+            }
+
+            StartActiveMp3PerformancePhase("disc.scan");
+        }
+
+        var workManifest = _services.Foundation.WorkManifestService.LoadOrCreate(
+            ProjectFolderLayout.ResolveExportManifestPath(projectFolder),
             ProjectManifestTypes.Mp3DiscProject,
             projectFolder,
             ProjectFolderLayout.GetOriginalsFolder(projectFolder),
             livePreset.DisplayName);
-        var existingConvertedCount = Math.Max(
-            _workManifestService.CountReusableConvertedTracks(workManifest, livePreset),
-            DeveloperMp3DiscTestProjectService.CountReusablePreparedConvertedFiles(projectFolder, livePreset));
-        var importedDiscSignatures = _mp3DiscImportWorkflowService.BuildCompletedDiscSignatureSet(projectManifest);
+        var existingConvertedCount = _services.Foundation.WorkManifestService.CountReusableConvertedTracks(workManifest, livePreset);
+        var liveWorkManifestLock = new object();
+        await using var preparedLifecycle = new PreparedTrackLifecycleSession(
+            _services.Foundation.WorkManifestService, _services.Workflows.AacExportProcessingService,
+            workManifest, ProjectFolderLayout.ResolveExportManifestPath(projectFolder), liveWorkManifestLock,
+            _ffmpegStatus.FfprobePath ?? "", liveConversionQueue.GetLiveWorkerLimit(ParallelJobsInput));
+
+        var importedDiscSignatures = _services.Workflows.Mp3DiscImportWorkflowService.BuildCompletedDiscSignatureSet(projectManifest);
 
         RefreshExistingMp3DiscTrackStateBeforeImport(
             projectFolder,
@@ -3922,22 +6088,45 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         IsDiscImporting = true;
         _activeMp3DiscManifest = projectManifest;
         _discImportCancellation = new CancellationTokenSource();
+        var importSourcesCompleted = false;
+
+        void CompleteMp3ImportLifecycle()
+        {
+            _discImportCancellation?.Dispose();
+            _discImportCancellation = null;
+            _activeMp3DiscManifest = null;
+            IsDiscImporting = false;
+            IsBusy = false;
+            _trackStateUpdateQueueService.RequestRefresh();
+            NotifyExportUiStateChanged();
+        }
+
+        preparedLifecycle.QueuePreset(livePreset, _discImportCancellation.Token);
 
         async Task<bool> HandleImportCancellationAsync(string progressText, bool cleanupPartFiles = false)
         {
             Interlocked.Exchange(ref _mp3DiscBackgroundPresetPreparationActive, 0);
-            await LiveConversionWorkflowService.WaitForTasksAsync(
-                liveConversionTasks,
-                liveConversionTasksLock,
-                () => SaveCurrentMp3DiscProjectSnapshot(projectManifest),
-                ProjectSnapshotInterval);
+            try
+            {
+                await LiveConversionWorkflowService.WaitForTasksAsync(
+                    liveConversionTasks,
+                    liveConversionTasksLock,
+                    () => SaveCurrentMp3DiscProjectSnapshot(projectManifest),
+                    ProjectSnapshotInterval);
+            }
+            catch (OperationCanceledException) when (_discImportCancellation?.IsCancellationRequested == true)
+            {
+                // WhenAll has finished every producer, including canceled background jobs.
+            }
+
+            await preparedLifecycle.DrainAsync();
 
             if (extensionSnapshot is null)
             {
-                var last = _workflowStatusCoordinator.Snapshot;
+                var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
                 PublishWorkflowStatus(workflowOperationId, last with { IsPaused = true });
                 EndWorkflowStatusOperation(workflowOperationId);
-                CancelMp3DiscImportAndShowResumeDialog(
+                await CancelMp3DiscImportAndShowResumeDialogAsync(
                     projectManifest,
                     progressText,
                     cleanupPartFiles,
@@ -3945,10 +6134,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return true;
             }
 
-            if (_pauseRequested)
+            if (_presentationState.PauseRequested)
             {
-                _convertedFileCleanupService.DeletePartFiles(projectFolder);
-                var last = _workflowStatusCoordinator.Snapshot;
+                _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
+                var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
                 PublishWorkflowStatus(workflowOperationId, last with { IsPaused = true });
                 EndWorkflowStatusOperation(workflowOperationId);
                 EnterPipelinePause(string.Empty, preserveWorkflowStatus: true);
@@ -3961,18 +6150,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 generatedConvertedFiles = extensionGeneratedConvertedFiles.ToArray();
             }
 
-            _projectExtensionRollbackService.Rollback(extensionSnapshot, generatedConvertedFiles);
+            _services.Pipeline.ProjectExtensionRollbackService.Rollback(extensionSnapshot, generatedConvertedFiles);
+            ReloadCanonicalMetadataSessionAfterRollback(projectFolder);
             ClearProjectExtensionPauseContext();
-            _convertedFileCleanupService.DeletePartFiles(projectFolder);
+            _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
             RefreshLoadedProjectTrackStateFromPersistedProject(projectFolder);
 
-            _loadedResumeProjectNeedsDiscImport = false;
-            _loadedResumeProjectIsMp3Disc = true;
-            _isCurrentProjectCompleted = extensionReturnCompletedState;
-            _isWaitingForManualMergeReview = extensionReturnState == ProjectPipelineState.ReviewBeforeMerge;
-            SetPipelineState(extensionReturnState ?? ProjectPipelineState.ReviewBeforeMerge);
-            StatusText = "Hinzufügen weiterer CDs wurde abgebrochen. Das bisherige Projekt blieb unverändert.";
-            ExportProgressText = "Neu hinzugefügte Dateien und Konvertierungen wurden entfernt.";
+            ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+            ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
+            _projectReviewState = ProjectReviewState.WithCompletion(extensionReturnCompletedState);
+            _projectReviewState = ProjectReviewState.WithManualMergeReview(extensionReturnState == ProjectPipelineState.ReviewBeforeMerge);
+            _projectReviewState = ProjectReviewState.WithPhase(extensionReturnState ?? ProjectPipelineState.ReviewBeforeMerge);
+            StatusText = LocalizationText.Get("Disc.AddMore.CanceledStatus");
+            ExportProgressText = LocalizationText.Get("Disc.AddMore.CanceledProgress");
             NotifyExportUiStateChanged();
             RefreshResumeProjects(showStatus: false);
 
@@ -3980,11 +6170,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Info(
                     this,
-                    "Erweiterung abgebrochen",
-                    "Das Hinzufügen weiterer CDs wurde abgebrochen.\n\n" +
-                    "Alle Dateien und Konvertierungen dieses Erweiterungsversuchs wurden entfernt. " +
-                    "Das zuvor vollständige Projekt steht weiterhin unverändert zur Verfügung.",
-                    title: "Erweiterung abgebrochen");
+                    LocalizationText.Get("Disc.AddMore.CanceledTitle"),
+                    LocalizationText.Get("Disc.AddMore.CanceledMessage"),
+                    title: LocalizationText.Get("Disc.AddMore.CanceledTitle"));
             }
 
             return true;
@@ -4060,7 +6248,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                 PublishWorkflowStatus(
                     workflowOperationId,
-                    _mp3DiscWorkflowStatusAdapter.CreateRunningSnapshot(
+                    _services.Status.Mp3DiscWorkflowStatusAdapter.CreateRunningSnapshot(
                         projectFolder,
                         ProjectPipelineState.AcquiringSources,
                         statusDiscNumber,
@@ -4075,7 +6263,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         isExtension: extensionSnapshot is not null,
                         isPaused: isPaused,
                         currentDiscFinished: statusCurrentDiscFinished,
-                        allDiscsFinished: statusAllDiscsFinished));
+                        allDiscsFinished: statusAllDiscsFinished,
+                        driveDisplayName: DiscDriveSelectionPresentationService.FormatStatusDriveLabel(sourceFolder, _settings.DiscDriveOrder)));
             }
 
             for (var discNumber = startDiscNumber; discNumber <= totalDiscs; discNumber++)
@@ -4086,29 +6275,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (token.IsCancellationRequested)
                 {
                     return await HandleImportCancellationAsync(
-                        $"Benutzerabbruch: {totalCopiedFiles} Datei(en) kopiert");
+                        $"{ImportCancellationReason()}: {totalCopiedFiles} Datei(en) kopiert");
                 }
 
                 var shouldWaitForDisc = discNumber != startDiscNumber || !firstDiscAlreadyReady;
+                var acceptDuplicateForCurrentDisc = false;
+                if (discNumber == startDiscNumber && _resumeDiscPreview.Mp3Disc?.DiscNumber == discNumber)
+                {
+                    var current = await Task.Run(() => _services.Workflows.Mp3DiscImportWorkflowService
+                        .AnalyzeDiscForImport(sourceFolder, importedDiscSignatures, token), token);
+                    if (_resumeDiscPreview.CanResumeMp3Import(discNumber, current.Signature))
+                    {
+                        shouldWaitForDisc = false;
+                        acceptDuplicateForCurrentDisc = _resumeDiscPreview.Mp3DuplicateAccepted;
+                    }
+                    else if (current.Analysis.IsSupportedDataDisc)
+                        DiscardChangedResumeDiscPreview(discNumber);
+                }
                 if (shouldWaitForDisc)
                 {
-                    if (!isDeveloperShortTest)
-                    {
-                        Interlocked.Exchange(ref _mp3DiscBackgroundPresetPreparationActive, 1);
-                        StartBackgroundMp3DiscPresetPreparation(
-                            projectFolder,
-                            livePreset,
-                            liveConvertedFolder,
-                            liveConversionSemaphore,
-                            liveConversionTasks,
-                            liveConversionTasksLock,
-                            () => Interlocked.Increment(ref backgroundPreparedCount),
-                            () => Interlocked.Increment(ref backgroundFailedCount),
-                            token);
-                    }
+                    Interlocked.Exchange(ref _mp3DiscBackgroundPresetPreparationActive, 1);
+                    StartBackgroundMp3DiscPresetPreparation(
+                        projectFolder,
+                        livePreset,
+                        liveConvertedFolder,
+                        liveConversionSemaphore,
+                        liveConversionTasks,
+                        liveConversionTasksLock,
+                        () => Interlocked.Increment(ref backgroundPreparedCount),
+                        () => Interlocked.Increment(ref backgroundFailedCount),
+                        token,
+                        item => RegisterPreparedMp3Track(preparedLifecycle,
+                            item.Index, item.Track, item.SourcePath, item.ConvertedPath, livePreset, token),
+                        preparedLifecycle);
 
                     PublishMp3Status(
-                        discNumber,
+                        discNumber - 1,
                         copiedBeforeCurrentDisc: totalCopiedFiles,
                         copiedCurrentDisc: 0,
                         totalCurrentDisc: 0,
@@ -4122,8 +6324,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         totalDiscs,
                         importedDiscSignatures,
                         token,
-                        discNumber == startDiscNumber ? expectedFirstDiscSignature : null,
-                        acceptedSource => selectedSourceFolder = acceptedSource);
+                        acceptedSource =>
+                        {
+                            selectedSourceFolder = acceptedSource;
+                            // Keep an accepted, uncommitted source across Pause/Continue.
+                            // It is not yet the last completed drive in the rotation.
+                            _resumeDiscStartDriveRoot = acceptedSource;
+                        },
+                        startWithSelectedDrive: startWithSelectedDrive && discNumber == startDiscNumber);
+                    token.ThrowIfCancellationRequested();
                     sourceFolder = selectedSourceFolder;
                     projectManifest.SourceFolder = sourceFolder;
                     _settings.LastDiscSourceFolder = sourceFolder;
@@ -4131,15 +6340,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Interlocked.Exchange(ref _mp3DiscBackgroundPresetPreparationActive, 0);
                     if (waitOutcome == DiscWaitDialogOutcome.Deferred)
                     {
-                        _pauseRequested = true;
+                        ApplyPipelinePauseRequest();
                         return await HandleImportCancellationAsync(
                             $"Projekt pausiert • MP3-CD {discNumber} von {totalDiscs} ausstehend");
                     }
+                    if (waitOutcome == DiscWaitDialogOutcome.ImportCompleted)
+                    {
+                        DiscardChangedResumeDiscPreview(discNumber);
+                        _services.Foundation.Mp3DiscProjectService.CompleteDiscImportEarly(projectManifest);
+                        totalDiscs = projectManifest.TotalDiscs;
+                        SaveCurrentMp3DiscProjectSnapshot(projectManifest);
+                        break;
+                    }
+                    acceptDuplicateForCurrentDisc = waitOutcome == DiscWaitDialogOutcome.ReadyWithDuplicateOverride;
 
                     try
                     {
-                        AppendDiscPreviewTracks(sourceFolder, discNumber, clearExistingTracks: false);
-                        TracksGrid.Items.Refresh();
+                        var previewTracks = await _services.Media.FolderScanner.ScanAsync(
+                            sourceFolder, TrackNumberPreference.FileName, cancellationToken: token);
+                        token.ThrowIfCancellationRequested();
+                        AppendDiscPreviewTracks(
+                            previewTracks,
+                            sourceFolder,
+                            discNumber,
+                            clearExistingTracks: false,
+                            refreshChapterProjection: false);
+                        RefreshTrackPresentationViews();
                         NotifyExportUiStateChanged();
                         OnExportPreviewChanged();
                         await Dispatcher.Yield(DispatcherPriority.Background);
@@ -4152,6 +6378,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             allDiscsFinished: false);
                         AutoFitTrackColumnsAfterRender();
                     }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         ShowMp3DiscAnalysisFailed(discNumber, ex);
@@ -4159,6 +6389,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                 }
 
+                StartMp3DiscPerformanceOperation(sourceFolder);
                 var totalFilesOnDisc = 0;
 
                 using var progress = new DispatcherCoalescingProgress<DiscCopyProgress>(
@@ -4176,6 +6407,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var copiedFileProgress = new InlineProgress<DiscCopiedFile>(copiedFile =>
                     QueueLiveConversionForCopiedFile(
                         copiedFile,
+                        projectFolder,
+                        workManifest,
+                        liveWorkManifestLock,
+                        preparedLifecycle,
                         livePreset,
                         liveConvertedFolder,
                         discNumber,
@@ -4203,7 +6438,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         () => PublishMp3Status(),
                         token));
 
-                var importResult = await _mp3DiscImportWorkflowService.ImportDiscAsync(
+                var importResult = await _services.Workflows.Mp3DiscImportWorkflowService.ImportDiscAsync(
                     sourceFolder,
                     projectFolder,
                     projectManifest,
@@ -4214,7 +6449,65 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     copiedFileProgress,
                     onReadyToCopy: precheck =>
                     {
+                        if (_resumeDiscPreview.DiscNumber == discNumber &&
+                            !_resumeDiscPreview.MatchesMp3(discNumber, precheck.Signature))
+                            DiscardChangedResumeDiscPreview(discNumber);
+                        _resumeDiscPreview.Set(new Mp3DiscPendingChapterDisc(
+                            discNumber, precheck.Signature, precheck.PlannedSources), acceptDuplicateForCurrentDisc);
+                        _resumeDiscPreview.MarkProcessingStarted();
+                        PersistTrackListState();
+                        _resumeDiscStartDriveRoot = sourceFolder;
+                        // The disc is now accepted for import. Stage its stable source identities in
+                        // the runtime chapter catalog before copy/conversion starts. Nothing is
+                        // persisted merely by selecting or analyzing a disc.
+                        _mp3DiscChapterSourceCatalog.Stage(
+                            discNumber,
+                            precheck.Signature,
+                            precheck.PlannedSources);
+                        if (_transientMp3DiscChapterPreview?.DiscNumber == discNumber)
+                            _transientMp3DiscChapterPreview = null;
+
+                        _services.Discs.Mp3DiscTrackReconciliationService.ApplyPlannedSourceIds(
+                            Tracks,
+                            sourceFolder,
+                            discNumber,
+                            precheck.PlannedSources);
+
+                        var previewTracks = _services.Discs.Mp3DiscTrackReconciliationService.CreatePreviewTracksFromKnownFiles(
+                            sourceFolder,
+                            precheck.Analysis.SupportedAudioFiles);
+                        _services.Discs.Mp3DiscTrackReconciliationService.NormalizeProjectDiscNumber(
+                            previewTracks,
+                            discNumber);
+
+                        _services.Discs.Mp3DiscTrackReconciliationService.ApplyPlannedSourceIds(
+                            previewTracks,
+                            sourceFolder,
+                            discNumber,
+                            precheck.PlannedSources);
+
+                        AppendDiscPreviewTracks(
+                            previewTracks,
+                            sourceFolder,
+                            discNumber,
+                            clearExistingTracks: false,
+                            refreshChapterProjection: true);
+                        RefreshTrackPresentationViews();
+                        AutoFitTrackColumnsAfterRender();
+                        NotifyExportUiStateChanged();
+                        CompleteActiveMp3PerformancePhase();
+                        StartActiveMp3PerformancePhase("file.copy");
                         totalFilesOnDisc = precheck.TotalFiles;
+                        if (activeMp3DiscPerformanceScope.IsActive && mp3PerformanceApp is not null)
+                        {
+                            try
+                            {
+                                mp3PerformanceApp.UpdatePerformanceWorkload(
+                                    activeMp3DiscPerformanceScope.OperationId,
+                                    precheck.CreatePerformanceWorkload(previewTracks.Count));
+                            }
+                            catch { /* Workload evidence must never affect copying. */ }
+                        }
                         PublishMp3Status(
                             discNumber,
                             copiedBeforeCurrentDisc: totalCopiedFiles,
@@ -4223,12 +6516,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             currentDiscFinished: false,
                             allDiscsFinished: false);
                     },
-                    token);
+                    token,
+                    acceptDuplicateForCurrentDisc,
+                    preparedDisc: _resumeDiscPreview.Mp3Disc,
+                    sourceReadStarted: source => PublishDiscReadSource(source, projectFolder, token));
 
                 progress.Flush();
 
                 if (importResult.IsAlreadyImported)
                 {
+                    CompleteActiveMp3PerformancePhase();
+                    activeMp3DiscPerformanceScope.Cancel();
+                    activeMp3DiscPerformanceScope = default;
+                    mp3PerformanceApp?.TryFinalizeDisabledPerformanceSession();
                     ShowAlreadyImportedMp3DiscWarning(discNumber, totalDiscs);
                     if (extensionSnapshot is not null)
                         return await HandleImportCancellationAsync("Bereits importierte CD erkannt.");
@@ -4237,6 +6537,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                 if (importResult.WasCanceled)
                 {
+                    CancelActiveMp3PerformanceOperation();
                     PublishMp3Status(
                         discNumber,
                         copiedBeforeCurrentDisc: totalCopiedFiles,
@@ -4244,10 +6545,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         totalCurrentDisc: totalFilesOnDisc,
                         isPaused: true);
                     return await HandleImportCancellationAsync(
-                        $"Benutzerabbruch: {importResult.CopiedFiles}/{totalFilesOnDisc} auf CD {discNumber} kopiert");
+                        $"{ImportCancellationReason()}: {importResult.CopiedFiles}/{totalFilesOnDisc} auf CD {discNumber} kopiert");
                 }
 
+                CompleteActiveMp3PerformancePhase();
+                // ImportDiscAsync has already committed the same planned SourceIds into the
+                // completed manifest. From here on the persisted manifest is authoritative.
+                if (_resumeDiscPreview.DiscNumber == discNumber) _resumeDiscPreview.Clear();
+                _mp3DiscChapterSourceCatalog.Remove(discNumber);
                 SaveCurrentMp3DiscProjectSnapshot(projectManifest);
+                ApplySourceMetadataAggregation(
+                    projectFolder,
+                    discNumber == 1
+                        ? ProjectMetadataInitializationState.InitialSetComplete
+                        : ProjectMetadataInitializationState.SubsequentSource,
+                    CreateMp3DiscProjectAggregationOptions());
 
                 PublishMp3Status(
                     discNumber,
@@ -4257,29 +6569,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     currentDiscFinished: discNumber < totalDiscs,
                     allDiscsFinished: discNumber >= totalDiscs);
 
+                // ImportDiscAsync has committed this disc. Only now may the round
+                // advance beyond its source, including when Pause follows eject.
+                _resumeDiscStartDriveRoot = null;
                 totalCopiedFiles += importResult.CopiedFiles;
 
-                await RefreshMp3DiscTrackListAfterDiscImportAsync(projectFolder, sourceFolder);
+                await RefreshMp3DiscTrackListAfterDiscImportAsync(
+                    projectFolder,
+                    sourceFolder,
+                    projectManifest,
+                    activeMp3DiscPerformanceScope.OperationId,
+                    importResult.ImportResult?.ImportedFolder);
+
+                if (activeMp3DiscPerformanceScope.IsActive && mp3PerformanceApp is not null)
+                {
+                    mp3PerformanceApp.UpdatePerformanceWorkload(
+                        activeMp3DiscPerformanceScope.OperationId,
+                        CreateMp3DiscPerformanceWorkload(discNumber, totalFilesOnDisc));
+                }
+
                 UpdateMp3DiscImportContinuationState(discNumber, totalDiscs);
-                WarnIfMp3DiscEjectFailed(sourceFolder, discNumber, totalDiscs);
                 if (discNumber < totalDiscs)
-                    _notificationService.Notify(NotificationEvent.DiscChangeRequired);
+                    CompleteActiveMp3PerformanceOperation();
+
+                await WarnIfMp3DiscEjectFailedAsync(sourceFolder, discNumber, totalDiscs);
             }
+            importSourcesCompleted = true;
         }
         catch (OperationCanceledException)
         {
+            CancelActiveMp3PerformanceOperation();
             return await HandleImportCancellationAsync(
-                $"Benutzerabbruch: {totalCopiedFiles} Datei(en) kopiert",
+                $"{ImportCancellationReason()}: {totalCopiedFiles} Datei(en) kopiert",
                 cleanupPartFiles: true);
         }
         catch (Exception) when (_discImportCancellation?.IsCancellationRequested == true)
         {
+            CancelActiveMp3PerformanceOperation();
             return await HandleImportCancellationAsync(
-                $"Benutzerabbruch: {totalCopiedFiles} Datei(en) kopiert",
+                $"{ImportCancellationReason()}: {totalCopiedFiles} Datei(en) kopiert",
                 cleanupPartFiles: true);
         }
         catch (Exception ex)
         {
+            FailActiveMp3PerformanceOperation(ex);
             MarkMp3DiscImportFailed(projectManifest, projectFolder, ex);
             return false;
         }
@@ -4289,42 +6622,104 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (_isShutdownInProgress)
                 TrySaveCurrentMp3DiscProjectSnapshot(projectManifest);
 
-            _discImportCancellation?.Dispose();
-            _discImportCancellation = null;
-            _activeMp3DiscManifest = null;
-            IsDiscImporting = false;
-            IsBusy = false;
-            _trackStateUpdateQueueService.RequestRefresh();
+            if (!importSourcesCompleted)
+            {
+                _discImportCancellation?.Cancel();
+                try
+                {
+                    await LiveConversionWorkflowService.WaitForTasksAsync(liveConversionTasks, liveConversionTasksLock);
+                    lock (liveWorkManifestLock)
+                        _services.Foundation.WorkManifestService.Save(
+                            ProjectFolderLayout.ResolveExportManifestPath(projectFolder), workManifest);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _runtimeServices.DiagnosticLogService.WriteError("MP3 cache checkpoint after cancellation failed", ex);
+                }
+                finally { await preparedLifecycle.DrainAsync(); CompleteMp3ImportLifecycle(); }
+            }
         }
 
-        await WaitForLiveMp3DiscPreparationAsync(
-            projectManifest,
-            projectFolder,
-            liveConversionTasks,
-            liveConversionTasksLock);
-
-        if (!isDeveloperShortTest &&
-            !await PrepareCompletedMp3DiscProjectForCurrentPresetAsync(projectFolder))
+        try
         {
-            return false;
+            StartActiveMp3PerformancePhase("preset.prepare");
+
+            await WaitForLiveMp3DiscPreparationAsync(
+                projectManifest,
+                projectFolder,
+                liveConversionTasks,
+                liveConversionTasksLock);
+
+            await preparedLifecycle.DrainAsync();
+            lock (liveWorkManifestLock)
+                _services.Foundation.WorkManifestService.Save(
+                    ProjectFolderLayout.ResolveExportManifestPath(projectFolder), workManifest);
+            if (_discImportCancellation?.IsCancellationRequested == true)
+            {
+                CancelActiveMp3PerformanceOperation();
+                return await HandleImportCancellationAsync(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+            }
+            CompleteMp3ImportLifecycle();
+
+            Guid? presetPreparationPhaseId = activeMp3DiscPerformancePhase.IsActive
+                ? activeMp3DiscPerformancePhase.PhaseId
+                : null;
+            var presetPreparationPerformanceContext =
+                activeMp3DiscPerformanceScope.IsActive && mp3PerformanceApp is not null
+                    ? mp3PerformanceApp.CreatePerformanceExternalProcessContext(
+                        activeMp3DiscPerformanceScope.OperationId,
+                        presetPreparationPhaseId,
+                        "preset.prepare")
+                    : null;
+
+            if (!await PrepareCompletedMp3DiscProjectForCurrentPresetAsync(
+                    projectFolder,
+                    presetPreparationPerformanceContext))
+            {
+                var performanceFailure = new InvalidOperationException(
+                    "MP3 preset preparation did not complete successfully.");
+                FailActiveMp3PerformanceOperation(performanceFailure);
+                return false;
+            }
+
+            CompleteActiveMp3PerformanceOperation();
+        }
+        catch (OperationCanceledException)
+        {
+            CancelActiveMp3PerformanceOperation();
+            if (_discImportCancellation?.IsCancellationRequested == true)
+                return await HandleImportCancellationAsync(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            FailActiveMp3PerformanceOperation(ex);
+            throw;
+        }
+        finally
+        {
+            if (_discImportCancellation is not null)
+                CompleteMp3ImportLifecycle();
         }
 
-        _convertedFileCleanupService.DeletePartFiles(projectFolder);
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
         if (autoExportWhenComplete)
         {
             EndWorkflowStatusOperation(workflowOperationId);
-            await RunFinalMp3DiscExportAsync(projectFolder, pauseBeforeMergeOverride);
+            await RunFinalMp3DiscExportAsync(projectFolder);
             return false;
         }
 
         SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
-        _isWaitingForManualMergeReview = true;
-        _isCurrentProjectCompleted = false;
-        _loadedResumeProjectNeedsDiscImport = false;
-        _loadedResumeProjectIsMp3Disc = true;
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(true);
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
         PublishWorkflowStatus(
             workflowOperationId,
-            _mp3DiscWorkflowStatusAdapter.CreateReadySnapshot(
+            _services.Status.Mp3DiscWorkflowStatusAdapter.CreateReadySnapshot(
                 projectFolder,
                 totalDiscs,
                 Tracks.Count,
@@ -4348,7 +6743,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             () => SaveCurrentMp3DiscProjectSnapshot(manifest),
             ProjectSnapshotInterval);
 
-        _convertedFileCleanupService.DeletePartFiles(projectFolder);
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
     }
 
     private void ApplyMp3DiscUiStatus(Mp3DiscUiStatus status)
@@ -4360,17 +6755,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ExportProgressPercent = status.ExportProgressPercent.Value;
     }
 
-    private async Task RunFinalMp3DiscExportAsync(string projectFolder, bool? pauseBeforeMergeOverride)
+    private async Task RunFinalMp3DiscExportAsync(string projectFolder)
     {
-        _pauseBeforeMergeOverride = pauseBeforeMergeOverride;
-        try
-        {
-            await RunCurrentExportPlanAsync(projectFolder, ProjectManifestTypes.Mp3DiscProject);
-        }
-        finally
-        {
-            _pauseBeforeMergeOverride = null;
-        }
+        await RunCurrentExportPlanAsync(projectFolder, ProjectManifestTypes.Mp3DiscProject,
+            manualMergeRequested: false);
     }
 
     private void RefreshExistingMp3DiscTrackStateBeforeImport(
@@ -4378,7 +6766,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string sourceFolder,
         int totalDiscs)
     {
-        _mp3DiscTrackReconciliationService.ReconcileImportedTrackPathsForExistingDiscs(
+        _services.Discs.Mp3DiscTrackReconciliationService.ReconcileImportedTrackPathsForExistingDiscs(
             Tracks,
             sourceFolder,
             projectFolder,
@@ -4394,15 +6782,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!changed)
             return;
 
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
         UpdateFinalStatus(Tracks.Count);
     }
 
-    private async Task RefreshMp3DiscTrackListAfterDiscImportAsync(string projectFolder, string sourceFolder)
+    private async Task RefreshMp3DiscTrackListAfterDiscImportAsync(
+        string projectFolder,
+        string sourceFolder,
+        Mp3DiscProjectManifest projectManifest,
+        Guid performanceOperationId = default,
+        string? currentImportedFolder = null)
     {
-        var statusText = StatusText;
+        var statusText = _statusText;
         var progressText = ExportProgressText;
         var excludedPaths = new List<string>();
+        var previousTracksByPath = Tracks
+            .Select(track => new
+            {
+                Track = track,
+                Path = GetNormalizedTrackPath(projectFolder, track)
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Path))
+            .GroupBy(item => item.Path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Track,
+                StringComparer.OrdinalIgnoreCase);
 
         SelectedFolder = sourceFolder;
 
@@ -4414,14 +6819,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             trackNumberPreference: TrackNumberPreference.FileName,
             includeFile: path =>
             {
-                var excluded = _trackWorkspaceFilterService.IsMp3DiscGeneratedPath(projectFolder, path);
+                var excluded = _services.Tracks.TrackWorkspaceFilterService.IsMp3DiscGeneratedPath(projectFolder, path);
                 if (excluded)
                     excludedPaths.Add(path);
                 return !excluded;
             },
-            publishWorkflowStatus: false);
+            publishWorkflowStatus: false,
+            performanceOperationId: performanceOperationId,
+            captureMp3RefreshPerformance: performanceOperationId != Guid.Empty,
+            reusableMp3ProbeTracksByPath: previousTracksByPath,
+            currentMp3ImportedFolder: currentImportedFolder,
+            prepareScannedTracksBeforeIndexUpdate: tracks =>
+            {
+                _services.Discs.Mp3DiscTrackReconciliationService.ApplyManifestDiscOrder(
+                    tracks,
+                    projectFolder,
+                    projectManifest);
+                var ordered = _services.Foundation.TrackListStateService.Apply(
+                    projectFolder,
+                    tracks,
+                    TrackOrderProjectType.Mp3Disc,
+                    TrackOrderConfirmedContextFactory.CreateMp3DiscContexts(tracks));
+                tracks.Clear();
+                tracks.AddRange(ordered);
+            });
 
-        _diagnosticLogService.WriteTrackScan(
+        _runtimeServices.DiagnosticLogService.WriteTrackScan(
             "MP3 project refresh after disc import",
             projectFolder,
             Tracks,
@@ -4437,23 +6860,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (discNumber >= totalDiscs)
             return;
 
-        _loadedResumeProjectNeedsDiscImport = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(true));
         NotifyExportUiStateChanged();
     }
 
-    private void WarnIfMp3DiscEjectFailed(string sourceFolder, int discNumber, int totalDiscs)
+    private async Task WarnIfMp3DiscEjectFailedAsync(string sourceFolder, int discNumber, int totalDiscs)
     {
-        var ejected = _discDriveService.TryEjectDisc(sourceFolder);
+        var ejected = await _services.Discs.DiscDriveService.TryEjectDiscAsync(sourceFolder);
         if (ejected)
             return;
 
-        var message = discNumber < totalDiscs
-            ? "BookStitch konnte das CD-Laufwerk nicht automatisch auswerfen.\n\nBitte die aktuelle CD manuell auswerfen und danach die nächste CD einlegen."
-            : "BookStitch konnte das CD-Laufwerk nach der letzten CD nicht automatisch auswerfen.\n\nBitte die CD bei Bedarf manuell auswerfen.";
+        var message = LocalizationText.Get(discNumber < totalDiscs
+            ? "MainWindow.Mp3Disc.EjectFailed.NextDiscMessage"
+            : "MainWindow.Mp3Disc.EjectFailed.LastDiscMessage");
 
         AppDialogService.Warning(
             this,
-            "CD-Laufwerk nicht ausgeworfen",
+            LocalizationText.Get("MainWindow.Mp3Disc.EjectFailed.Title"),
             message);
     }
 
@@ -4461,19 +6884,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         AppDialogService.Error(
             this,
-            $"CD {discNumber} nicht gelesen",
-            "Die Audiodateien auf der eingelegten CD konnten nicht vollständig gelesen werden.",
+            LocalizationText.Format("Disc.Import.ReadFailedTitle", discNumber),
+            LocalizationText.Get("Disc.Import.ReadFailedMessage"),
             details: new[] { ex.Message });
-        ApplyMp3DiscUiStatus(_mp3DiscUiStatusService.CreateAnalysisFailed(discNumber));
+        ApplyMp3DiscUiStatus(_services.Discs.Mp3DiscUiStatusService.CreateAnalysisFailed(discNumber));
     }
 
     private void ShowAlreadyImportedMp3DiscWarning(int discNumber, int totalDiscs)
     {
         AppDialogService.Warning(
             this,
-            $"CD {discNumber} wurde nicht importiert",
-            $"Im Laufwerk liegt offenbar eine CD, die bereits importiert wurde.\n\nBitte CD {discNumber} von {totalDiscs} einlegen und den Import danach erneut starten bzw. fortsetzen.");
-        ApplyMp3DiscUiStatus(_mp3DiscUiStatusService.CreateAlreadyImported(discNumber, totalDiscs));
+            LocalizationText.Format("Disc.Import.DuplicateTitle", discNumber),
+            LocalizationText.Format("Disc.Import.DuplicateMessage", discNumber, totalDiscs));
+        ApplyMp3DiscUiStatus(_services.Discs.Mp3DiscUiStatusService.CreateAlreadyImported(discNumber, totalDiscs));
     }
 
     private void MarkMp3DiscImportFailed(
@@ -4482,20 +6905,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Exception ex)
     {
         TrySaveCurrentMp3DiscProjectSnapshot(manifest);
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
 
-        _convertedFileCleanupService.DeletePartFiles(projectFolder);
+        var failureTransition = _services.Pipeline.PipelinePauseTransitionService.CreateFailure();
+        ApplyPipelineTransition(failureTransition);
+        NotifyExportUiStateChanged();
 
-        _notificationService.Notify(NotificationEvent.Error);
+        _runtimeServices.NotificationService.Notify(NotificationEvent.Error);
         AppDialogService.Error(
             this,
-            "MP3-CD nicht importiert",
-            "Beim Kopieren der MP3-CD in den lokalen Arbeitsordner ist ein Fehler aufgetreten.",
+            LocalizationText.Get("MainWindow.Mp3Disc.ImportFailed.Title"),
+            LocalizationText.Get("MainWindow.Mp3Disc.ImportFailed.Message"),
             details: new[] { ex.Message });
-        ApplyMp3DiscUiStatus(_mp3DiscUiStatusService.CreateImportFailed());
+        ApplyMp3DiscUiStatus(_services.Discs.Mp3DiscUiStatusService.CreateImportFailed());
     }
 
     private void QueueLiveConversionForCopiedFile(
         DiscCopiedFile copiedFile,
+        string projectFolder,
+        ExportWorkManifest workManifest,
+        object liveWorkManifestLock,
+        PreparedTrackLifecycleSession preparedLifecycle,
         ExportPreset livePreset,
         string liveConvertedFolder,
         int discNumber,
@@ -4515,7 +6945,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Action onStatusChanged,
         CancellationToken token)
     {
-        var liveTrack = _mp3DiscPreparationService.BuildLiveConversionTrack(copiedFile);
+        var liveTrack = _services.Discs.Mp3DiscPreparationService.BuildLiveConversionTrack(copiedFile);
+        liveTrack.TargetSampleRateHz = ProjectSampleRateService.ReadTarget(projectFolder);
+        PublishSourceMetadataSnapshot(
+            projectFolder,
+            copiedFile.ImportedFile,
+            liveTrack,
+            evidence: "mp3-disc-copy");
         var convertedPath = ConvertedTrackPathService.GetConvertedTrackPath(liveConvertedFolder, copiedFile.ImportedFile, liveTrack);
 
         lock (extensionGeneratedConvertedFilesLock)
@@ -4557,20 +6993,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             onStatusChanged();
         }
 
-        var conversionTask = _liveConversionWorkflowService.RunAsync(
+        var conversionTask = _services.Workflows.LiveConversionWorkflowService.RunAsync(
             liveTrack,
             queuedItem,
             livePreset,
             liveConversionQueue,
             liveConversionSemaphore,
-            MarkActiveTrack,
+            () =>
+            {
+                preparedLifecycle.MarkStarted(trackNumber - 1, liveTrack, queuedItem.SourcePath, queuedItem.ConvertedPath, livePreset, token);
+                MarkActiveTrack();
+            },
             () =>
             {
                 onCompleted();
                 QueueMp3DiscConvertedTrackUiUpdate(copiedFile, convertedPath, livePreset.DisplayName);
             },
             onFailed,
-            token);
+            token,
+            persistPreparedTrack: () => RegisterPreparedMp3Track(preparedLifecycle, trackNumber - 1, liveTrack,
+                queuedItem.SourcePath, queuedItem.ConvertedPath, livePreset, token));
 
         _ = conversionTask.ContinueWith(
             _ => CompleteActiveTrack(),
@@ -4589,13 +7031,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
-            var track = _mp3DiscTrackReconciliationService.FindTrackForCopiedFile(Tracks, copiedFile);
+            var track = _services.Discs.Mp3DiscTrackReconciliationService.FindTrackForCopiedFile(Tracks, copiedFile);
             if (track is null)
                 return;
 
             track.FilePath = copiedFile.ImportedFile;
             track.FileName = Path.GetFileName(copiedFile.ImportedFile);
-            track.RelativeFolder = _mp3DiscTrackReconciliationService.GetImportedRelativeFolder(copiedFile);
+            track.RelativeFolder = _services.Discs.Mp3DiscTrackReconciliationService.GetImportedRelativeFolder(copiedFile);
+            ApplySourceIdFromCopiedFile(track, copiedFile);
 
             if (File.Exists(copiedFile.ImportedFile))
             {
@@ -4614,7 +7057,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
-            var track = _mp3DiscTrackReconciliationService.FindTrackForCopiedFile(Tracks, copiedFile);
+            var track = _services.Discs.Mp3DiscTrackReconciliationService.FindTrackForCopiedFile(Tracks, copiedFile);
             if (track is null || !File.Exists(convertedPath))
                 return;
 
@@ -4626,12 +7069,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             track.PreparedConvertedPreset = presetName;
             track.HasReusableConvertedFile = true;
             track.ConvertedSizeAvailable = true;
-            track.ConvertedSizeMb = Math.Round(file.Length / 1024d / 1024d, 2);
 
         });
     }
 
-    private async Task<bool> PrepareCompletedMp3DiscProjectForCurrentPresetAsync(string projectFolder)
+    private async Task<bool> PrepareCompletedMp3DiscProjectForCurrentPresetAsync(
+        string projectFolder,
+        PerformanceExternalProcessContext? performanceContext = null)
     {
         if (string.IsNullOrWhiteSpace(projectFolder) || !Directory.Exists(projectFolder) || Tracks.Count == 0)
             return true;
@@ -4645,7 +7089,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 projectFolder,
                 CancellationToken.None,
                 maxParallelOverride: ResolveParallelJobCount(),
-                updateProgress: true);
+                updateProgress: true,
+                performanceContext: performanceContext);
 
             return true;
         }
@@ -4653,17 +7098,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Error(
                 this,
-                "Preset-Vorbereitung fehlgeschlagen",
-                "Bereits importierte Dateien konnten nicht vollständig für das aktuelle Export-Preset vorbereitet werden.",
+                LocalizationText.Get("MainWindow.Preset.PreparationFailed"),
+                LocalizationText.Get("MainWindow.Preset.PreparationFailed.Message"),
                 details: ExportFailureDetailsService.SplitMessageLines(ex.Message));
-            StatusText = "Preset-Vorbereitung fehlgeschlagen.";
-            ExportProgressText = "Projekt ist noch nicht exportbereit.";
+            StatusText = LocalizationText.Get("MainWindow.Preset.PreparationFailed");
+            ExportProgressText = LocalizationText.Get("MainWindow.Preset.NotReady");
             return false;
         }
         finally
         {
             IsBusy = wasBusy;
         }
+    }
+
+    private void RegisterPreparedMp3Track(PreparedTrackLifecycleSession lifecycle,
+        int index, TrackInfo track, string sourcePath, string convertedPath, ExportPreset preset, CancellationToken token)
+    {
+        lifecycle.Complete(index, track, sourcePath, convertedPath, preset, token);
     }
 
     private void StartBackgroundMp3DiscPresetPreparation(
@@ -4675,14 +7126,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         object taskListLock,
         Action onCompleted,
         Action onFailed,
-        CancellationToken token)
+        CancellationToken token,
+        Action<Mp3DiscPresetPreparationItem>? persistPreparedTrack,
+        PreparedTrackLifecycleSession preparedLifecycle)
     {
-        _mp3DiscPresetPreparationWorkflowService.StartBackgroundPreparation(
+        _services.Workflows.Mp3DiscPresetPreparationWorkflowService.StartBackgroundPreparation(
             Tracks,
             projectFolder,
             preset,
             convertedFolder,
-            (sourcePath, convertedPath) => PreparedConvertedTrackReuseService.CanReuseForDiscProject(ProjectManifestTypes.Mp3DiscProject, sourcePath, convertedPath),
+            (sourcePath, convertedPath) => preparedLifecycle.CanReuse(sourcePath, convertedPath, preset),
             sharedSemaphore,
             taskList,
             taskListLock,
@@ -4690,46 +7143,73 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Math.Clamp(ResolveParallelJobCount() / 2, 1, Math.Max(1, ResolveParallelJobCount())),
             onCompleted,
             onFailed,
-            token);
+            token,
+            persistPreparedTrack,
+            item => preparedLifecycle.TryMarkStarted(item.Index, item.Track, item.SourcePath, item.ConvertedPath, preset, token));
     }
 
     private async Task<int> PrepareMissingMp3DiscConvertedTracksForCurrentPresetAsync(
         string projectFolder,
         CancellationToken token,
         int? maxParallelOverride = null,
-        bool updateProgress = false)
+        bool updateProgress = false,
+        PerformanceExternalProcessContext? performanceContext = null)
     {
         var preset = ExportPreset.Parse(SelectedExportPreset);
         var convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectFolder, preset.GetFolderName());
         Directory.CreateDirectory(convertedFolder);
-        _convertedFileCleanupService.DeletePartFiles(convertedFolder);
+        _services.Foundation.ConvertedFileCleanupService.DeleteConvertedPartFiles(convertedFolder);
 
+        var manifest = _services.Foundation.WorkManifestService.LoadOrCreate(
+            ProjectFolderLayout.ResolveExportManifestPath(projectFolder), ProjectManifestTypes.Mp3DiscProject,
+            projectFolder, projectFolder, preset.DisplayName);
+        var manifestLock = new object();
+        await using var preparedLifecycle = new PreparedTrackLifecycleSession(
+            _services.Foundation.WorkManifestService, _services.Workflows.AacExportProcessingService,
+            manifest, ProjectFolderLayout.ResolveExportManifestPath(projectFolder), manifestLock,
+            _ffmpegStatus.FfprobePath ?? "", Math.Clamp(maxParallelOverride ?? ResolveParallelJobCount(), 1, 40));
+        preparedLifecycle.QueuePreset(preset, token);
         try
         {
-            return await _mp3DiscPresetPreparationWorkflowService.PrepareMissingTracksAsync(
+            var prepared = await _services.Workflows.Mp3DiscPresetPreparationWorkflowService.PrepareMissingTracksAsync(
                 Tracks,
                 projectFolder,
                 preset,
                 convertedFolder,
-                (sourcePath, convertedPath) => PreparedConvertedTrackReuseService.CanReuseForDiscProject(ProjectManifestTypes.Mp3DiscProject, sourcePath, convertedPath),
+                (sourcePath, convertedPath) => preparedLifecycle.CanReuse(sourcePath, convertedPath, preset),
                 Math.Clamp(maxParallelOverride ?? ResolveParallelJobCount(), 1, 40),
                 updateProgress
                     ? ReportMp3DiscPresetPreparationProgress
                     : null,
-                token);
+                token,
+                performanceContext,
+                item => RegisterPreparedMp3Track(preparedLifecycle,
+                    item.Index, item.Track, item.SourcePath, item.ConvertedPath, preset, token),
+                item => preparedLifecycle.TryMarkStarted(item.Index, item.Track, item.SourcePath, item.ConvertedPath, preset, token));
+            await preparedLifecycle.DrainAsync();
+            token.ThrowIfCancellationRequested();
+            _services.Foundation.WorkManifestService.Save(
+                ProjectFolderLayout.ResolveExportManifestPath(projectFolder), manifest);
+            return prepared;
         }
         finally
         {
-            _convertedFileCleanupService.DeletePartFiles(convertedFolder);
+            await preparedLifecycle.DrainAsync();
+            _services.Foundation.ConvertedFileCleanupService.DeleteConvertedPartFiles(convertedFolder);
         }
     }
 
     private void ReportMp3DiscPresetPreparationProgress(int completed, int total)
     {
+        var operationId = _workflowStatusOperationId;
+        var projectFolder = _currentProjectWorkFolder;
         Dispatcher.BeginInvoke(() =>
         {
+            if (_presentationState.IsPipelinePaused || _presentationState.IsPipelineFailed ||
+                operationId != _workflowStatusOperationId ||
+                !TrackPathService.PathEquals(projectFolder, _currentProjectWorkFolder)) return;
             var percent = total <= 0 ? 100 : Math.Clamp(completed * 100.0 / total, 0, 100);
-            ApplyWorkflowStatusViewState(_workflowStatusFormatter.Format(
+            ApplyWorkflowStatusViewState(new WorkflowStatusFormatter().Format(
                 CreateExportStatusSnapshot(
                     WorkflowProjectKind.Mp3Disc,
                     _currentProjectWorkFolder,
@@ -4747,33 +7227,64 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int totalDiscs,
         HashSet<string> importedDiscSignatures,
         CancellationToken token,
-        string? expectedDiscSignature = null,
-        Action<string>? acceptedSourceFolderChanged = null)
+        Action<string>? acceptedSourceFolderChanged = null,
+        bool startWithSelectedDrive = false,
+        bool previewOnly = false)
     {
+        // A chosen entry drive still needs the same type/duplicate gate as later discs.
+        // Accept a valid disc immediately; otherwise keep the regular polling dialog.
+        if (startWithSelectedDrive && !_settings.ExperimentalDriveRoundEnabled)
+        {
+            try
+            {
+                var initialCheck = await _services.Workflows.Mp3DiscPollingService.CheckDiscSourceForNextImportAsync(
+                    sourceFolder, discNumber, totalDiscs, importedDiscSignatures, token);
+                token.ThrowIfCancellationRequested();
+                if (initialCheck.CanImport)
+                    return DiscWaitDialogOutcome.Ready;
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _runtimeServices.DiagnosticLogService.WriteError("Initial MP3 disc polling failed; continuing in wait dialog", ex);
+            }
+        }
+
         if (await TrySelectNextMp3DiscFromDriveRoundAsync(
                 sourceFolder,
                 discNumber,
                 totalDiscs,
                 importedDiscSignatures,
                 token,
-                expectedDiscSignature,
-                acceptedSourceFolderChanged))
+                acceptedSourceFolderChanged,
+                startWithSelectedDrive))
         {
             return DiscWaitDialogOutcome.Ready;
         }
 
-        if (_settings.ExperimentalDriveRoundEnabled && string.IsNullOrWhiteSpace(expectedDiscSignature))
+        if (_settings.ExperimentalDriveRoundEnabled)
         {
+            NotifyDiscChangeRequired(
+                "MP3-CD",
+                source: "Mp3DiscWait",
+                reason: "DriveRoundWaitDialog");
+
             return await WaitForNextMp3DiscWithDriveRoundDialogAsync(
                 sourceFolder,
                 discNumber,
                 totalDiscs,
                 importedDiscSignatures,
                 token,
-                acceptedSourceFolderChanged);
+                acceptedSourceFolderChanged,
+                startWithSelectedDrive, previewOnly);
         }
 
-        return await _mp3DiscWaitDialogService.WaitForNextDiscAsync(
+        NotifyDiscChangeRequired(
+            "MP3-CD",
+            source: "Mp3DiscWait",
+            reason: "WaitDialog");
+
+        return await _services.Workflows.Mp3DiscWaitDialogService.WaitForNextDiscAsync(
             this,
             sourceFolder,
             discNumber,
@@ -4783,7 +7294,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _ => { },
             token,
             NotifyDiscPollingState,
-            expectedDiscSignature);
+            driveDisplayName: CreateDiscDriveDisplayName(sourceFolder),
+            canCompleteImport: !previewOnly);
     }
 
     private async Task<DiscWaitDialogOutcome> WaitForNextMp3DiscWithDriveRoundDialogAsync(
@@ -4792,29 +7304,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int totalDiscs,
         HashSet<string> importedDiscSignatures,
         CancellationToken token,
-        Action<string>? acceptedSourceFolderChanged)
+        Action<string>? acceptedSourceFolderChanged,
+        bool startWithSelectedDrive = false,
+        bool previewOnly = false)
     {
+        using var statusAnimation = BeginDriveCircleStatusAnimation(token);
         string? acceptedSourceFolder = null;
         var request = new DiscWaitDialogRequest(
             discNumber,
             totalDiscs,
-            "MP3-CD",
-            $"Bitte CD {discNumber} von {totalDiscs} einlegen. Die Laufwerksrunde prüft automatisch alle aktiven Laufwerke in Reihenfolge.",
-            "Bereits importierte CDs werden erkannt, übersprungen und nach Möglichkeit wieder ausgeworfen.",
+            LocalizationText.Get("Disc.Media.Mp3"),
+            LocalizationText.Format("Disc.DriveRound.InsertInstruction", LocalizationText.Get("Disc.Media.Mp3"), discNumber, totalDiscs),
+            LocalizationText.Get("Disc.DriveRound.Mp3DuplicateHint"),
             CreateDiscDriveDisplayName(sourceFolder),
-            NotifyDiscPollingState);
+            NotifyDiscPollingState,
+            CanCompleteImport: !previewOnly && discNumber > 1,
+            IsDriveCircle: _settings.ExperimentalDriveRoundEnabled);
 
-        var accepted = await _discWaitDialogService.WaitForDiscAsync(
+        var accepted = await _services.Workflows.DiscWaitDialogService.WaitForDiscAsync(
             this,
             request,
-            async cancellationToken =>
+            async (checkRequest, cancellationToken) =>
             {
                 var result = await CheckMp3DriveRoundForWaitDialogAsync(
                     sourceFolder,
                     discNumber,
                     totalDiscs,
                     importedDiscSignatures,
-                    cancellationToken);
+                    checkRequest.AcceptNextDuplicate,
+                    cancellationToken,
+                    startWithSelectedDrive);
                 if (!string.IsNullOrWhiteSpace(result.AcceptedSourceFolder))
                     acceptedSourceFolder = result.AcceptedSourceFolder;
                 return result.PollingResult;
@@ -4823,8 +7342,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _ => { },
             token);
 
-        if (accepted == DiscWaitDialogOutcome.Ready && !string.IsNullOrWhiteSpace(acceptedSourceFolder))
+        if (accepted is DiscWaitDialogOutcome.Ready or DiscWaitDialogOutcome.ReadyWithDuplicateOverride &&
+            !string.IsNullOrWhiteSpace(acceptedSourceFolder))
+        {
+            SelectedFolder = acceptedSourceFolder;
             acceptedSourceFolderChanged?.Invoke(acceptedSourceFolder);
+        }
 
         return accepted;
     }
@@ -4838,16 +7361,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int discNumber,
         int totalDiscs,
         HashSet<string> importedDiscSignatures,
-        CancellationToken token)
+        bool acceptDuplicate,
+        CancellationToken token,
+        bool startWithSelectedDrive = false)
     {
-        var round = BuildDriveRound(lastProcessedSourceFolder);
+        var round = await BuildDriveRoundAsync(lastProcessedSourceFolder, token, startWithSelectedDrive);
         if (round.Count == 0)
         {
             return new Mp3DriveRoundWaitResult(new DiscPollingResult(
                 false,
-                $"Bitte CD {discNumber} von {totalDiscs} einlegen.\n\nDie Laufwerksrunde ist aktiv, aber aktuell ist kein aktives Laufwerk verfügbar.",
-                $"Warte auf CD {discNumber}: kein aktives Laufwerk verfügbar.",
-                "Laufwerksrunde aktiv: kein aktives Laufwerk verfügbar."));
+                LocalizationText.Format("Disc.DriveRound.NoDrive.Dialog", LocalizationText.Get("Disc.Media.Mp3"), discNumber, totalDiscs),
+                LocalizationText.Format("Disc.DriveRound.NoDrive.Status", LocalizationText.Get("Disc.Media.Mp3"), discNumber),
+                LocalizationText.Get("Disc.DriveRound.NoDrive.Progress")));
         }
 
         DiscPollingResult? lastProblem = null;
@@ -4855,51 +7380,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             token.ThrowIfCancellationRequested();
             var driveLetter = FormatDriveLetter(driveRoot);
-            ExportProgressText = $"Laufwerksrunde aktiv: prüfe Laufwerk {driveLetter} …";
+            ExportProgressText = LocalizationText.Format("Disc.DriveRound.Checking.Progress", driveLetter);
 
-            var typeProbe = await Task.Run(
-                () => _discDriveCandidateProbeService.ProbeType(driveRoot, DiscMediaKind.Mp3Disc),
-                token);
+            var typeProbe = await _services.Workflows.DiscDriveCandidateProbeService
+                .ProbeTypeAsync(driveRoot, DiscMediaKind.Mp3Disc, token);
             if (!typeProbe.IsAccepted)
             {
                 WriteDriveRoundSkip("MP3-CD", discNumber, typeProbe);
-                lastProblem = CreateDriveRoundWaitingResult(
+                var candidateNotice = CreateDriveRoundWaitingResult(
                     discNumber,
                     totalDiscs,
-                    "MP3-CD",
+                    LocalizationText.Get("Disc.Media.Mp3"),
                     driveLetter,
                     typeProbe);
+                lastProblem = DiscDriveRoundWaitPresentation.KeepActionable(lastProblem, candidateNotice,
+                    typeProbe.Status == DiscDriveCandidateStatus.Error);
                 continue;
             }
+
 
             Mp3DiscImportPrecheckResult precheck;
             try
             {
                 precheck = await Task.Run(
-                    () => _mp3DiscImportWorkflowService.AnalyzeDiscForImport(typeProbe.DriveRoot, importedDiscSignatures),
+                    () => _services.Workflows.Mp3DiscImportWorkflowService.AnalyzeDiscForImport(typeProbe.DriveRoot, importedDiscSignatures, token),
                     token);
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                _diagnosticLogService.WriteError($"Laufwerksrunde MP3-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
+                _runtimeServices.DiagnosticLogService.WriteError($"DriveCircle MP3-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
                 lastProblem = new DiscPollingResult(
                     false,
-                    $"Laufwerk {driveLetter} konnte gerade nicht gelesen werden.\n\nBookStitch prüft gleich automatisch weiter.",
-                    $"Warte auf CD {discNumber}: Laufwerk {driveLetter} konnte gerade nicht gelesen werden.",
-                    $"Laufwerksrunde aktiv: Laufwerk {driveLetter} konnte gerade nicht gelesen werden.");
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Dialog", driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Status", LocalizationText.Get("Disc.Media.Mp3"), discNumber, driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Progress", driveLetter));
                 continue;
             }
 
-            if (precheck.IsAlreadyImported)
+            if (precheck.IsAlreadyImported && !acceptDuplicate)
             {
-                var duplicate = _discDriveCandidateProbeService.MarkDuplicate(typeProbe.DriveRoot, typeProbe.MediaKind);
+                var duplicate = _services.Workflows.DiscDriveCandidateProbeService.MarkDuplicate(typeProbe.DriveRoot, typeProbe.MediaKind);
                 WriteDriveRoundSkip("MP3-CD", discNumber, duplicate);
-                _discDriveService.TryEjectDisc(typeProbe.DriveRoot);
+                await _services.Discs.DiscDriveService.TryEjectDiscAsync(typeProbe.DriveRoot, token);
                 lastProblem = new DiscPollingResult(
                     false,
-                    $"Laufwerk {driveLetter}: Diese CD wurde bereits importiert und wurde nach Möglichkeit wieder ausgeworfen.\n\nDie Laufwerksrunde prüft automatisch weiter.",
-                    $"Warte auf CD {discNumber}: Laufwerk {driveLetter} enthielt ein Duplikat.",
-                    $"Laufwerksrunde aktiv: Laufwerk {driveLetter} Duplikat übersprungen.",
+                    LocalizationText.Format("Disc.DriveRound.Duplicate.Dialog", driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Duplicate.Status", discNumber, driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Duplicate.Progress", driveLetter),
                     DiscPollingDisplayState.Duplicate);
                 continue;
             }
@@ -4912,36 +7440,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     typeProbe.MediaKind,
                     "Keine unterstützten Audiodateien gefunden.");
                 WriteDriveRoundSkip("MP3-CD", discNumber, noFiles);
-                lastProblem = CreateDriveRoundWaitingResult(
-                    discNumber,
-                    totalDiscs,
-                    "MP3-CD",
-                    driveLetter,
-                    noFiles);
                 continue;
             }
 
-            SelectedFolder = typeProbe.DriveRoot;
-            _diagnosticLogService.WriteApplicationEvent(
-                "DRIVE ROUND",
+            _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+                "DRIVECIRCLE",
                 $"MP3-CD {discNumber}/{totalDiscs}: {typeProbe.DriveRoot} akzeptiert.");
             return new Mp3DriveRoundWaitResult(
                 new DiscPollingResult(
                     true,
-                    $"Neue MP3-CD in Laufwerk {driveLetter} erkannt. CD {discNumber} von {totalDiscs} wird vorbereitet …",
-                    $"CD {discNumber} von {totalDiscs} in Laufwerk {driveLetter} erkannt. Import startet …",
-                    $"Laufwerksrunde: Laufwerk {driveLetter} erkannt. Import startet …",
+                    LocalizationText.Format("Disc.DriveRound.Mp3Ready.Dialog", driveLetter, discNumber, totalDiscs),
+                    LocalizationText.Format("Disc.DriveRound.Mp3Ready.Status", discNumber, totalDiscs, driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Mp3Ready.Progress", driveLetter),
                     DiscPollingDisplayState.Ready),
                 typeProbe.DriveRoot);
         }
 
-        return new Mp3DriveRoundWaitResult(lastProblem ?? new DiscPollingResult(
-            false,
-            $"Bitte CD {discNumber} von {totalDiscs} einlegen.\n\nDie Laufwerksrunde prüft automatisch alle aktiven Laufwerke in Reihenfolge.",
-            $"Warte auf CD {discNumber}: Laufwerksrunde aktiv.",
-            "Laufwerksrunde aktiv: keine passende MP3-CD gefunden. Nächste Prüfung läuft automatisch …"));
+        return new Mp3DriveRoundWaitResult(DiscDriveRoundWaitPresentation.Complete(
+            LocalizationText.Get("Disc.Media.Mp3"), discNumber, totalDiscs, lastProblem));
     }
-
 
     private async Task<bool> TrySelectNextMp3DiscFromDriveRoundAsync(
         string lastProcessedSourceFolder,
@@ -4949,27 +7466,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         int totalDiscs,
         HashSet<string> importedDiscSignatures,
         CancellationToken token,
-        string? expectedDiscSignature,
-        Action<string>? acceptedSourceFolderChanged)
+        Action<string>? acceptedSourceFolderChanged,
+        bool startWithSelectedDrive = false)
     {
-        if (!_settings.ExperimentalDriveRoundEnabled || !string.IsNullOrWhiteSpace(expectedDiscSignature))
+        if (!_settings.ExperimentalDriveRoundEnabled)
             return false;
 
-        var round = BuildDriveRound(lastProcessedSourceFolder);
+
+        var round = await BuildDriveRoundAsync(lastProcessedSourceFolder, token, startWithSelectedDrive);
         if (round.Count == 0)
             return false;
 
-        _diagnosticLogService.WriteApplicationEvent(
-            "DRIVE ROUND",
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "DRIVECIRCLE",
             $"MP3-CD {discNumber}/{totalDiscs}: prüfe {string.Join(", ", round)} nach {lastProcessedSourceFolder}.");
 
         foreach (var driveRoot in round)
         {
             token.ThrowIfCancellationRequested();
 
-            var typeProbe = await Task.Run(
-                () => _discDriveCandidateProbeService.ProbeType(driveRoot, DiscMediaKind.Mp3Disc),
-                token);
+            var typeProbe = await _services.Workflows.DiscDriveCandidateProbeService
+                .ProbeTypeAsync(driveRoot, DiscMediaKind.Mp3Disc, token);
             if (!typeProbe.IsAccepted)
             {
                 WriteDriveRoundSkip("MP3-CD", discNumber, typeProbe);
@@ -4980,20 +7497,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             try
             {
                 precheck = await Task.Run(
-                    () => _mp3DiscImportWorkflowService.AnalyzeDiscForImport(typeProbe.DriveRoot, importedDiscSignatures),
+                    () => _services.Workflows.Mp3DiscImportWorkflowService.AnalyzeDiscForImport(typeProbe.DriveRoot, importedDiscSignatures, token),
                     token);
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                _diagnosticLogService.WriteError($"Laufwerksrunde MP3-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
+                _runtimeServices.DiagnosticLogService.WriteError($"DriveCircle MP3-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
                 continue;
             }
 
             if (precheck.IsAlreadyImported)
             {
-                var duplicate = _discDriveCandidateProbeService.MarkDuplicate(typeProbe.DriveRoot, typeProbe.MediaKind);
+                var duplicate = _services.Workflows.DiscDriveCandidateProbeService.MarkDuplicate(typeProbe.DriveRoot, typeProbe.MediaKind);
                 WriteDriveRoundSkip("MP3-CD", discNumber, duplicate);
-                _discDriveService.TryEjectDisc(typeProbe.DriveRoot);
+                await _services.Discs.DiscDriveService.TryEjectDiscAsync(typeProbe.DriveRoot, token);
                 continue;
             }
 
@@ -5012,16 +7530,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             acceptedSourceFolderChanged?.Invoke(typeProbe.DriveRoot);
             SelectedFolder = typeProbe.DriveRoot;
-            StatusText = $"Laufwerksrunde: MP3-CD {discNumber} von {totalDiscs} in Laufwerk {FormatDriveLetter(typeProbe.DriveRoot)} erkannt.";
-            ExportProgressText = "Laufwerksrunde aktiv: Import wird fortgesetzt …";
-            _diagnosticLogService.WriteApplicationEvent(
-                "DRIVE ROUND",
+            StatusText = LocalizationText.Format("Disc.DriveRound.Accepted.Status", LocalizationText.Get("Disc.Media.Mp3"), discNumber, totalDiscs, FormatDriveLetter(typeProbe.DriveRoot));
+            ExportProgressText = LocalizationText.Get("Disc.DriveRound.ImportContinues.Progress");
+            _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+                "DRIVECIRCLE",
                 $"MP3-CD {discNumber}/{totalDiscs}: {typeProbe.DriveRoot} akzeptiert.");
             return true;
         }
 
-        _diagnosticLogService.WriteApplicationEvent(
-            "DRIVE ROUND",
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "DRIVECIRCLE",
             $"MP3-CD {discNumber}/{totalDiscs}: keine passende neue Disc gefunden.");
         return false;
     }
@@ -5035,11 +7553,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var message = result.Status switch
         {
-            DiscDriveCandidateStatus.Unavailable => $"Laufwerk {driveLetter} ist nicht verbunden.",
-            DiscDriveCandidateStatus.Empty => $"Laufwerk {driveLetter} ist leer.",
-            DiscDriveCandidateStatus.WrongType => $"Laufwerk {driveLetter} enthält keinen passenden Datenträger.",
-            DiscDriveCandidateStatus.Duplicate => $"Laufwerk {driveLetter} enthält ein Duplikat.",
-            _ => $"Laufwerk {driveLetter} wurde übersprungen."
+            DiscDriveCandidateStatus.Error => result.Message,
+            DiscDriveCandidateStatus.Unavailable => LocalizationText.Format("Disc.DriveRound.Unavailable.Message", driveLetter),
+            DiscDriveCandidateStatus.Empty => LocalizationText.Format("Disc.DriveRound.Empty.Message", driveLetter),
+            DiscDriveCandidateStatus.WrongType => LocalizationText.Format("Disc.DriveRound.WrongType.Message", driveLetter),
+            DiscDriveCandidateStatus.Duplicate => LocalizationText.Format("Disc.DriveRound.Duplicate.Message", driveLetter),
+            _ => LocalizationText.Format("Disc.DriveRound.Skipped.Message", driveLetter)
         };
 
         var displayState = result.Status == DiscDriveCandidateStatus.Duplicate
@@ -5050,78 +7569,129 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         return new DiscPollingResult(
             false,
-            $"{message}\n\nBitte {mediaName} {discNumber} von {totalDiscs} einlegen. Die Laufwerksrunde prüft automatisch weiter.",
-            $"Warte auf {mediaName} {discNumber}: {message}",
-            $"Laufwerksrunde aktiv: {driveLetter} übersprungen – {message}",
+            LocalizationText.Format("Disc.DriveRound.Problem.Dialog", message, mediaName, discNumber, totalDiscs),
+            LocalizationText.Format("Disc.DriveRound.Problem.Status", mediaName, discNumber, message),
+            LocalizationText.Format("Disc.DriveRound.Problem.Progress", driveLetter, message),
             displayState);
     }
 
-    private IReadOnlyList<string> BuildDriveRound(string lastProcessedSourceFolder)
+    private async Task<IReadOnlyList<string>> BuildDriveRoundAsync(
+        string lastProcessedSourceFolder,
+        CancellationToken cancellationToken = default,
+        bool startWithSelectedDrive = false)
     {
         IReadOnlyList<DiscDriveInfo> detectedDrives;
         try
         {
-            detectedDrives = _discDriveService.GetCdDrives();
+            detectedDrives = await _services.Discs.DiscDriveService
+                .GetCdDrivesAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
             detectedDrives = [];
         }
 
-        var configured = _discDriveConfigurationService.Synchronize(_settings, detectedDrives);
-        SaveSettingsIfReady();
-        return _discDriveRotationService.BuildRound(configured, lastProcessedSourceFolder);
+        return await Dispatcher.InvokeAsync(() =>
+        {
+            var configured = _services.Discs.DiscDriveConfigurationService.Synchronize(_settings, detectedDrives);
+            SaveSettingsIfReady();
+            return _services.Discs.DiscDriveRotationService.BuildRound(configured, lastProcessedSourceFolder, startWithSelectedDrive);
+        });
     }
 
     private void WriteDriveRoundSkip(string projectKind, int discNumber, DiscDriveCandidateResult result)
     {
-        _diagnosticLogService.WriteApplicationEvent(
-            "DRIVE ROUND",
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "DRIVECIRCLE",
             $"{projectKind} {discNumber}: {result.DriveRoot} übersprungen ({result.Status}, {result.MediaKind}) {result.Message}".Trim());
     }
 
-    private static string FormatDriveLetter(string driveRoot)
+    private void NotifyDiscChangeRequired(string projectType, string source, string reason)
     {
-        try
-        {
-            var root = Path.GetPathRoot(driveRoot) ?? driveRoot;
-            return root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
-        catch
-        {
-            return driveRoot;
-        }
+        _runtimeServices.NotificationService.Notify(new NotificationEventContext(
+            NotificationEvent.DiscChangeRequired,
+            ProjectType: projectType,
+            RequiresUserInteraction: true,
+            IsBackgroundOperation: true,
+            Source: source,
+            Reason: reason,
+            CircleDriveSearchActive: _settings.ExperimentalDriveRoundEnabled,
+            CircleDriveFoundNextDisc: false));
     }
 
+    private string FormatDriveLetter(string driveRoot) =>
+        DiscDriveSelectionPresentationService.FormatStatusDriveLabel(driveRoot, _settings.DiscDriveOrder);
 
-    private void AppendDiscPreviewTracks(string sourceFolder, int discNumber, bool clearExistingTracks)
+
+    private void AppendDiscPreviewTracks(
+        string sourceFolder,
+        int discNumber,
+        bool clearExistingTracks,
+        bool refreshChapterProjection = true)
     {
-        var sourceTracks = _folderScanner.Scan(sourceFolder, TrackNumberPreference.FileName);
-        AppendDiscPreviewTracks(sourceTracks, sourceFolder, discNumber, clearExistingTracks);
+        var sourceTracks = _services.Media.FolderScanner.Scan(sourceFolder, TrackNumberPreference.FileName, cancellationToken: DiscDriveOperationService.CurrentCancellationToken);
+        AppendDiscPreviewTracks(
+            sourceTracks,
+            sourceFolder,
+            discNumber,
+            clearExistingTracks,
+            refreshChapterProjection);
     }
 
     private void AppendDiscPreviewTracks(
         IEnumerable<TrackInfo> sourceTracks,
         int discNumber,
-        bool clearExistingTracks)
+        bool clearExistingTracks,
+        bool refreshChapterProjection = true)
     {
-        AppendDiscPreviewTracks(sourceTracks, string.Empty, discNumber, clearExistingTracks);
+        AppendDiscPreviewTracks(
+            sourceTracks,
+            string.Empty,
+            discNumber,
+            clearExistingTracks,
+            refreshChapterProjection);
     }
 
     private void AppendDiscPreviewTracks(
         IEnumerable<TrackInfo> sourceTracks,
         string sourceFolder,
         int discNumber,
-        bool clearExistingTracks)
+        bool clearExistingTracks,
+        bool refreshChapterProjection = true)
     {
-        _mp3DiscTrackReconciliationService.AppendMissingPreviewTracks(
-            Tracks,
+        var reconciled = Tracks.ToList();
+        _services.Discs.Mp3DiscTrackReconciliationService.AppendMissingPreviewTracks(
+            reconciled,
             sourceTracks,
             sourceFolder,
             discNumber,
             clearExistingTracks);
+        Tracks.ReplaceAll(reconciled);
 
-        UpdateIndexes();
+        new TrackAutomaticOrderApplicationService().CalculateAndApply(
+            Tracks.ToList(),
+            TrackOrderProjectType.Mp3Disc,
+            TrackOrderConfirmedContextFactory.CreateMp3DiscContexts(Tracks));
+
+        if (refreshChapterProjection)
+        {
+            UpdateIndexes();
+            return;
+        }
+
+        RefreshMp3DiscPreviewPresentationWithoutChapterProjection();
+    }
+
+    private void RefreshMp3DiscPreviewPresentationWithoutChapterProjection()
+    {
+        _services.Tracks.TrackListWarningService.Apply(Tracks);
+        RefreshTrackPresentationViews();
+        OnExportPreviewChanged();
     }
 
     private void ShowUnsupportedDiscSourceMessage(DiscSourceAnalysis analysis)
@@ -5130,17 +7700,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "Audio-CD noch nicht unterstützt",
-                "Die ausgewählte Quelle sieht nach einer Audio-CD aus. Echte Audio-CDs haben keine normalen MP3-Dateien und brauchen später eine eigene Ripping-Pipeline.\n\n" +
-                "Aktuell ist nur MP3-CD / Daten-CD mit normalen Audiodateien aktiv.");
+                LocalizationText.Get("MainWindow.DiscSource.AudioUnreadable.Title"),
+                LocalizationText.Get("MainWindow.DiscSource.AudioUnreadable.Message"));
             return;
         }
 
         AppDialogService.Warning(
             this,
-            "Keine MP3-CD erkannt",
-            "Auf der ausgewählten Quelle wurden keine unterstützten Audiodateien gefunden.\n\n" +
-            "Unterstützt werden aktuell: MP3, AAC, M4A, M4B, WAV und FLAC.");
+            LocalizationText.Get("MainWindow.DiscSource.NoDataDisc.Title"),
+            LocalizationText.Format("MainWindow.DiscSource.NoDataDisc.Message", AudioInputFormatCatalog.SupportedInputDisplayText));
     }
 
     private void ResetMetadataForNewFolderProject()
@@ -5150,28 +7718,113 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetMetadataForNewDiscProject()
     {
+        _resumeDiscPreview.Clear();
+        _mp3DiscChapterSourceCatalog.Clear();
+        _transientMp3DiscChapterPreview = null;
+        _replaceableGenreSeed = "";
+
         _currentProjectWorkFolder = "";
+        _currentFolderPath = "";
         _pendingDiscProjectSourceFolder = "";
-        _loadedResumeProjectNeedsDiscImport = false;
-        _loadedResumeProjectIsMp3Disc = false;
-        _loadedResumeProjectIsAudioDisc = false;
-        _loadedResumeProjectIsLocal = false;
+        _pendingAudioDisc = null;
+        ApplyLoadedProjectState(LoadedProjectStateSnapshot.None);
         _isAudioDiscProjectAwaitingRip = false;
         OnPropertyChanged(nameof(CanStartExport));
         OnPropertyChanged(nameof(ExportButtonText));
-        OnPropertyChanged(nameof(AlbumLinkToggleToolTip));
-        BookTitle = "";
-        Album = "";
-        Series = "";
-        Author = "";
-        Narrator = "";
-        _coverSourcePath = "";
-        _processedCoverPath = "";
-        CoverPreviewSource = "";
+        OnPropertyChanged(nameof(ExportButtonVisibility));
+
+        // Every new source starts with a fresh canonical ProjectMetadata session.
+        // Even a completely untagged source gets an empty revision-0 metadata model;
+        // cross-project exceptions are explicitly locked global metadata preferences.
+        _projectMetadataSession.Discard();
+        _projectMetadata.Clear("");
+        CoverPreviewSource = CoverPreviewPresentationService.GetPlaceholderSource(
+            AppearanceSettingsService.GetEffectiveMode(_settings));
+        var canonicalMetadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.None);
+        _projectMetadataSession.BeginNew(canonicalMetadata);
+        ApplyLockedGenrePreferencesToMetadataState();
+        ApplyLockedTrackPreferencesToMetadataState();
+        _services.Media.ProjectMetadataPreviewAggregationService.Apply(
+            _projectMetadata, [], CreateMp3DiscProjectAggregationOptions(),
+            ProjectMetadataInitializationState.InitialSetOpen);
+        _developmentMetadataDialog?.NotifyProjectChanged();
+        _chapterGridColumnLayoutState.MarkAutoFitPending();
+
+        _lastObservedProjectMetadataBookTitle = "";
+        OnPropertyChanged(nameof(Series));
         OnExportPreviewChanged();
     }
 
+    private void InitializeGenreStateForEmptySession()
+    {
+        _replaceableGenreSeed = "";
+        _projectMetadata.Genre = "";
+        ApplyLockedGenrePreferencesToMetadataState();
+        ApplyLockedTrackPreferencesToMetadataState();
+        _services.Media.ProjectMetadataPreviewAggregationService.Apply(
+            _projectMetadata, [], CreateMp3DiscProjectAggregationOptions(),
+            ProjectMetadataInitializationState.InitialSetOpen);
+    }
+
+    private void ApplyLockedGenrePreferencesToMetadataState()
+    {
+        if (!_settings.MetadataPreferences.GenrePreferenceLocked)
+            return;
+
+        var preferred = _settings.MetadataPreferences.PreferredGenres
+            .Where(GenreListService.IsSelectableGenre)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (preferred.Length == 0)
+            return;
+
+        var metadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.GlobalPreference);
+        metadata.SetValue<IReadOnlyList<string>>(
+            ProjectMetadataField.Genres,
+            preferred,
+            MetadataOrigin.GlobalPreference);
+        _projectMetadata.ApplyCanonicalMetadata(metadata);
+    }
+
+    private void ApplyLockedTrackPreferencesToMetadataState()
+    {
+        var preferences = _settings.MetadataPreferences;
+        if (!preferences.OutputTrackNumberPreferenceLocked &&
+            !preferences.OutputTrackTotalPreferenceLocked)
+        {
+            return;
+        }
+
+        var metadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.GlobalPreference);
+        if (preferences.OutputTrackNumberPreferenceLocked &&
+            preferences.PreferredOutputTrackNumber is >= 0)
+        {
+            metadata.SetValue<int?>(
+                ProjectMetadataField.OutputTrackNumber,
+                preferences.PreferredOutputTrackNumber,
+                MetadataOrigin.GlobalPreference);
+        }
+
+        if (preferences.OutputTrackTotalPreferenceLocked &&
+            preferences.PreferredOutputTrackTotal is >= 0)
+        {
+            metadata.SetValue<int?>(
+                ProjectMetadataField.OutputTrackTotal,
+                preferences.PreferredOutputTrackTotal,
+                MetadataOrigin.GlobalPreference);
+        }
+
+        _projectMetadata.ApplyCanonicalMetadata(metadata);
+    }
+
+
     private void Cover_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        ChooseCover(this);
+    }
+
+    private void ChooseCover(Window owner)
     {
         if (!CanChangeBookMetadata || _isCoverDialogOpen)
             return;
@@ -5179,41 +7832,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _isCoverDialogOpen = true;
         try
         {
-            var dialog = new OpenFileDialog
-            {
-                Title = "Coverbild auswählen",
-                Filter = "Bilddateien (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp|Alle Dateien (*.*)|*.*",
-                Multiselect = false,
-                InitialDirectory = ResolveMainCoverDialogInitialDirectory()
-            };
-
-            if (dialog.ShowDialog(this) != true)
+            var sourceKind = LoadedProjectState.IsMp3Disc || LoadedProjectState.IsAudioDisc || _isAudioDiscProjectAwaitingRip
+                ? ProjectSetupSourceKind.Mp3Disc
+                : ProjectSetupSourceKind.Folder;
+            var selectedFile = _coverPickerService.ChooseCoverFile(
+                owner,
+                new CoverPickerContext(
+                    sourceKind,
+                    _currentFolderPath,
+                    _projectMetadata.CoverSourcePath,
+                    _settings.LastCoverFolder));
+            if (string.IsNullOrWhiteSpace(selectedFile))
                 return;
 
-            SetCoverFromFile(dialog.FileName);
+            SetCoverFromFile(selectedFile, owner);
         }
         finally
         {
-            _isCoverDialogOpen = false;
-            e.Handled = true;
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.ApplicationIdle,
+                new Action(() => _isCoverDialogOpen = false));
         }
-    }
-
-    private void Cover_ContextMenuOpening(object sender, ContextMenuEventArgs e)
-    {
-        if (IsExporting || string.IsNullOrWhiteSpace(_processedCoverPath))
-            e.Handled = true;
     }
 
     private void RemoveCover_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanChangeBookMetadata || string.IsNullOrWhiteSpace(_processedCoverPath))
+        RemoveCover();
+    }
+
+    private void RemoveCover()
+    {
+        if (!CanChangeBookMetadata || string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath))
             return;
 
-        _coverSourcePath = "";
-        _processedCoverPath = "";
+        var sourcePath = _projectMetadata.CoverSourcePath;
+        if (!string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath))
+        {
+            try
+            {
+                EmbeddedCoverService.RecordUserRemoval(_projectMetadata.CanonicalMetadata, sourcePath);
+            }
+            catch (Exception ex)
+            {
+                _runtimeServices.DiagnosticLogService.WriteError("Cover-Löschung konnte nicht gespeichert werden", ex);
+                AppDialogService.Error(this, LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                    LocalizationText.Get("Disc.Setup.CoverFailed.Message"), new[] { ex.Message });
+                return;
+            }
+        }
+        _projectMetadata.ApplyCoverMetadata("", "", MetadataOrigin.User);
         CoverPreviewSource = "";
-        StatusText = "Cover entfernt.";
+        StatusText = LocalizationText.Get("MainWindow.Cover.Removed");
+        TryFlushCanonicalMetadataSession();
         OnExportPreviewChanged();
     }
 
@@ -5239,8 +7909,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "Cover nicht übernommen",
-                "Bitte eine Bilddatei ablegen. Unterstützt werden JPG, PNG und WebP.");
+                LocalizationText.Get("MainWindow.Cover.NotAccepted.Title"),
+                LocalizationText.Get("MainWindow.Cover.DropUnsupported.Message"));
             return;
         }
 
@@ -5270,45 +7940,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return extension is ".jpg" or ".jpeg" or ".png" or ".webp";
     }
 
-    private string ResolveMainCoverDialogInitialDirectory()
-    {
-        if (IsLikelyLocalSourceFolderForCoverDialog(_currentFolderPath))
-            return _currentFolderPath;
-
-        return GetLastExternalCoverFolderOrDesktop();
-    }
-
-    private string ResolveProjectSetupCoverInitialDirectory(ProjectSetupSourceKind sourceKind, string sourceFolder)
-    {
-        if (sourceKind == ProjectSetupSourceKind.Folder && IsValidExternalCoverFolder(sourceFolder))
-            return sourceFolder;
-
-        return GetLastExternalCoverFolderOrDesktop();
-    }
-
     private string GetCoverSourcePathForProjectSetup()
     {
-        return IsInternalBookStitchPath(_coverSourcePath)
+        return IsInternalBookStitchPath(_projectMetadata.CoverSourcePath)
             ? string.Empty
-            : _coverSourcePath;
-    }
-
-    private string GetLastExternalCoverFolderOrDesktop()
-    {
-        return IsValidExternalCoverFolder(_settings.LastCoverFolder)
-            ? _settings.LastCoverFolder!
-            : GetDesktopFolder();
-    }
-
-    private bool IsLikelyLocalSourceFolderForCoverDialog(string? folderPath)
-    {
-        if (!IsValidExternalCoverFolder(folderPath))
-            return false;
-
-        if (_loadedResumeProjectIsMp3Disc || _loadedResumeProjectIsAudioDisc || _isAudioDiscProjectAwaitingRip)
-            return false;
-
-        return !IsOpticalDriveSelection(folderPath);
+            : _projectMetadata.CoverSourcePath;
     }
 
     private bool IsValidExternalCoverFolder(string? folderPath)
@@ -5343,46 +7979,127 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void TryApplyFirstEmbeddedCover(IEnumerable<TrackInfo> tracks)
     {
-        if (!string.IsNullOrWhiteSpace(_processedCoverPath) && File.Exists(_processedCoverPath))
-            return;
+        TryApplyEmbeddedCoverPath(TryExtractFirstEmbeddedCoverPath(tracks));
+    }
+
+    private string? TryExtractFirstEmbeddedCoverPath(IEnumerable<TrackInfo> tracks)
+    {
+        if (!string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath) && File.Exists(_projectMetadata.ProcessedCoverPath))
+            return null;
 
         try
         {
             var coverFolder = GetProjectFolderStructure().CoversFolder;
-            var embeddedCoverPath = _embeddedCoverService.ExtractFirstValidCover(
-                tracks.Select(track => track.FilePath),
-                coverFolder);
+            return _services.Media.EmbeddedCoverService.ExtractFirstValidCover(
+                BuildEmbeddedCoverCandidates(tracks),
+                coverFolder,
+                _projectMetadata.CanonicalMetadata.GetSuppressedValues(ProjectMetadataField.Cover));
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Eingebettetes Cover konnte nicht gelesen werden", ex);
+            return null;
+        }
+    }
 
-            if (string.IsNullOrWhiteSpace(embeddedCoverPath))
-                return;
+    private IReadOnlyList<EmbeddedCoverExtractionCandidate> BuildEmbeddedCoverCandidates(IEnumerable<TrackInfo> tracks)
+    {
+        var trackList = tracks.ToList();
+        var snapshotsBySourceId = TryLoadCoverEvidenceSnapshots();
+        if (snapshotsBySourceId.Count == 0)
+        {
+            return trackList
+                .Select(track => new EmbeddedCoverExtractionCandidate(track.FilePath))
+                .ToArray();
+        }
 
+        var candidates = new List<EmbeddedCoverExtractionCandidate>();
+        var hasEvidenceCandidate = false;
+        foreach (var track in trackList)
+        {
+            snapshotsBySourceId.TryGetValue(track.SourceId, out var snapshot);
+            var coverCandidate = snapshot?.CoverCandidate;
+            var hasEvidence = coverCandidate?.HasEmbeddedCover == true;
+            hasEvidenceCandidate |= hasEvidence;
+            candidates.Add(new EmbeddedCoverExtractionCandidate(
+                track.FilePath,
+                hasEvidence,
+                coverCandidate?.Fingerprint ?? string.Empty));
+        }
+
+        return hasEvidenceCandidate
+            ? candidates.Where(candidate => candidate.HasCoverEvidence).ToArray()
+            : trackList.Select(track => new EmbeddedCoverExtractionCandidate(track.FilePath)).ToArray();
+    }
+
+    private IReadOnlyDictionary<Guid, SourceMetadataSnapshot> TryLoadCoverEvidenceSnapshots()
+    {
+        if (string.IsNullOrWhiteSpace(_currentProjectWorkFolder) ||
+            !Directory.Exists(_currentProjectWorkFolder))
+        {
+            return new Dictionary<Guid, SourceMetadataSnapshot>();
+        }
+
+        try
+        {
+            return _services.Media.SourceMetadataSnapshotStore
+                .LoadAll(_currentProjectWorkFolder)
+                .Where(snapshot => snapshot.SourceId != Guid.Empty)
+                .ToDictionary(snapshot => snapshot.SourceId);
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Cover-Evidence aus SourceSnapshots konnte nicht gelesen werden", ex);
+            return new Dictionary<Guid, SourceMetadataSnapshot>();
+        }
+    }
+
+    private void TryApplyEmbeddedCoverPath(string? embeddedCoverPath)
+    {
+        if (string.IsNullOrWhiteSpace(embeddedCoverPath))
+            return;
+
+        try
+        {
             SetCoverFromFile(embeddedCoverPath);
         }
         catch (Exception ex)
         {
-            _diagnosticLogService.WriteError("Eingebettetes Cover konnte nicht übernommen werden", ex);
+            _runtimeServices.DiagnosticLogService.WriteError("Eingebettetes Cover konnte nicht übernommen werden", ex);
         }
     }
 
-    private void SetCoverFromFile(string filePath)
+    private void SetCoverWarningThresholdPixels(int threshold)
+    {
+        _settings.CoverWarningThresholdPixels = CoverWarningSettingsService.NormalizeThresholdPixels(threshold);
+        SaveSettingsIfReady();
+        _developmentMetadataDialog?.RefreshCoverWarningThresholdFromSharedState();
+    }
+
+    private void SetCoverFromFile(string filePath, Window? owner = null)
     {
         if (!IsSupportedCoverFile(filePath))
         {
             AppDialogService.Warning(
                 this,
-                "Cover nicht übernommen",
-                "Dieses Bildformat wird nicht unterstützt. Bitte JPG, PNG oder WebP verwenden.");
+                LocalizationText.Get("MainWindow.Cover.NotAccepted.Title"),
+                LocalizationText.Get("MainWindow.Cover.FormatUnsupported.Message"));
             return;
         }
 
         try
         {
             var coverFolder = GetProjectFolderStructure().CoversFolder;
-            var result = _coverImageService.CreateProcessedCover(filePath, coverFolder);
+            var result = _services.Media.CoverImageService.CreateProcessedCover(
+                filePath,
+                coverFolder,
+                BookTitle,
+                _settings.CoverWarningThresholdPixels);
 
-            _coverSourcePath = result.SourcePath;
-            _processedCoverPath = result.ProcessedJpegPath;
+            EmbeddedCoverService.RecordUserSelection(_projectMetadata.CanonicalMetadata, result.SourcePath);
+            _projectMetadata.ApplyCoverMetadata(result.SourcePath, result.ProcessedJpegPath, MetadataOrigin.User);
             CoverPreviewSource = result.ProcessedJpegPath;
+            TryFlushCanonicalMetadataSession();
 
             var selectedCoverFolder = Path.GetDirectoryName(result.SourcePath);
             if (IsValidExternalCoverFolder(selectedCoverFolder))
@@ -5393,30 +8110,57 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (!string.IsNullOrWhiteSpace(result.Warning))
             {
-                AppDialogService.Warning(
-                    this,
-                    "Cover übernommen",
-                    result.Warning);
+                AppDialogService.CoverWarning(
+                    owner ?? this,
+                    LocalizationText.Get("MainWindow.Cover.Accepted"),
+                    result.Warning,
+                    _settings.CoverWarningThresholdPixels,
+                    SetCoverWarningThresholdPixels);
             }
             else
             {
-                StatusText = "Cover übernommen und auf 2000 × 2000 vorbereitet.";
+                StatusText = LocalizationText.Get("MainWindow.Cover.Prepared");
             }
         }
         catch (Exception ex)
         {
             AppDialogService.Error(
                 this,
-                "Cover konnte nicht übernommen werden",
-                "Das Coverbild konnte nicht verarbeitet werden.",
+                LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                LocalizationText.Get("Disc.Setup.CoverFailed.Message"),
                 new[] { ex.Message });
         }
     }
 
     private void MetadataHeader_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (IsWithinMetadataActionHost(e.OriginalSource as DependencyObject))
+        {
+            e.Handled = true;
+            return;
+        }
+
         SetMetadataPanelExpanded(!_isMetadataPanelExpanded, animate: true);
         e.Handled = true;
+    }
+
+    private bool IsWithinMetadataActionHost(DependencyObject? source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (ReferenceEquals(current, MetadataActionHost))
+                return true;
+
+            current = current switch
+            {
+                Visual or Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement contentElement => contentElement.Parent,
+                _ => null
+            };
+        }
+
+        return false;
     }
 
 
@@ -5425,8 +8169,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(path))
             return false;
 
-        var root = Path.GetPathRoot(Path.GetFullPath(path));
-        return !string.IsNullOrWhiteSpace(root) && _discDriveService.IsCdDrivePath(root);
+        var root = DiscDriveConfigurationService.NormalizeRootPath(path);
+        if (string.IsNullOrWhiteSpace(root))
+            return false;
+
+        return (_settings.DiscDriveOrder ?? []).Any(item => string.Equals(
+            DiscDriveConfigurationService.NormalizeRootPath(item.DriveRoot),
+            root,
+            StringComparison.OrdinalIgnoreCase));
     }
 
     private void SetMetadataPanelExpanded(bool expanded, bool animate)
@@ -5437,46 +8187,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (MetadataDetailsBorder is null)
             return;
 
-        const double expandedHeight = 98;
+        var padding = MetadataDetailsBorder.Padding;
+        MetadataDetailsContent.Measure(new Size(
+            Math.Max(0, MetadataDetailsBorder.ActualWidth - padding.Left - padding.Right),
+            double.PositiveInfinity));
+        var expandedHeight = Math.Ceiling(MetadataDetailsContent.DesiredSize.Height + padding.Top + padding.Bottom +
+            MetadataDetailsBorder.BorderThickness.Top + MetadataDetailsBorder.BorderThickness.Bottom);
         var targetHeight = expanded ? expandedHeight : 0;
         var targetOpacity = expanded ? 1d : 0d;
 
         if (!animate)
         {
+            MetadataDetailsBorder.BeginAnimation(HeightProperty, null);
+            MetadataDetailsBorder.BeginAnimation(OpacityProperty, null);
             MetadataDetailsBorder.Height = targetHeight;
             MetadataDetailsBorder.Opacity = targetOpacity;
             return;
         }
 
-        var animationMilliseconds = Math.Clamp(_settings.MetadataPanelAnimationMilliseconds, 0, 2000);
+        var animationMilliseconds = AnimationTimingSettingsService
+            .GetMetadataPanelMilliseconds(_debugSettings);
         var duration = TimeSpan.FromMilliseconds(animationMilliseconds);
         var easing = new CubicEase { EasingMode = EasingMode.EaseInOut };
         MetadataDetailsBorder.BeginAnimation(HeightProperty, new DoubleAnimation(targetHeight, duration) { EasingFunction = easing });
         MetadataDetailsBorder.BeginAnimation(OpacityProperty, new DoubleAnimation(targetOpacity, duration) { EasingFunction = easing });
     }
 
-
-    private void AlbumLabel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        _settings.KeepAlbumLinkedToTitle = !_settings.KeepAlbumLinkedToTitle;
-        SaveSettingsIfReady();
-
-        if (IsTitleAlbumLinked)
-            Album = BookTitle;
-
-        OnPropertyChanged(nameof(AlbumLinkToggleToolTip));
-        OnPropertyChanged(nameof(IsAlbumTabStop));
-        e.Handled = true;
-    }
-
-    private void GenreComboBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Tab || !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
-            return;
-
-        AlbumTextBox?.Focus();
-        e.Handled = true;
-    }
 
     private void OpenTaskManager_Click(object sender, RoutedEventArgs e)
     {
@@ -5486,29 +8222,86 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            AppDialogService.Warning(this, "Task-Manager konnte nicht geöffnet werden", ex.Message);
+            AppDialogService.Warning(this, LocalizationText.Get("MainWindow.TaskManager.OpenFailed"), LocalizationText.Get("Common.OperationFailed"), details: new[] { ex.Message });
         }
     }
 
-    private void ChooseOutputFolder_Click(object sender, RoutedEventArgs e)
+    private void UpdateOutputFolderBadge() => MainOutputSettingsView?.RefreshOutputFolderBadge();
+
+    private void OutputFolderStateChip_Click(object sender, RoutedEventArgs e)
     {
-        ChooseOutputFolder();
+        OpenFolderInExplorer(OutputFolder, LocalizationText.Get("MainWindow.Path.OutputFolder"));
     }
 
-    private void OutputFolderPath_Click(object sender, MouseButtonEventArgs e)
+    private void OutputFolderPrimaryAction_Click(object sender, RoutedEventArgs e)
     {
-        ChooseOutputFolder();
+        RefreshOutputFolderPrimaryActionState();
+
+        switch (EffectiveOutputFolderPrimaryAction)
+        {
+            case OutputFolderPrimaryAction.Open:
+                OpenFolderInExplorer(OutputFolder, LocalizationText.Get("MainWindow.Path.OutputFolder"));
+                break;
+
+            case OutputFolderPrimaryAction.Change:
+                ChooseOutputFolder();
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private void OutputFolderSplitMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.ContextMenu is null)
+            return;
+
+        RefreshOutputFolderPrimaryActionState();
+        button.ContextMenu.PlacementTarget = button;
+        button.ContextMenu.IsOpen = true;
         e.Handled = true;
     }
 
-    private void ChooseOutputFolder()
+    private void SelectOutputFolderChangeAction_Click(object sender, RoutedEventArgs e)
+    {
+        SetOutputFolderPrimaryAction(OutputFolderPrimaryAction.Change);
+    }
+
+    private void SetOutputFolderPrimaryAction(OutputFolderPrimaryAction action)
+    {
+        var value = action.ToString();
+        if (string.Equals(_settings.OutputFolderPrimaryAction, value, StringComparison.Ordinal))
+            return;
+
+        _settings.OutputFolderPrimaryAction = value;
+        OnPropertyChanged(nameof(IsOutputFolderOpenPrimaryAction));
+        OnPropertyChanged(nameof(IsOutputFolderChangePrimaryAction));
+        SaveSettingsIfReady();
+    }
+
+    private void RefreshOutputFolderPrimaryActionState()
+    {
+        OnPropertyChanged(nameof(CanOpenOutputFolder));
+        OnPropertyChanged(nameof(IsOutputFolderOpenPrimaryAction));
+        OnPropertyChanged(nameof(IsOutputFolderChangePrimaryAction));
+    }
+
+    private void ChooseOutputFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        ChooseOutputFolder();
+    }
+
+    private void ChooseOutputFolder() => ChooseOutputFolder(this);
+
+    private void ChooseOutputFolder(Window owner)
     {
         if (IsBusy)
             return;
 
         var dialog = new OpenFolderDialog
         {
-            Title = "Ausgabeordner auswählen",
+            Title = LocalizationText.Get("Disc.Setup.SelectOutputFolder"),
             Multiselect = false
         };
 
@@ -5516,10 +8309,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ? OutputFolder
             : GetDesktopFolder();
 
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(owner) != true)
             return;
 
         OutputFolder = dialog.FolderName;
+    }
+
+    private void PublishDiscReadSource(string sourceRoot, string projectFolder, CancellationToken operationToken)
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        try
+        {
+            // Publish the successful read before the producer can finish or pause.
+            // Cancellation does not undo data already read by this current operation.
+            Dispatcher.Invoke(() =>
+            {
+                if (_discImportCancellation?.Token != operationToken ||
+                    !TrackPathService.PathEquals(projectFolder, _currentProjectWorkFolder) ||
+                    !(LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc)) return;
+                SetSelectedSourceDisplayOverride(CreateDiscDriveDisplayName(sourceRoot), sourceRoot);
+            });
+        }
+        catch (OperationCanceledException) when (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+        }
+        catch (InvalidOperationException) when (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+        }
     }
 
     private void SetSelectedSourceDisplayOverride(string? displayText, string? openPath)
@@ -5573,56 +8389,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(discSourceRoot))
             return discSourceRoot;
 
-        return _discDriveService.IsCdDrivePath(SelectedFolder)
+        return LoadedProjectState.IsAudioDisc
             ? SelectedFolder
             : string.Empty;
     }
 
-    private string BuildSelectedSourceDisplayText(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path) ||
-            string.Equals(path, "Noch kein Ordner ausgewählt.", StringComparison.Ordinal))
-        {
-            return path ?? string.Empty;
-        }
-
-        if (_discDriveService.IsCdDrivePath(path))
-        {
-            var root = Path.GetPathRoot(path) ?? path;
-            var letter = root.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, ':');
-            return string.IsNullOrWhiteSpace(letter) ? "CD-Laufwerk" : $"CD-Laufwerk {letter}";
-        }
-
-        try
-        {
-            var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var folderName = Path.GetFileName(trimmed);
-            return string.IsNullOrWhiteSpace(folderName) ? path : folderName;
-        }
-        catch
-        {
-            return path;
-        }
-    }
-
     private void OpenSelectedFolder_Click(object sender, RoutedEventArgs e)
     {
-        OpenFolderInExplorer(SelectedSourceOpenPath, "Quelle oder Projekt");
+        if (!CanOpenSelectedFolder)
+            return;
+
+        OpenFolderInExplorer(SelectedSourceOpenPath, LocalizationText.Get("MainWindow.Path.SourceOrProject"));
     }
 
-    private void AutoMergeLabel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void SelectOutputFolderOpenAction_Click(object sender, RoutedEventArgs e)
     {
-        MergeAutomaticallyAfterConversion = !MergeAutomaticallyAfterConversion;
-    }
+        if (!CanOpenOutputFolder)
+        {
+            RefreshOutputFolderPrimaryActionState();
+            return;
+        }
 
-    private void OpenOutputFolder_Click(object sender, RoutedEventArgs e)
-    {
-        OpenFolderInExplorer(OutputFolder, "Ausgabeordner");
+        SetOutputFolderPrimaryAction(OutputFolderPrimaryAction.Open);
     }
 
     private void OpenWorkFolder_Click(object sender, RoutedEventArgs e)
     {
-        OpenFolderInExplorer(GetBestWorkFolderToOpen(), "Projektordner");
+        OpenFolderInExplorer(GetBestWorkFolderToOpen(), LocalizationText.Get("MainWindow.Path.ProjectFolder"), warnForProjectFolder: true);
     }
 
     private void OpenFfmpegFolder_Click(object sender, RoutedEventArgs e)
@@ -5635,371 +8428,253 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "FFmpeg nicht gefunden",
-                "Die aktuelle FFmpeg-Installation wurde nicht gefunden. Bitte richte FFmpeg über „FFmpeg einrichten …“ ein.");
+                LocalizationText.Get("MainWindow.Ffmpeg.NotFound.Title"),
+                LocalizationText.Get("MainWindow.Ffmpeg.NotFound.CurrentInstallationMessage"));
             return;
         }
 
-        OpenFolderInExplorer(Path.GetDirectoryName(ffmpegPath) ?? string.Empty, "FFmpeg-Ordner");
+        OpenFolderInExplorer(Path.GetDirectoryName(ffmpegPath) ?? string.Empty, LocalizationText.Get("MainWindow.Path.FfmpegFolder"));
     }
 
-    private async void BookStitchLogo_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private ContextMenu? _developerQuickMenu;
+
+    internal void OpenDeveloperQuickMenu(FrameworkElement placementTarget)
     {
-        if (e.ClickCount != 2 || !_settings.ShowDeveloperTab || IsBusy)
+        if (!DeveloperToolsCommands.AccessState.IsEnabled)
             return;
-
-        e.Handled = true;
-        await StartDeveloperAudioDiscTestAsync();
-    }
-
-    private void MainWindow_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!IsBookStitchLogoSource(e.OriginalSource as DependencyObject))
-            return;
-
-        e.Handled = true;
-        var menu = CreateDeveloperLogoContextMenu();
-        menu.PlacementTarget = this;
+        if (_developerQuickMenu is not null) _developerQuickMenu.IsOpen = false;
+        var menu = CreateDeveloperQuickMenu();
+        _developerQuickMenu = menu;
+        menu.Closed += (_, _) => { if (ReferenceEquals(_developerQuickMenu, menu)) _developerQuickMenu = null; };
+        menu.PlacementTarget = placementTarget;
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
     }
 
-    private static bool IsBookStitchLogoSource(DependencyObject? source)
-    {
-        while (source is not null)
-        {
-            if (source is Image image && IsBookStitchLogoImage(image))
-                return true;
-
-            source = VisualTreeHelper.GetParent(source);
-        }
-
-        return false;
-    }
-
-    private static bool IsBookStitchLogoImage(Image image)
-    {
-        var sourceText = image.Source?.ToString() ?? string.Empty;
-        return Math.Abs(image.Width - 38d) < 0.1d &&
-               Math.Abs(image.Height - 38d) < 0.1d &&
-               sourceText.Contains("BookStitchLogo-Round.png", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private ContextMenu CreateDeveloperLogoContextMenu()
+    private ContextMenu CreateDeveloperQuickMenu()
     {
         var menu = new ContextMenu
         {
             Style = TryFindResource("BookStitchContextMenuStyle") as Style
         };
 
-        menu.Items.Add(CreateDeveloperCheckMenuItem(
-            "Entwicklermodus",
-            _settings.ShowDeveloperTab,
-            () => SetDeveloperMode(!_settings.ShowDeveloperTab)));
-
+        menu.Items.Add(CreateDeveloperQuickActionMenuItem(
+            "Developer Tools öffnen",
+            RestartDeveloperToolsWindowForModalAccess));
+        menu.Items.Add(CreateDeveloperQuickActionMenuItem(
+            "Neustarten",
+            RequestApplicationRestart));
         menu.Items.Add(new Separator());
-
-        menu.Items.Add(CreateDeveloperCheckMenuItem(
-            "Trackzustand im Hauptfenster anzeigen",
-            _settings.ShowPipelineStateDebug,
-            () => SetPipelineStateDebugVisible(!_settings.ShowPipelineStateDebug)));
-
-        menu.Items.Add(CreateDeveloperCheckMenuItem(
-            "FFmpeg-Einstellungsbutton immer anzeigen",
-            _settings.ForceShowFfmpegSetupButton,
-            () => SetForceShowFfmpegSetupButton(!_settings.ForceShowFfmpegSetupButton)));
-
-        menu.Items.Add(new Separator());
-
-        menu.Items.Add(CreateDeveloperActionMenuItem(
-            "Audio-CD-Kurztest starten",
-            async () =>
-            {
-                EnsureDeveloperModeEnabled();
-                await StartDeveloperAudioDiscTestAsync();
-            }));
-
-        menu.Items.Add(new Separator());
-
-        menu.Items.Add(CreateDeveloperActionMenuItem(
-            "Entwickler-Tab zeigen",
-            () =>
-            {
-                EnsureDeveloperModeEnabled();
-                ShowSettingsDialog(this, openDeveloperTab: true);
-                return Task.CompletedTask;
-            }));
+        menu.Items.Add(CreateBackgroundQuickMenu());
+        menu.Items.Add(CreateTextColorQuickMenu());
+        menu.Items.Add(CreateDeveloperAccessQuickMenu());
 
         return menu;
     }
 
-    private MenuItem CreateDeveloperCheckMenuItem(string text, bool isChecked, Action action)
+    private MenuItem CreateBackgroundQuickMenu()
     {
-        var item = CreateDeveloperMenuItem($"{(isChecked ? "✓" : "□")} {text}");
-        item.StaysOpenOnClick = false;
+        var submenu = CreateDeveloperQuickSubmenuItem("Hintergrund");
+        foreach (var preset in AppearanceSettingsService.BackgroundPresets)
+        {
+            var presetName = preset.Preset.ToString();
+            submenu.Items.Add(CreateDeveloperQuickSelectionMenuItem(
+                preset.DisplayName,
+                string.Equals(AppearanceSettingsService.GetEffectiveSettings(_settings).BackgroundPreset, presetName, StringComparison.Ordinal),
+                isEnabled: true,
+                () => SetBackgroundPreset(presetName)));
+        }
+
+        return submenu;
+    }
+
+    private MenuItem CreateTextColorQuickMenu()
+    {
+        var submenu = CreateDeveloperQuickSubmenuItem("Textfarbe");
+        var appearanceMode = AppearanceSettingsService.GetEffectiveMode(_settings);
+        foreach (var preset in AppearanceSettingsService.TextColorPresets)
+        {
+            var presetName = preset.Preset.ToString();
+            submenu.Items.Add(CreateDeveloperQuickSelectionMenuItem(
+                preset.DisplayName,
+                string.Equals(AppearanceSettingsService.GetEffectiveSettings(_settings).TextColorPreset, presetName, StringComparison.Ordinal),
+                preset.IsCompatibleWith(appearanceMode),
+                () => SetTextColorPreset(presetName)));
+        }
+
+        return submenu;
+    }
+
+    private MenuItem CreateDeveloperAccessQuickMenu()
+    {
+        var submenu = CreateDeveloperQuickSubmenuItem(LocalizationText.Get("DeveloperTools.AccessMenu"));
+        var access = DeveloperToolsCommands.AccessState;
+        foreach (var (choice, key) in new[]
+        {
+            (DeveloperToolsVisibilityChoice.Show, "DeveloperAccess.Show"),
+            (DeveloperToolsVisibilityChoice.Hide, "DeveloperAccess.Hide"),
+            (DeveloperToolsVisibilityChoice.Conceal, "DeveloperAccess.Conceal")
+        })
+        {
+            submenu.Items.Add(CreateDeveloperQuickSelectionMenuItem(
+                LocalizationText.Get(key), choice != DeveloperToolsVisibilityChoice.Conceal && access.VisibilityChoice == choice,
+                isEnabled: true, () => access.VisibilityChoice = choice));
+        }
+        return submenu;
+    }
+
+    private MenuItem CreateDeveloperQuickSubmenuItem(string text) =>
+        new()
+        {
+            Header = text,
+            Style = TryFindResource("BookStitchContextSubmenuItemStyle") as Style
+        };
+
+    private MenuItem CreateDeveloperQuickSelectionMenuItem(
+        string text,
+        bool isChecked,
+        bool isEnabled,
+        Action action)
+    {
+        var item = CreateDeveloperQuickMenuItem(text);
+        item.IsCheckable = true;
+        item.IsChecked = isChecked;
+        item.IsEnabled = isEnabled;
         item.Click += (_, _) => action();
         return item;
     }
 
-    private MenuItem CreateDeveloperActionMenuItem(string text, Func<Task> action)
+    private MenuItem CreateDeveloperQuickActionMenuItem(string text, Action action)
     {
-        var item = CreateDeveloperMenuItem(text);
-        item.Click += async (_, _) => await action();
+        var item = CreateDeveloperQuickMenuItem(text);
+        item.Click += (_, _) => action();
         return item;
     }
 
-    private MenuItem CreateDeveloperMenuItem(string text)
-    {
-        var item = new MenuItem
+    private MenuItem CreateDeveloperQuickMenuItem(string text) =>
+        new()
         {
             Header = text,
             Style = TryFindResource("BookStitchContextMenuItemStyle") as Style
         };
-        return item;
-    }
 
-    private void SetDeveloperMode(bool enabled)
+    private void DeveloperAccessState_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        _settings.ShowDeveloperTab = enabled;
-        if (!enabled)
+        if (e.PropertyName != nameof(DeveloperToolsAccessState.IsEnabled)) return;
+        if (!DeveloperToolsCommands.AccessState.IsEnabled)
         {
-            _settings.ShowPipelineStateDebug = false;
-            _settings.ForceShowFfmpegSetupButton = false;
+            SetPerformanceDiagnosticsEnabled(false);
+            _developerToolsWindow?.Close();
+            MainExportProgress.StopPreview();
+            if (_developerQuickMenu is not null) _developerQuickMenu.IsOpen = false;
+            var previousBackground = _settings.BackgroundPreset;
+            var previousText = _settings.TextColorPreset;
+            AppearanceSettingsService.NormalizeRegular(_settings, false);
+            if (previousBackground != _settings.BackgroundPreset || previousText != _settings.TextColorPreset)
+                _services.Foundation.GlobalSettingsManager.SaveImmediate();
         }
-
-        SaveSettingsIfReady();
-        NotifyDeveloperModeSettingsChanged();
+        ApplyAppearanceResources(_settings);
     }
 
-    private void EnsureDeveloperModeEnabled()
+    private void SetPerformanceDiagnosticsEnabled(bool enabled)
     {
-        if (_settings.ShowDeveloperTab)
-            return;
+        enabled = enabled && DeveloperToolsCommands.AccessState.IsEnabled;
+        if (Application.Current is App app)
+            app.SetPerformanceDiagnosticsEnabled(enabled, _settings);
 
-        _settings.ShowDeveloperTab = true;
-        SaveSettingsIfReady();
-        NotifyDeveloperModeSettingsChanged();
-    }
-
-    private void SetPipelineStateDebugVisible(bool visible)
-    {
-        if (visible)
-            _settings.ShowDeveloperTab = true;
-
-        _settings.ShowPipelineStateDebug = visible;
-        SaveSettingsIfReady();
-        NotifyDeveloperModeSettingsChanged();
+        if (_debugSettings.PerformanceDiagnosticsEnabled == enabled) return;
+        _debugSettings.PerformanceDiagnosticsEnabled = enabled;
+        try { _services.Foundation.DebugSettingsService.Save(_debugSettings); }
+        catch (Exception ex) { Trace.TraceWarning("Performance diagnostics preference could not be saved: {0}", ex); }
     }
 
     private void SetForceShowFfmpegSetupButton(bool visible)
     {
-        if (visible)
-            _settings.ShowDeveloperTab = true;
-
-        _settings.ForceShowFfmpegSetupButton = visible;
-        SaveSettingsIfReady();
-        NotifyDeveloperModeSettingsChanged();
-    }
-
-    private void NotifyDeveloperModeSettingsChanged()
-    {
-        OnPropertyChanged(nameof(PipelineStateDebugVisibility));
-        OnPropertyChanged(nameof(PipelineStateDebugText));
+        _debugSettings.ForceShowFfmpegSetupButton = visible;
+        _services.Foundation.DebugSettingsService.Save(_debugSettings);
         OnPropertyChanged(nameof(FfmpegSetupButtonVisibility));
     }
 
-    private async Task StartDeveloperAudioDiscTestAsync()
+    private void SetTrackGridRowHeightLevel(int level)
     {
-        if (IsBusy)
+        var normalized = TrackGridRowHeightService.NormalizeLevel(level);
+        if (_debugSettings.TrackGridRowHeightLevel == normalized)
             return;
 
-        var drives = await Task.Run(() => _discDriveService.GetCdDrives());
-        var initialAudioTemplateFolder = Directory.Exists(_settings.LastDeveloperAudioDiscTestFolder)
-            ? _settings.LastDeveloperAudioDiscTestFolder
-            : GetDesktopFolder();
-        var initialMp3TemplateFolder = Directory.Exists(_settings.LastDeveloperMp3DiscTestFolder)
-            ? _settings.LastDeveloperMp3DiscTestFolder
-            : GetDesktopFolder();
-        var initiallySelectMp3Disc = string.Equals(_settings.LastDeveloperDiscTestType, "Mp3Disc", StringComparison.OrdinalIgnoreCase);
-        var dialog = new DeveloperAudioDiscTestDialog(drives, initialAudioTemplateFolder, initialMp3TemplateFolder, initiallySelectMp3Disc)
-        {
-            Owner = this
-        };
-        if (dialog.ShowDialog() != true || dialog.SelectedDrive is null)
-            return;
-
-        _settings.LastDeveloperDiscTestType = dialog.IsMp3DiscTest ? "Mp3Disc" : "AudioCd";
-        SaveSettingsIfReady();
-
-        try
-        {
-            if (dialog.IsMp3DiscTest)
-            {
-                await StartDeveloperMp3DiscTestAsync(dialog);
-                return;
-            }
-
-            var preparation = new DeveloperAudioDiscTestProjectService(
-                _audioDiscProjectService,
-                _workManifestService).Prepare(
-                    dialog.ProjectFolder,
-                    GetProjectFolderStructure().AudioDiscProjectsFolder,
-                    dialog.DiscNumber,
-                    dialog.ResetTrackCount,
-                    dialog.TotalDiscs,
-                    dialog.SelectedDrive);
-
-            _settings.LastDeveloperAudioDiscTestFolder = preparation.TemplateProjectFolder;
-            SaveSettingsIfReady();
-
-            var manifest = preparation.Manifest;
-            _activeAudioDiscManifest = manifest;
-            _loadedResumeProjectIsAudioDisc = true;
-            _loadedResumeProjectIsMp3Disc = false;
-            _loadedResumeProjectIsLocal = false;
-            _currentProjectWorkFolder = manifest.ProjectFolder;
-            _currentFolderPath = ProjectFolderLayout.GetOriginalsFolder(manifest.ProjectFolder);
-            SelectedFolder = dialog.SelectedDrive.RootPath;
-            SetAudioDiscSourceDisplayOverride(manifest);
-            _isAudioDiscProjectAwaitingRip = true;
-            _isWaitingForManualMergeReview = false;
-            _isCurrentProjectCompleted = false;
-            SetPipelineState(ProjectPipelineState.AcquiringSources);
-
-            void ApplyShortTestProjectSettings()
-            {
-                ApplyLoadedTitleAndAlbum(preparation.Title, preparation.Album);
-                Author = preparation.Author;
-                Narrator = preparation.Narrator;
-                Genre = preparation.Genre;
-                SetMetadataEditingAvailable(true);
-                if (!string.IsNullOrWhiteSpace(preparation.SelectedPreset))
-                    SetSelectedExportPresetSilently(preparation.SelectedPreset);
-                if (!string.IsNullOrWhiteSpace(preparation.ParallelJobs))
-                    SetParallelJobsInput(preparation.ParallelJobs, showMessage: false);
-            }
-
-            ApplyShortTestProjectSettings();
-            if (!string.IsNullOrWhiteSpace(manifest.OutputFolder))
-                OutputFolder = manifest.OutputFolder;
-            if (!string.IsNullOrWhiteSpace(manifest.OutputExtension))
-                OutputExtension = manifest.OutputExtension;
-            if (!string.IsNullOrWhiteSpace(manifest.FileNameTemplate))
-                FileNameTemplate = manifest.FileNameTemplate;
-            if (!string.IsNullOrWhiteSpace(preparation.CoverFilePath))
-                SetCoverFromFile(preparation.CoverFilePath);
-            else
-            {
-                _coverSourcePath = string.Empty;
-                _processedCoverPath = string.Empty;
-                CoverPreviewSource = string.Empty;
-            }
-
-            RefreshActiveAudioDiscPreviewMetadata();
-            SaveCurrentAudioDiscProjectSnapshot(manifest);
-
-            Tracks.Clear();
-            foreach (var track in _audioDiscProjectService.CreateTrackPreview(manifest))
-                Tracks.Add(track);
-            UpdateIndexes();
-            TracksGrid.Items.Refresh();
-            AutoFitTrackColumnsAfterRender();
-            NotifyExportUiStateChanged();
-
-            StatusText = $"Audio-CD-Kurztest-Arbeitskopie vorbereitet • CD {preparation.DiscNumber} • Tracks {preparation.FirstResetTrackNumber:00} bis {preparation.FirstResetTrackNumber + preparation.ResetTrackCount - 1:00}";
-            ExportProgressText = "Der Audio-CD-Testlauf wird gestartet …";
-            _developerAudioDiscTestDriveRoot = dialog.SelectedDrive.RootPath;
-            try
-            {
-                await RunPreparedAudioDiscRipAsync(
-                    restoreUiState: ApplyShortTestProjectSettings,
-                    queueExistingRippedTracks: false);
-            }
-            finally
-            {
-                _developerAudioDiscTestDriveRoot = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            AppDialogService.Error(this, dialog.IsMp3DiscTest
-                ? "MP3-CD-Kurztest konnte nicht vorbereitet werden"
-                : "Audio-CD-Kurztest konnte nicht vorbereitet werden", ex.Message);
-        }
+        _debugSettings.TrackGridRowHeightLevel = normalized;
+        _services.Foundation.DebugSettingsService.Save(_debugSettings);
+        OnPropertyChanged(nameof(TrackGridRowHeight));
     }
 
-
-    private async Task StartDeveloperMp3DiscTestAsync(DeveloperAudioDiscTestDialog dialog)
+    private DeveloperToolsWindow CreateDeveloperToolsWindow()
     {
-        if (dialog.SelectedDrive is null)
+        var developerToolsWindow = new DeveloperToolsWindow(
+            _services.Foundation.GlobalSettingsManager,
+            _services.Foundation.SettingsService.ProjectRootFolder,
+            _debugSettings,
+            _services.Foundation.DebugSettingsService,
+            _services.Foundation.EnvironmentContext,
+            Application.Current is App app ? app.ProjectEnvironmentSelectionService : new ProjectEnvironmentSelectionService(),
+            RequestApplicationRestart,
+            _runtimeServices.NotificationService,
+            _isMetadataPanelExpanded,
+            expanded => SetMetadataPanelExpanded(expanded, animate: true),
+            SetForceShowFfmpegSetupButton,
+            SetPerformanceDiagnosticsEnabled,
+            SetTrackGridRowHeightLevel,
+            SetBackgroundPreset,
+            SetTextColorPreset,
+            () => RefreshGenreOptions(),
+            PreviewDiscSourceAnalysisAsync,
+            () => ProjectReviewState.Phase.ToString(),
+            () => StatusText,
+            () => ExportProgressText,
+            CreateCurrentChapterDebugSnapshot,
+            CreateCurrentMetadataDebugSnapshot,
+            projectIndexService: _services.Foundation.ProjectIndexService,
+            startProgressPreview: (seconds, gold) => MainExportProgress.StartPreview(seconds, gold, StandardProgressPanel),
+            stopProgressPreview: () => MainExportProgress.StopPreview());
+
+
+        developerToolsWindow.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_developerToolsWindow, developerToolsWindow))
+            {
+                _developerToolsWindow = null;
+            }
+        };
+
+        _developerToolsWindow = developerToolsWindow;
+        return developerToolsWindow;
+    }
+
+    private ChapterDebugSnapshot CreateCurrentChapterDebugSnapshot() =>
+        _services.Foundation.ChapterDebugPresentationService.Create(
+            _currentActiveChapterResult,
+            TracksGrid?.SelectedItem as TrackInfo);
+
+    private MetadataDebugSnapshot CreateCurrentMetadataDebugSnapshot() =>
+        _services.Foundation.MetadataDebugPresentationService.Create(
+            _projectMetadata.CanonicalMetadata,
+            string.Equals(
+                _latestMetadataDiagnosisProjectFolder,
+                _currentProjectWorkFolder,
+                StringComparison.OrdinalIgnoreCase)
+                ? _latestMetadataFieldDecisions
+                : []);
+
+    internal void RestartDeveloperToolsWindowForModalAccess()
+    {
+        if (!DeveloperToolsCommands.AccessState.IsEnabled)
             return;
 
-        var preparation = new DeveloperMp3DiscTestProjectService(
-            _mp3DiscProjectService,
-            _workManifestService).Prepare(
-                dialog.ProjectFolder,
-                GetProjectFolderStructure().Mp3DiscProjectsFolder,
-                dialog.DiscNumber,
-                dialog.ResetTrackCount,
-                dialog.TotalDiscs,
-                dialog.SelectedDrive);
+        if (_developerToolsWindow is { IsLoaded: true })
+            _developerToolsWindow.Close();
 
-        _settings.LastDeveloperMp3DiscTestFolder = preparation.TemplateProjectFolder;
-        SaveSettingsIfReady();
-
-        var manifest = preparation.Manifest;
-        _activeMp3DiscManifest = manifest;
-        _activeAudioDiscManifest = null;
-        _loadedResumeProjectIsMp3Disc = true;
-        _loadedResumeProjectIsAudioDisc = false;
-        _loadedResumeProjectIsLocal = false;
-        _loadedResumeProjectNeedsDiscImport = true;
-        _currentProjectWorkFolder = manifest.ProjectFolder;
-        _currentFolderPath = manifest.ProjectFolder;
-        SelectedFolder = dialog.SelectedDrive.RootPath;
-        _isWaitingForManualMergeReview = false;
-        _isCurrentProjectCompleted = false;
-        SetPipelineState(ProjectPipelineState.AcquiringSources);
-
-        ApplyLoadedTitleAndAlbum(preparation.Title, preparation.Album);
-        Author = preparation.Author;
-        Narrator = preparation.Narrator;
-        Genre = preparation.Genre;
-        SetMetadataEditingAvailable(true);
-        if (!string.IsNullOrWhiteSpace(preparation.SelectedPreset))
-            SetSelectedExportPresetSilently(preparation.SelectedPreset);
-        if (!string.IsNullOrWhiteSpace(manifest.OutputFolder))
-            OutputFolder = manifest.OutputFolder;
-        if (!string.IsNullOrWhiteSpace(manifest.OutputExtension))
-            OutputExtension = manifest.OutputExtension;
-        if (!string.IsNullOrWhiteSpace(manifest.FileNameTemplate))
-            FileNameTemplate = manifest.FileNameTemplate;
-        if (!string.IsNullOrWhiteSpace(preparation.ParallelJobs))
-            SetParallelJobsInput(preparation.ParallelJobs, showMessage: false);
-
-        if (!string.IsNullOrWhiteSpace(preparation.CoverFilePath))
-            SetCoverFromFile(preparation.CoverFilePath);
-        else
-        {
-            _coverSourcePath = string.Empty;
-            _processedCoverPath = string.Empty;
-            CoverPreviewSource = string.Empty;
-        }
-
-        SaveCurrentMp3DiscProjectSnapshot(manifest);
-        NotifyExportUiStateChanged();
-        StatusText = $"MP3-CD-Kurztest-Arbeitskopie vorbereitet • CD {preparation.DiscNumber} • Dateien {preparation.FirstResetTrackNumber:00} bis {preparation.FirstResetTrackNumber + preparation.ResetTrackCount - 1:00}";
-        ExportProgressText = "Der MP3-CD-Testlauf wird gestartet …";
-
-        await ImportMp3DiscProjectAsync(
-            manifest.ProjectFolder,
-            dialog.SelectedDrive.RootPath,
-            manifest,
-            startDiscNumber: preparation.DiscNumber,
-            firstDiscAlreadyReady: false,
-            autoExportWhenComplete: false,
-            isDeveloperShortTest: true,
-            expectedFirstDiscSignature: preparation.ExpectedDiscSignature);
+        _developerToolsWindow = null;
+        var developerToolsWindow = CreateDeveloperToolsWindow();
+        developerToolsWindow.Show();
+        developerToolsWindow.Activate();
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -6010,36 +8685,70 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ShowSettingsDialog(this);
     }
 
-    private void ShowSettingsDialog(Window owner, bool openDeveloperTab = false)
+    private void ShowSettingsDialog(
+        Window owner,
+        string? initialTabKey = null,
+        Action? chapterStateChanged = null)
     {
-        var previousUseLeadingZerosInChapterSuggestions = _settings.UseLeadingZerosInChapterSuggestions;
-
-        if (openDeveloperTab)
-            EnsureDeveloperModeEnabled();
+        var previousChapterSettings = CloneChapterSettings(_settings.ChapterSettings);
 
         var settingsWindow = new SettingsWindow(
-            _settings,
-            _settingsService,
-            _notificationService,
+            _services.Foundation.GlobalSettingsManager,
+            _runtimeServices.NotificationService,
             days => DeleteOldProjects(days, showUserMessage: false),
-            _isMetadataPanelExpanded,
-            expanded => SetMetadataPanelExpanded(expanded, animate: true),
-            enabled => MergeAutomaticallyAfterConversion = enabled,
-            _ =>
+            ApplyMergeAutomaticallyFromSettingsWindow,
+            ApplyRegularAppearanceSettings,
+            getOutputFolder: () => OutputFolder,
+            chooseOutputFolder: owner => ChooseOutputFolder(owner),
+            openOutputFolder: owner => OpenFolderInExplorer(OutputFolder, LocalizationText.Get("MainWindow.Path.OutputFolder"), owner),
+            outputFolderChangeSource: this,
+            chapterPreviewProjectTracks: Tracks.ToList(),
+            chapterPreviewProjectBookTitle: BookTitle,
+            chapterPreviewProjectAlbum: Album,
+            chapterPreviewResolvedAutoContents: CreateCurrentResolvedAutoContentsBySourceId(),
+            chapterPreviewProjectDataProvider: CreateCurrentChapterPreviewData,
+            chapterSettingsChanged: () =>
             {
-                OnPropertyChanged(nameof(PipelineStateDebugVisibility));
-                OnPropertyChanged(nameof(PipelineStateDebugText));
+                ApplyPersistedChapterSettingsEditorChange();
+                chapterStateChanged?.Invoke();
             },
-            PreviewDiscSourceAnalysisAsync,
-            StartDeveloperAudioDiscTestAsync,
-            openDeveloperTab)
+            initialTabKey: initialTabKey,
+            coverPickerService: _coverPickerService,
+            projectRootFolder: GetWorkingRootFolder(),
+            projectIndexService: _services.Foundation.ProjectIndexService,
+            projectResumePlanService: _services.Foundation.ProjectResumePlanService,
+            requestApplicationRestart: RequestApplicationRestart,
+            checkProjectIntegrity: RunProjectIntegritySweep,rebuildProject: RunProjectRebuild)
         {
             Owner = owner
         };
+        var conversionSettings = settingsWindow.ConversionSettingsControl;
+        conversionSettings.DataContext = this;
+        conversionSettings.ExportPresetComboBox.SelectionChanged += (sender, args) =>
+        {
+            // Initial binding populates this additional view; only a replacement is a user selection.
+            if (args.RemovedItems.Count > 0) ExportPresetComboBox_SelectionChanged(sender, args);
+        };
+        conversionSettings.ParallelJobsTextBox.LostFocus += ParallelJobsInput_LostFocus;
+        conversionSettings.ParallelJobsTextBox.KeyDown += ParallelJobsInput_KeyDown;
+        conversionSettings.ParallelJobsTextBox.PreviewMouseWheel += ParallelJobsInput_PreviewMouseWheel;
+        conversionSettings.IncreaseParallelJobsButton.Click += IncreaseParallelJobs_Click;
+        conversionSettings.DecreaseParallelJobsButton.Click += DecreaseParallelJobs_Click;
+        conversionSettings.OpenWorkFolderButton.Click += OpenWorkFolder_Click;
+        conversionSettings.OpenTaskManagerButton.Click += OpenTaskManager_Click;
+        settingsWindow.Loaded += (_, _) => { ++_openSettingsContexts; CheckAutomaticMaintenance(); };
+        settingsWindow.Closed += (_, _) => { _openSettingsContexts = Math.Max(0, _openSettingsContexts - 1); CheckAutomaticMaintenance(); };
+        AttachDebugWindowPlacement(settingsWindow, DebugWindowPlacementTarget.GlobalSettings);
 
-        settingsWindow.ShowDialog();
+        ModalDialogService.ShowDialog(settingsWindow, owner);
+        if (IsApplicationRestartOrShutdownPending())
+            return;
 
-        if (previousUseLeadingZerosInChapterSuggestions != _settings.UseLeadingZerosInChapterSuggestions)
+        ApplyAppearanceResources(_settings);
+        if (string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            RecalculateProcessingActionsForCurrentPreset();
+
+        if (!ChapterSettingsEqual(previousChapterSettings, _settings.ChapterSettings))
         {
             UpdateIndexes();
             PersistTrackListState();
@@ -6047,41 +8756,224 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         OutputExtension = _settings.DefaultOutputExtension;
         FileNameTemplate = _settings.DefaultFileNameTemplate;
-        if (IsTitleAlbumLinked)
-            Album = BookTitle;
-
-        OnPropertyChanged(nameof(AlbumLinkToggleToolTip));
-        OnPropertyChanged(nameof(IsAlbumTabStop));
+        OnPropertyChanged(nameof(OutputFolderLayout));
         OnPropertyChanged(nameof(FfmpegSetupButtonVisibility));
+        AutoFitTrackColumnsAfterRender();
         OnPropertyChanged(nameof(MergeAutomaticallyAfterConversion));
-        OnPropertyChanged(nameof(PipelineStateDebugVisibility));
-        OnPropertyChanged(nameof(PipelineStateDebugText));
+        OnPropertyChanged(nameof(DriveCircleEnabled));
         OnPropertyChanged(nameof(CanStartNewProject));
         OnPropertyChanged(nameof(ExportPreviewFileName));
+        RefreshSystemSleepPrevention();
         RefreshResumeProjects(showStatus: false);
-        owner.Activate();
-        owner.Focus();
+    }
+
+    private bool IsApplicationRestartOrShutdownPending()
+    {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return true;
+
+        return Application.Current is App app && app.ApplicationRestartService.IsRestartRequested;
+    }
+
+    private IReadOnlyDictionary<Guid, string>? CreateCurrentResolvedAutoContentsBySourceId()
+    {
+        if (_currentAutoChapterResult is null)
+            return null;
+
+        var resolvedById = _currentAutoChapterResult.ResolveResult.Chapters.ToDictionary(
+            chapter => chapter.EffectiveChapterId,
+            StringComparer.Ordinal);
+        return _currentAutoChapterResult.AnalysisSnapshot.EffectiveChapters
+            .OrderBy(chapter => chapter.ScopeOrder)
+            .GroupBy(chapter => chapter.SourceId)
+            .ToDictionary(
+                group => group.Key,
+                group => resolvedById[group.First().EffectiveChapterId].Text);
+    }
+
+    private ChapterPreviewData? CreateCurrentChapterPreviewData()
+    {
+        if (Tracks.Count == 0)
+            return null;
+
+        return new ChapterPreviewData(
+            BookTitle,
+            Album,
+            Tracks.ToList(),
+            CreateCurrentResolvedAutoContentsBySourceId(),
+            _currentActiveChapterResult?.RenderedTimeline);
+    }
+
+    private void ConfigureMainChapterSettingsEditor()
+    {
+        MainChapterHeadingTextBlock.Text = ChapterSettingsEditorPresentation.GetText("GenericChapterLabel");
+        MainChapterModeLabelTextBlock.Text = ChapterSettingsEditorPresentation.GetText("Mode");
+        MainChapterNumberingStyleLabelTextBlock.Text = ChapterSettingsEditorPresentation.GetText("NumberingStyle");
+        MainChapterCustomHeadingTextBlock.Text = ChapterSettingsEditorPresentation.GetText("CustomRules");
+
+        SettingsComboBoxSelection.Populate(
+            MainChapterModeComboBox,
+            ChapterSettingsEditorPresentation.Modes
+                .Select(option => (option.Value, ChapterSettingsEditorPresentation.GetText(option.ResourceKey)))
+                .ToArray());
+        SettingsComboBoxSelection.Populate(
+            MainChapterNumberingStyleComboBox,
+            ChapterSettingsEditorPresentation.NumberingStyles
+                .Select(option => (option.Value, ChapterSettingsEditorPresentation.GetText(option.ResourceKey)))
+                .ToArray());
+
+        var slots = ChapterSettingsEditorPresentation.Slots
+            .Select(option => (option.Value, ChapterSettingsEditorPresentation.GetText(option.ResourceKey)))
+            .ToArray();
+        SettingsComboBoxSelection.Populate(MainChapterSlot1ComboBox, slots);
+        SettingsComboBoxSelection.Populate(MainChapterSlot2ComboBox, slots);
+        SettingsComboBoxSelection.Populate(MainChapterSlot3ComboBox, slots);
+
+        var separators = ChapterSettingsEditorPresentation.Separators
+            .Select(option => (option.Value, ChapterSettingsEditorPresentation.GetText(option.ResourceKey)))
+            .ToArray();
+        SettingsComboBoxSelection.Populate(MainChapterSeparator1ComboBox, separators);
+        SettingsComboBoxSelection.Populate(MainChapterSeparator2ComboBox, separators);
+    }
+
+    private void RefreshMainChapterSettingsEditorFromSharedState()
+    {
+        if (MainChapterModeComboBox is null)
+            return;
+
+        var previousGuard = _isRefreshingMainChapterSettingsEditor;
+        _isRefreshingMainChapterSettingsEditor = true;
+        try
+        {
+            var state = _chapterSettingsEditorService.Read(_settings);
+            SettingsComboBoxSelection.SelectByTag(MainChapterModeComboBox, state.Mode);
+            SettingsComboBoxSelection.SelectByTag(MainChapterNumberingStyleComboBox, state.NumberingStyle);
+            SettingsComboBoxSelection.SelectByTag(MainChapterSlot1ComboBox, state.Slot1);
+            SettingsComboBoxSelection.SelectByTag(MainChapterSeparator1ComboBox, state.Separator1);
+            SettingsComboBoxSelection.SelectByTag(MainChapterSlot2ComboBox, state.Slot2);
+            SettingsComboBoxSelection.SelectByTag(MainChapterSeparator2ComboBox, state.Separator2);
+            SettingsComboBoxSelection.SelectByTag(MainChapterSlot3ComboBox, state.Slot3);
+            UpdateMainChapterSettingsEditorVisibility(state.Mode);
+            UpdateMainChapterSlotOptionAvailability(state.NumberingStyle);
+        }
+        finally
+        {
+            _isRefreshingMainChapterSettingsEditor = previousGuard;
+        }
+    }
+
+    private void MainChapterSettingsComboBox_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingMainChapterSettingsEditor)
+            return;
+
+        var current = _chapterSettingsEditorService.Read(_settings);
+        var mode = SettingsComboBoxSelection.GetSelectedTag(MainChapterModeComboBox, current.Mode);
+        var numberingStyle = SettingsComboBoxSelection.GetSelectedTag(MainChapterNumberingStyleComboBox, current.NumberingStyle);
+        _chapterSettingsEditorService.Apply(
+            _settings,
+            new ChapterSettingsEditorState(
+                mode,
+                numberingStyle,
+                current.PreviewDataSource,
+                SettingsComboBoxSelection.GetSelectedTag(MainChapterSlot1ComboBox, current.Slot1),
+                SettingsComboBoxSelection.GetSelectedTag(MainChapterSeparator1ComboBox, current.Separator1),
+                SettingsComboBoxSelection.GetSelectedTag(MainChapterSlot2ComboBox, current.Slot2),
+                SettingsComboBoxSelection.GetSelectedTag(MainChapterSeparator2ComboBox, current.Separator2),
+                SettingsComboBoxSelection.GetSelectedTag(MainChapterSlot3ComboBox, current.Slot3)));
+
+        ApplySharedChapterSettingsEditorChange();
+    }
+
+    private void UpdateMainChapterSettingsEditorVisibility(string mode)
+    {
+        MainChapterNumberingStylePanel.Visibility = ChapterSettingsEditorPresentation.ShowsNumberingStyle(mode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        MainChapterCustomRulePanel.Visibility = ChapterSettingsEditorPresentation.ShowsCustomRule(mode)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (_isMetadataPanelExpanded)
+            SetMetadataPanelExpanded(true, animate: false);
+    }
+
+    private void UpdateMainChapterSlotOptionAvailability(string numberingStyle)
+    {
+        foreach (var comboBox in new[] { MainChapterSlot1ComboBox, MainChapterSlot2ComboBox, MainChapterSlot3ComboBox })
+        {
+            foreach (var item in comboBox.Items.OfType<ComboBoxItem>())
+            {
+                var slotValue = item.Tag?.ToString() ?? string.Empty;
+                item.IsEnabled = ChapterSettingsEditorPresentation.IsSlotOptionEnabled(slotValue, numberingStyle);
+                var helpText = ChapterSettingsEditorPresentation.GetSlotOptionUnavailableHelpText(slotValue, numberingStyle);
+                item.ToolTip = helpText;
+                ToolTipService.SetShowOnDisabled(item, helpText is not null);
+            }
+        }
+    }
+
+    private void ApplySharedChapterSettingsEditorChange()
+    {
+        SaveSettingsIfReady();
+        ApplyPersistedChapterSettingsEditorChange();
+    }
+
+    private void ApplyPersistedChapterSettingsEditorChange()
+    {
+        ApplyChapterSettingsImmediately();
+        RefreshMainChapterSettingsEditorFromSharedState();
+        _developmentMetadataDialog?.RefreshChapterSettingsEditorFromSharedState();
+    }
+
+    private void ApplyChapterSettingsImmediately()
+    {
+        _chapterMetadataRefreshTimer.Stop();
+        UpdateIndexes();
+        PersistTrackListState();
+    }
+
+    private void QueueProjectSetupDiscCountPreviewRefresh()
+    {
+        _projectSetupDiscCountRefreshTimer.Stop();
+        _projectSetupDiscCountRefreshTimer.Start();
+    }
+
+    private void ProjectSetupDiscCountRefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        FlushProjectSetupDiscCountPreviewRefresh();
+    }
+
+    private void FlushProjectSetupDiscCountPreviewRefresh()
+    {
+        if (!_projectSetupDiscCountRefreshTimer.IsEnabled)
+            return;
+
+        _projectSetupDiscCountRefreshTimer.Stop();
+        UpdateIndexes();
     }
 
     private DiscProjectSetupDialog CreateProjectSetupDialog(ProjectSetupDialogRequest request)
     {
+        if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset) && request.SourceKind != ProjectSetupSourceKind.Folder)
+            request = request with { IsDiscResume = true, SelectedExportPreset = _lockedDiscResumePreset };
+        _previewEffectiveTotalDiscs = request.SourceKind == ProjectSetupSourceKind.Folder
+            ? null
+            : Math.Clamp(request.DefaultDiscCount, request.MinimumDiscs, Math.Min(request.MaximumDiscs, 99));
+        if (_previewEffectiveTotalDiscs is not null && Tracks.Count > 0)
+            UpdateIndexes();
+
         var dialog = new DiscProjectSetupDialog(
             request,
+            AppearanceSettingsService.GetEffectiveMode(_settings),
             openAdvancedSettings: owner =>
             {
                 ShowSettingsDialog(owner);
                 return new ProjectSetupDialogGlobalSettings(
                     _settings.MergeAutomaticallyAfterConversion,
-                    _settings.KeepAlbumLinkedToTitle,
                     _settings.DefaultOutputExtension,
-                    _settings.DefaultFileNameTemplate);
-            },
-            setAlbumLink: linked =>
-            {
-                _settings.KeepAlbumLinkedToTitle = linked;
-                SaveSettingsIfReady();
-                OnPropertyChanged(nameof(AlbumLinkToggleToolTip));
-                OnPropertyChanged(nameof(IsAlbumTabStop));
+                    _settings.DefaultFileNameTemplate,
+                    OutputFolder);
             },
             setAutoMerge: enabled =>
             {
@@ -6093,6 +8985,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 OutputExtension = extension;
                 SaveSettingsIfReady();
                 OnPropertyChanged(nameof(ExportPreviewFileName));
+            },
+            setOutputFolder: folder =>
+            {
+                OutputFolder = folder;
             },
             setFileNameTemplate: template =>
             {
@@ -6109,17 +9005,267 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _settings.LastCoverFolder = folder;
                 SaveSettingsIfReady();
             },
-            previewCoverChanged: (sourcePath, processedPath) =>
+            setCoverWarningThresholdPixels: SetCoverWarningThresholdPixels,
+            getCoverWarningThresholdPixels: () => _settings.CoverWarningThresholdPixels,
+            coverPickerService: _coverPickerService,
+            discCountChanged: totalDiscs =>
             {
-                _coverSourcePath = sourcePath;
-                _processedCoverPath = processedPath;
-                CoverPreviewSource = processedPath;
+                _previewEffectiveTotalDiscs = totalDiscs;
+                QueueProjectSetupDiscCountPreviewRefresh();
+            },
+            metadataState: _projectMetadata,
+            metadataPreferences: _settings.MetadataPreferences,
+            metadataPreferencesChanged: _ => SaveSettingsIfReady(),
+            sourceSnapshotsProvider: () =>
+                _services.Media.ProjectMetadataPreviewAggregationService.CreateSourceSnapshots(Tracks.ToArray()),
+            metadataFieldDecisionsProvider: () =>
+                string.Equals(
+                    _latestMetadataDiagnosisProjectFolder,
+                    _currentProjectWorkFolder,
+                    StringComparison.OrdinalIgnoreCase)
+                        ? _latestMetadataFieldDecisions
+                        : [],
+            saveMetadata: SaveMetadataDialogCanonicalMetadata,
+            openMetadataDialog: owner => ShowMetadataDialog(owner, allowDuringProjectSetup: true),
+            compatibilityPreviewProvider: CreateCurrentCompatibilityPreviewTagData,
+            compatibilityDescriptionEnabledProvider: () => _settings.CompatibilityDescriptionEnabled,
+            compatibilityDescriptionEnabledChanged: enabled =>
+            {
+                _settings.CompatibilityDescriptionEnabled = enabled;
+                SaveSettingsIfReady();
+            },
+            getAppearanceMode: () => AppearanceSettingsService.GetEffectiveMode(_settings),
+            getProjectSetupPageAnimationMilliseconds: () => AnimationTimingSettingsService
+                .GetProjectSetupPageMilliseconds(_debugSettings),
+            settingsManager: _services.Foundation.GlobalSettingsManager,
+            shouldWarnDiscCount: () => !WarningSuppressionService.IsSuppressed(_settings, WarningSuppressionService.DiscCount),
+            setAlwaysWarnDiscCount: enabled =>
+            {
+                WarningSuppressionService.SetSuppressed(_settings, WarningSuppressionService.DiscCount, !enabled);
+                SaveSettingsIfReady();
             })
         {
             Owner = this
         };
 
+        if (request.SourceKind == ProjectSetupSourceKind.Folder && string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+        {
+            dialog.AcceptedPresetChanged += preset => ShowFolderPassThroughNotice(dialog, preset);
+            dialog.Loaded += (_, _) => _folderSetupPreviewOwner = dialog;
+            dialog.Closed += (_, _) => _folderSetupPreviewOwner = null;
+            dialog.Loaded += (_, _) => ShowFolderPassThroughNotice(dialog, dialog.PresetComboBox.SelectedItem?.ToString());
+        }
+        ApplyProjectSetupDialogInitialWidth(dialog);
+        AttachDebugWindowPlacement(dialog, DebugWindowPlacementTarget.ProjectSetup);
         return dialog;
+    }
+
+    private void AttachDebugWindowPlacement(Window window, DebugWindowPlacementTarget target)
+    {
+        if (_debugWindowPlacementService is null)
+            return;
+
+        _debugWindowPlacementService.Attach(window, target);
+    }
+
+    private void ApplyProjectSetupDialogInitialWidth(DiscProjectSetupDialog dialog)
+    {
+        var ownerWidth = ActualWidth > 0 ? ActualWidth : Width;
+        dialog.Width = CalculateProjectSetupDialogInitialWidth(
+            ownerWidth,
+            dialog.Width,
+            dialog.MinWidth,
+            SystemParameters.WorkArea.Width);
+    }
+
+    internal static double CalculateProjectSetupDialogInitialWidth(
+        double ownerWidth,
+        double fallbackWidth,
+        double minimumWidth,
+        double workAreaWidth)
+    {
+        var targetWidth = ownerWidth > 0 ? ownerWidth - 80 : fallbackWidth;
+        var maximumWidth = Math.Min(1200, Math.Max(minimumWidth, workAreaWidth - 80));
+        return Math.Clamp(targetWidth, minimumWidth, maximumWidth);
+    }
+
+    private static PerformanceProjectType ResolveExportPerformanceProjectType(string projectType)
+    {
+        if (string.Equals(projectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase))
+            return PerformanceProjectType.AudioCd;
+
+        if (string.Equals(projectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase))
+            return PerformanceProjectType.Mp3Disc;
+
+        return PerformanceProjectType.LocalFolder;
+    }
+
+    private PerformanceWorkloadSnapshot CreateExportPerformanceWorkload(
+        IReadOnlyList<TrackInfo> tracks,
+        PerformanceProjectType projectType,
+        string? sourceFolder,
+        string? outputPath = null,
+        ConvertedTrackResumeState? resumeState = null)
+    {
+        long inputBytes = 0;
+        var hasInputBytes = false;
+        double inputAudioDurationMilliseconds = 0;
+        var hasAudioDuration = false;
+
+        foreach (var track in tracks)
+        {
+            string? sourcePath = null;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(track.FilePath) && File.Exists(track.FilePath))
+                {
+                    sourcePath = track.FilePath;
+                }
+                else if (!string.IsNullOrWhiteSpace(sourceFolder))
+                {
+                    var candidate = TrackPathService.GetTrackPath(sourceFolder, track);
+                    if (File.Exists(candidate))
+                        sourcePath = candidate;
+                }
+
+                if (!string.IsNullOrWhiteSpace(sourcePath))
+                {
+                    inputBytes += new FileInfo(sourcePath).Length;
+                    hasInputBytes = true;
+                }
+            }
+            catch
+            {
+                // Workload-Größen sind best effort und dürfen den Export nie beeinflussen.
+            }
+
+            if (track.DurationTicks is > 0)
+            {
+                inputAudioDurationMilliseconds +=
+                    TimeSpan.FromTicks(track.DurationTicks.Value).TotalMilliseconds;
+                hasAudioDuration = true;
+            }
+        }
+
+        long? outputBytes = null;
+        if (!string.IsNullOrWhiteSpace(outputPath))
+        {
+            try
+            {
+                if (File.Exists(outputPath))
+                    outputBytes = new FileInfo(outputPath).Length;
+            }
+            catch
+            {
+                // Ausgabedateigröße ist best effort.
+            }
+        }
+
+        var discCount = tracks
+            .Where(track => track.DiscNumber > 0)
+            .Select(track => track.DiscNumber)
+            .Distinct()
+            .Count();
+
+        return new PerformanceWorkloadSnapshot
+        {
+            ProjectType = projectType,
+            TrackCount = tracks.Count,
+            FileCount = tracks.Count,
+            DiscCount = discCount > 0 ? discCount : null,
+            SelectedTrackCount = tracks.Count,
+            InputBytes = hasInputBytes ? inputBytes : null,
+            OutputBytes = outputBytes,
+            InputAudioDurationMilliseconds = hasAudioDuration
+                ? inputAudioDurationMilliseconds
+                : null,
+            OutputAudioDurationMilliseconds = outputBytes.HasValue && hasAudioDuration
+                ? inputAudioDurationMilliseconds
+                : null,
+            PreparedReuseCount = resumeState?.ReusableCount
+        };
+    }
+
+    private PerformanceWorkloadSnapshot CreateMp3DiscPerformanceWorkload(int discNumber, int totalFilesOnDisc)
+    {
+        var discTracks = Tracks
+            .Where(track => track.DiscNumber == discNumber)
+            .ToList();
+        long inputBytes = 0;
+        var hasInputBytes = false;
+        double inputAudioDurationMilliseconds = 0;
+        var hasAudioDuration = false;
+
+        foreach (var track in discTracks)
+        {
+            if (!string.IsNullOrWhiteSpace(track.FilePath))
+            {
+                try
+                {
+                    if (File.Exists(track.FilePath))
+                    {
+                        inputBytes += new FileInfo(track.FilePath).Length;
+                        hasInputBytes = true;
+                    }
+                }
+                catch
+                {
+                    // Workload-Größen sind best effort und dürfen den Import nie beeinflussen.
+                }
+            }
+
+            if (track.DurationTicks is > 0)
+            {
+                inputAudioDurationMilliseconds += TimeSpan.FromTicks(track.DurationTicks.Value).TotalMilliseconds;
+                hasAudioDuration = true;
+            }
+        }
+
+        return new PerformanceWorkloadSnapshot
+        {
+            ProjectType = PerformanceProjectType.Mp3Disc,
+            TrackCount = discTracks.Count,
+            FileCount = Math.Max(totalFilesOnDisc, discTracks.Count),
+            DiscCount = 1,
+            InputBytes = hasInputBytes ? inputBytes : null,
+            InputAudioDurationMilliseconds = hasAudioDuration
+                ? inputAudioDurationMilliseconds
+                : null
+        };
+    }
+
+    private PerformanceWorkloadSnapshot CreateLocalFolderPerformanceWorkload()
+    {
+        long inputBytes = 0;
+        double inputAudioDurationMilliseconds = 0;
+
+        foreach (var track in Tracks)
+        {
+            if (!string.IsNullOrWhiteSpace(track.FilePath))
+            {
+                try
+                {
+                    if (File.Exists(track.FilePath))
+                        inputBytes += new FileInfo(track.FilePath).Length;
+                }
+                catch
+                {
+                    // Workload-Größen sind best effort und dürfen den Import nie beeinflussen.
+                }
+            }
+
+            if (track.DurationTicks is > 0)
+                inputAudioDurationMilliseconds += TimeSpan.FromTicks(track.DurationTicks.Value).TotalMilliseconds;
+        }
+
+        return new PerformanceWorkloadSnapshot
+        {
+            ProjectType = PerformanceProjectType.LocalFolder,
+            TrackCount = Tracks.Count,
+            FileCount = Tracks.Count,
+            InputBytes = inputBytes,
+            InputAudioDurationMilliseconds = inputAudioDurationMilliseconds
+        };
     }
 
     private static string BuildProjectSetupDurationText(IEnumerable<TrackInfo> tracks)
@@ -6132,19 +9278,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}";
     }
 
-    private ProjectCleanupResult DeleteOldProjects(bool showUserMessage)
-    {
-        return DeleteOldProjects(_settings.ProjectRetentionDays, showUserMessage);
-    }
-
     private ProjectCleanupResult DeleteOldProjects(int olderThanDays, bool showUserMessage)
     {
+        _maintenanceCoordinator?.StopAsync().GetAwaiter().GetResult();
         ProjectCleanupResult result;
 
         try
         {
             var nowUtc = DateTime.UtcNow;
-            result = _projectIndexService.DeleteProjectsOlderThan(
+            result = _services.Foundation.ProjectIndexService.DeleteProjectsOlderThan(
                 GetWorkingRootFolder(),
                 nowUtc,
                 olderThanDays);
@@ -6160,120 +9302,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            result = new ProjectCleanupResult(0, 0, [$"Projektbereinigung fehlgeschlagen: {ex.Message}"]);
+            result = new ProjectCleanupResult(0, 0, [LocalizationText.Format("MainWindow.Cleanup.ProjectFailed", ex.Message)]);
         }
 
         if (result.DeletedCount > 0)
             RefreshResumeProjects(showStatus: false);
 
         if (showUserMessage && result.DeletedCount > 0)
-            StatusText = result.DeletedCount == 1
-                ? "1 altes Projekt wurde gelöscht."
-                : $"{result.DeletedCount} alte Projekte wurden gelöscht.";
+            StatusText = LocalizationText.Format(
+                result.DeletedCount == 1 ? "MainWindow.Cleanup.Deleted.One" : "MainWindow.Cleanup.Deleted.Many",
+                result.DeletedCount);
 
         return result;
     }
 
-    private IReadOnlyList<string> DeleteOldUnreferencedCoverFiles(DateTime nowUtc, int olderThanDays)
-    {
-        var failures = new List<string>();
-        var coversFolder = GetProjectFolderStructure().CoversFolder;
-        if (!Directory.Exists(coversFolder))
-            return failures;
-
-        var normalizedDays = ProjectIndexService.NormalizeRetentionDays(olderThanDays);
-        var cutoffUtc = normalizedDays == 0
-            ? nowUtc
-            : nowUtc.AddDays(-normalizedDays);
-        var referencedCovers = CollectReferencedCoverPaths(GetWorkingRootFolder(), coversFolder);
-
-        IEnumerable<string> coverFiles;
-        try
-        {
-            coverFiles = Directory.EnumerateFiles(coversFolder, "*", SearchOption.AllDirectories).ToList();
-        }
-        catch (Exception ex)
-        {
-            failures.Add($"Cover-Bereinigung fehlgeschlagen: {ex.Message}");
-            return failures;
-        }
-
-        foreach (var coverFile in coverFiles)
-        {
-            try
-            {
-                var fullCoverPath = Path.GetFullPath(coverFile);
-                if (referencedCovers.Contains(fullCoverPath))
-                    continue;
-
-                if (File.GetLastWriteTimeUtc(fullCoverPath) > cutoffUtc)
-                    continue;
-
-                File.SetAttributes(fullCoverPath, FileAttributes.Normal);
-                File.Delete(fullCoverPath);
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"Cover {Path.GetFileName(coverFile)}: {ex.Message}");
-            }
-        }
-
-        return failures;
-    }
-
-    private static HashSet<string> CollectReferencedCoverPaths(string workingRootFolder, string coversFolder)
-    {
-        var referenced = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!Directory.Exists(workingRootFolder))
-            return referenced;
-
-        IEnumerable<string> manifestFiles;
-        try
-        {
-            manifestFiles = Directory.EnumerateFiles(workingRootFolder, "*.json", SearchOption.AllDirectories).ToList();
-        }
-        catch
-        {
-            return referenced;
-        }
-
-        foreach (var manifestFile in manifestFiles)
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(File.ReadAllText(manifestFile));
-                CollectReferencedCoverPaths(document.RootElement, coversFolder, referenced);
-            }
-            catch
-            {
-                // Beschädigte Projektdateien dürfen die Cover-Bereinigung nicht blockieren.
-            }
-        }
-
-        return referenced;
-    }
-
-    private static void CollectReferencedCoverPaths(JsonElement element, string coversFolder, ISet<string> referenced)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                foreach (var property in element.EnumerateObject())
-                    CollectReferencedCoverPaths(property.Value, coversFolder, referenced);
-                break;
-
-            case JsonValueKind.Array:
-                foreach (var item in element.EnumerateArray())
-                    CollectReferencedCoverPaths(item, coversFolder, referenced);
-                break;
-
-            case JsonValueKind.String:
-                var value = element.GetString();
-                if (IsPathInsideFolder(value, coversFolder, out var fullPath))
-                    referenced.Add(fullPath);
-                break;
-        }
-    }
+    private IReadOnlyList<string> DeleteOldUnreferencedCoverFiles(DateTime nowUtc, int olderThanDays) =>
+        new CoverCleanupService().DeleteOldUnreferencedCoverFiles(
+            GetWorkingRootFolder(), GetProjectFolderStructure().CoversFolder, nowUtc,
+            ProjectIndexService.NormalizeRetentionDays(olderThanDays));
 
     private static bool IsPathInsideFolder(string? path, string folder, out string fullPath)
     {
@@ -6321,14 +9367,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return workRoot;
     }
 
-    private void OpenFolderInExplorer(string folderPath, string displayName)
+    private void OpenFolderInExplorer(string folderPath, string displayName, Window? owner = null, bool warnForProjectFolder = false)
     {
         if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
         {
             AppDialogService.Warning(
-                this,
-                "Ordner nicht gefunden",
-                $"Der {displayName} wurde nicht gefunden.\n\n{folderPath}");
+                owner ?? this,
+                LocalizationText.Get("Disc.Setup.FolderNotFound.Title"),
+                LocalizationText.Format("MainWindow.Path.NotFound.Message", displayName, folderPath));
+            return;
+        }
+
+        if (warnForProjectFolder || ProjectFolderOpenService.IsManagedFolder(folderPath))
+        {
+            ProjectFolderOpenService.Open(owner ?? this, folderPath, _services.Foundation.GlobalSettingsManager);
             return;
         }
 
@@ -6343,9 +9395,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             AppDialogService.Warning(
-                this,
-                "Explorer konnte nicht geöffnet werden",
-                $"Der {displayName} konnte nicht geöffnet werden.\n\n{ex.Message}");
+                owner ?? this,
+                LocalizationText.Get("Disc.Setup.ExplorerFailed.Title"),
+                LocalizationText.Format("MainWindow.Path.OpenFailed.Message", displayName, ex.Message));
         }
     }
 
@@ -6356,46 +9408,228 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         bool removeGeneratedOrWorkFiles = true,
         TrackNumberPreference trackNumberPreference = TrackNumberPreference.EmbeddedTag,
         Func<string, bool>? includeFile = null,
-        bool publishWorkflowStatus = true)
+        bool publishWorkflowStatus = true,
+        bool captureLocalImportPerformance = false,
+        Guid performanceOperationId = default,
+        bool captureMp3RefreshPerformance = false,
+        IReadOnlyDictionary<string, TrackInfo>? reusableMp3ProbeTracksByPath = null,
+        string? currentMp3ImportedFolder = null,
+        TrackAnalysisCancellationScope analysisCancellationScope = TrackAnalysisCancellationScope.None,
+        Action<List<TrackInfo>>? prepareScannedTracksBeforeIndexUpdate = null)
     {
+        var loadSucceeded = false;
         IsBusy = true;
+        using var analysisCancellation = analysisCancellationScope == TrackAnalysisCancellationScope.None
+            ? null
+            : new CancellationTokenSource();
+        if (analysisCancellation is not null)
+        {
+            _trackAnalysisCancellation = analysisCancellation;
+            _trackAnalysisCancellationScope = analysisCancellationScope;
+            NotifyExportUiStateChanged();
+        }
+
+        App? localImportPerformanceApp = null;
+        PerformanceOperationScope localImportPerformanceScope = default;
+        if (captureLocalImportPerformance && Application.Current is App performanceApp)
+        {
+            localImportPerformanceApp = performanceApp;
+            localImportPerformanceScope = performanceApp.StartPerformanceOperation(
+                "project.local.import",
+                PerformanceProjectType.LocalFolder,
+                new PerformanceWorkloadSnapshot
+                {
+                    ProjectType = PerformanceProjectType.LocalFolder
+                });
+
+            if (localImportPerformanceScope.IsActive)
+            {
+                performanceApp.RecordPerformanceDriveRole(
+                    localImportPerformanceScope.OperationId,
+                    folderPath,
+                    PerformanceDriveRole.Source);
+                performanceApp.RecordPerformanceDriveRole(
+                    localImportPerformanceScope.OperationId,
+                    _services.Foundation.SettingsService.ProjectRootFolder,
+                    PerformanceDriveRole.ProjectWorking);
+            }
+        }
+
+        App? folderPerformanceApp = localImportPerformanceApp;
+        var folderPerformanceOperationId = localImportPerformanceScope.OperationId;
+        if (!captureLocalImportPerformance &&
+            captureMp3RefreshPerformance &&
+            performanceOperationId != Guid.Empty &&
+            Application.Current is App mp3RefreshPerformanceApp)
+        {
+            folderPerformanceApp = mp3RefreshPerformanceApp;
+            folderPerformanceOperationId = performanceOperationId;
+        }
 
         try
         {
-            _loadedResumeProjectNeedsDiscImport = false;
+            ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
             OnPropertyChanged(nameof(CanStartExport));
             OnPropertyChanged(nameof(ExportButtonText));
+            OnPropertyChanged(nameof(ExportButtonVisibility));
             _currentFolderPath = folderPath;
             ExportProgressPercent = 0;
             ExportProgressText = BuildIdleExportProgressText();
 
-            if (string.IsNullOrWhiteSpace(OutputFolder) || !Directory.Exists(OutputFolder))
-                OutputFolder = folderPath;
-
             Tracks.Clear();
 
-            StatusText = "Ordner wird geprüft …";
+            StatusText = LocalizationText.Get("MainWindow.Folder.Checking");
 
-            var tracks = _folderScanner.Scan(folderPath, trackNumberPreference, includeFile);
+            var scanPerformancePhase = localImportPerformanceApp is null
+                ? default(PerformancePhaseScope)
+                : localImportPerformanceApp.StartPerformancePhase(
+                    localImportPerformanceScope.OperationId,
+                    "project.scan");
+            var reconcilePerformancePhase =
+                captureMp3RefreshPerformance && folderPerformanceApp is not null
+                    ? folderPerformanceApp.StartPerformancePhase(
+                        folderPerformanceOperationId,
+                        "track.reconcile")
+                    : default;
+            List<TrackInfo> tracks;
+            try
+            {
+                tracks = await _services.Media.FolderScanner.ScanAsync(
+                    folderPath, trackNumberPreference, includeFile,
+                    analysisCancellation?.Token ?? _discImportCancellation?.Token ?? CancellationToken.None);
+                scanPerformancePhase.Complete();
+            }
+            catch (OperationCanceledException)
+            {
+                scanPerformancePhase.Cancel();
+                reconcilePerformancePhase.Cancel();
+                reconcilePerformancePhase = default;
+                throw;
+            }
+            catch (Exception ex)
+            {
+                scanPerformancePhase.Fail(ex);
+                reconcilePerformancePhase.Fail(ex);
+                reconcilePerformancePhase = default;
+                throw;
+            }
 
-            foreach (var track in tracks)
-                Tracks.Add(track);
+            if (!reconcilePerformancePhase.IsActive && localImportPerformanceApp is not null)
+            {
+                reconcilePerformancePhase = localImportPerformanceApp.StartPerformancePhase(
+                    localImportPerformanceScope.OperationId,
+                    "track.reconcile");
+            }
+            try
+            {
+                prepareScannedTracksBeforeIndexUpdate?.Invoke(tracks);
 
-            UpdateIndexes();
+                Tracks.ReplaceAll(tracks);
 
-            TryApplyFirstEmbeddedCover(tracks);
+                _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(
+                    Tracks, _currentProjectWorkFolder, SelectedExportPreset);
+                UpdateIndexes();
+                reconcilePerformancePhase.Complete();
+            }
+            catch (Exception ex)
+            {
+                reconcilePerformancePhase.Fail(ex);
+                throw;
+            }
 
-            if (updateMetadata)
-                SuggestMetadataFromTracksAndFolder(folderPath, metadataSourceFolder ?? folderPath);
+            var preparePerformancePhase = localImportPerformanceApp is null
+                ? default(PerformancePhaseScope)
+                : localImportPerformanceApp.StartPerformancePhase(
+                    localImportPerformanceScope.OperationId,
+                    "project.prepare");
+            string? embeddedCoverPath = null;
+            try
+            {
+                embeddedCoverPath = RunPerformanceStep(
+                    localImportPerformanceApp,
+                    localImportPerformanceScope.OperationId,
+                    "project.prepare.cover",
+                    () => TryExtractFirstEmbeddedCoverPath(tracks));
 
-            if (removeGeneratedOrWorkFiles)
-                RemoveGeneratedOrWorkFilesFromTrackList(folderPath);
+                if (updateMetadata)
+                {
+                    RunPerformanceStep(
+                        localImportPerformanceApp,
+                        localImportPerformanceScope.OperationId,
+                        "project.prepare.metadata",
+                        () => SuggestMetadataFromTracksAndFolder(metadataSourceFolder ?? folderPath));
+                }
 
-            UpdateIndexes();
+                if (removeGeneratedOrWorkFiles)
+                {
+                    RunPerformanceStep(
+                        localImportPerformanceApp,
+                        localImportPerformanceScope.OperationId,
+                        "project.prepare.cleanup",
+                        () => RemoveGeneratedOrWorkFilesFromTrackList(folderPath));
+                }
+
+                RunPerformanceStep(
+                    localImportPerformanceApp,
+                    localImportPerformanceScope.OperationId,
+                    "project.prepare.indexes",
+                    UpdateIndexes);
+                preparePerformancePhase.Complete();
+            }
+            catch (Exception ex)
+            {
+                preparePerformancePhase.Fail(ex);
+                throw;
+            }
+
+            TryApplyEmbeddedCoverPath(embeddedCoverPath);
+
+            var skipProbePaths = captureMp3RefreshPerformance
+                ? RestoreReusableMp3ProbeState(
+                    folderPath,
+                    currentMp3ImportedFolder,
+                    reusableMp3ProbeTracksByPath)
+                : null;
 
             if (_ffmpegStatus.IsComplete)
             {
-                await EnrichTracksWithFfprobeAsync(folderPath, publishWorkflowStatus);
+                var audioProbePerformancePhase = folderPerformanceApp is null
+                    ? default(PerformancePhaseScope)
+                    : folderPerformanceApp.StartPerformancePhase(
+                        folderPerformanceOperationId,
+                        "audio.probe");
+                try
+                {
+                    var performanceContext = folderPerformanceApp?.CreatePerformanceExternalProcessContext(
+                        folderPerformanceOperationId,
+                        audioProbePerformancePhase.IsActive ? audioProbePerformancePhase.PhaseId : null,
+                        captureMp3RefreshPerformance ? "audio.probe" : null);
+                    var probeCompleted = await EnrichTracksWithFfprobeAsync(
+                        folderPath,
+                        publishWorkflowStatus,
+                        performanceContext,
+                        skipProbePaths,
+                        analysisCancellation?.Token ?? CancellationToken.None);
+                    if (!probeCompleted)
+                    {
+                        audioProbePerformancePhase.Cancel();
+                        ResetWorkspaceAfterCanceledTrackAnalysis(analysisCancellationScope);
+                        return;
+                    }
+
+                    audioProbePerformancePhase.Complete();
+                }
+                catch (OperationCanceledException)
+                {
+                    audioProbePerformancePhase.Cancel();
+                    ResetWorkspaceAfterCanceledTrackAnalysis(analysisCancellationScope);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    audioProbePerformancePhase.Fail(ex);
+                    throw;
+                }
             }
             else
             {
@@ -6403,28 +9637,119 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (!IsExporting)
                     ExportProgressText = BuildIdleExportProgressText();
             }
+
+            if (localImportPerformanceScope.IsActive && localImportPerformanceApp is not null)
+            {
+                localImportPerformanceApp.UpdatePerformanceWorkload(
+                    localImportPerformanceScope.OperationId,
+                    CreateLocalFolderPerformanceWorkload());
+            }
+
+            if (ResolveCurrentChapterProjectType() == ProjectManifestTypes.FolderProject)
+                RecalculateProcessingActionsForCurrentPreset();
             AutoFitTrackColumnsAfterRender();
+            RefreshOpenDevelopmentMetadataForExternalChanges();
+            localImportPerformanceScope.Complete();
+            localImportPerformanceScope = default;
+            loadSucceeded = true;
+        }
+        catch (OperationCanceledException)
+        {
+            localImportPerformanceScope.Cancel();
+            localImportPerformanceScope = default;
+            if (analysisCancellationScope == TrackAnalysisCancellationScope.None) throw;
+            ResetWorkspaceAfterCanceledTrackAnalysis(analysisCancellationScope);
         }
         catch (Exception ex)
         {
-            StatusText = "Fehler beim Einlesen des Ordners.";
+            localImportPerformanceScope.Fail(ex);
+            localImportPerformanceScope = default;
+            StatusText = LocalizationText.Get("MainWindow.Folder.ReadFailed");
 
-            _notificationService.Notify(NotificationEvent.Error);
+            _runtimeServices.NotificationService.Notify(NotificationEvent.Error);
             AppDialogService.Error(
                 this,
-                "Fehler beim Einlesen",
-                "Der Ordner konnte nicht vollständig eingelesen werden.\n\n" + ex.Message);
+                LocalizationText.Get("MainWindow.Folder.ReadFailed.Title"),
+                LocalizationText.Format("MainWindow.Folder.ReadFailed.Message", ex.Message));
         }
         finally
         {
+            if (analysisCancellation is not null)
+            {
+                _trackAnalysisCancellation = null;
+                _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.None;
+                NotifyExportUiStateChanged();
+            }
             IsBusy = false;
+            localImportPerformanceApp?.TryFinalizeDisabledPerformanceSession();
+        }
+        if (loadSucceeded && analysisCancellationScope == TrackAnalysisCancellationScope.LocalFolderImport)
+            ConfirmLoadedPresetBitrateIfNeeded();
+    }
+
+
+    private HashSet<string> RestoreReusableMp3ProbeState(
+        string projectFolder,
+        string? currentImportedFolder,
+        IReadOnlyDictionary<string, TrackInfo>? previousTracksByPath)
+    {
+        var skipProbePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (previousTracksByPath is null || previousTracksByPath.Count == 0)
+            return skipProbePaths;
+
+        foreach (var refreshedTrack in Tracks)
+        {
+            var trackPath = GetNormalizedTrackPath(projectFolder, refreshedTrack);
+            if (string.IsNullOrWhiteSpace(trackPath) ||
+                (!string.IsNullOrWhiteSpace(currentImportedFolder) &&
+                 TrackPathService.IsPathInsideFolder(trackPath, currentImportedFolder)) ||
+                !previousTracksByPath.TryGetValue(trackPath, out var previousTrack) ||
+                previousTrack.AudioValidationPassed is null)
+            {
+                continue;
+            }
+
+            refreshedTrack.AudioValidationPassed = previousTrack.AudioValidationPassed;
+            refreshedTrack.Duration = previousTrack.Duration;
+            refreshedTrack.DurationTicks = previousTrack.DurationTicks;
+            refreshedTrack.BitrateKbps = previousTrack.BitrateKbps;
+            refreshedTrack.SampleRateHz = previousTrack.SampleRateHz;
+            refreshedTrack.Channels = previousTrack.Channels;
+            refreshedTrack.ChannelLayout = previousTrack.ChannelLayout;
+            refreshedTrack.Codec = previousTrack.Codec;
+            refreshedTrack.EmbeddedChapters = previousTrack.EmbeddedChapters.ToList();
+            refreshedTrack.ProcessingAction = previousTrack.ProcessingAction;
+
+            if (previousTrack.AudioValidationPassed == false)
+                refreshedTrack.SetWarning(previousTrack.Warning, previousTrack.WarningCodes);
+
+            skipProbePaths.Add(trackPath);
+        }
+
+        return skipProbePaths;
+    }
+
+    private static string GetNormalizedTrackPath(string folderPath, TrackInfo track)
+    {
+        try
+        {
+            return Path.GetFullPath(TrackPathService.GetTrackPath(folderPath, track));
+        }
+        catch
+        {
+            return string.Empty;
         }
     }
 
-    private async Task EnrichTracksWithFfprobeAsync(string folderPath, bool publishWorkflowStatus = true)
+    private async Task<bool> EnrichTracksWithFfprobeAsync(
+        string folderPath,
+        bool publishWorkflowStatus = true,
+        PerformanceExternalProcessContext? performanceContext = null,
+        ISet<string>? skipProbePaths = null,
+        CancellationToken token = default)
     {
         if (string.IsNullOrWhiteSpace(_ffmpegStatus.FfprobePath))
-            return;
+            return true;
 
         var trackSnapshot = Tracks.ToList();
         var total = trackSnapshot.Count;
@@ -6433,41 +9758,124 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var workflowOperationId = publishWorkflowStatus
             ? BeginWorkflowStatusOperation(folderPath)
             : Guid.Empty;
-
-        foreach (var track in trackSnapshot)
+        var workflowEnded = false;
+        void EndWorkflowIfNeeded()
         {
-            processed++;
-            var percent = total == 0 ? 0 : processed * 100 / total;
-            if (publishWorkflowStatus)
+            if (!publishWorkflowStatus || workflowEnded)
+                return;
+
+            EndWorkflowStatusOperation(workflowOperationId);
+            workflowEnded = true;
+        }
+
+        var probeRequests = new List<AudioProbeBatchRequest>();
+        var skippedProbeIndexes = new HashSet<int>();
+
+        try
+        {
+            for (var index = 0; index < trackSnapshot.Count; index++)
             {
-                PublishWorkflowStatus(workflowOperationId, new WorkflowStatusSnapshot
+                var track = trackSnapshot[index];
+                processed++;
+                var percent = total == 0 ? 0 : processed * 100 / total;
+                if (publishWorkflowStatus)
                 {
-                ProjectId = folderPath,
-                ProjectKind = WorkflowProjectKind.Folder,
-                ProjectState = ProjectPipelineState.Preparing,
-                ActiveActivities = new HashSet<WorkflowActivity> { WorkflowActivity.AnalyzingTracks },
-                AnalysisProgress = new AnalysisProgress(WorkflowAnalysisKind.SourceTracks, processed, total, percent),
-                    TotalSourceItems = total
-                });
+                    PublishWorkflowStatus(workflowOperationId, new WorkflowStatusSnapshot
+                    {
+                    ProjectId = folderPath,
+                    ProjectKind = WorkflowProjectKind.Folder,
+                    ProjectState = ProjectPipelineState.Preparing,
+                    ActiveActivities = new HashSet<WorkflowActivity> { WorkflowActivity.AnalyzingTracks },
+                    AnalysisProgress = new AnalysisProgress(WorkflowAnalysisKind.SourceTracks, processed, total, percent),
+                        TotalSourceItems = total
+                    });
+                }
+
+                var trackPath = TrackPathService.GetTrackPath(folderPath, track);
+                var normalizedTrackPath = Path.GetFullPath(trackPath);
+                if (skipProbePaths?.Contains(normalizedTrackPath) == true)
+                {
+                    skippedProbeIndexes.Add(index);
+                    continue;
+                }
+
+                probeRequests.Add(new AudioProbeBatchRequest(index, trackPath));
             }
 
+            var probeResults = await _services.Media.AudioProbeBatchService.ProbeAsync(
+            probeRequests,
+            _ffmpegStatus.FfprobePath,
+            ParallelJobsInput,
+            performanceContext,
+            new Progress<int>(value =>
+            {
+                if (!publishWorkflowStatus)
+                    return;
+
+                var percent = total == 0 ? 0 : Math.Clamp(value * 100 / total, 0, 100);
+                PublishWorkflowStatus(workflowOperationId, new WorkflowStatusSnapshot
+                {
+                    ProjectId = folderPath,
+                    ProjectKind = WorkflowProjectKind.Folder,
+                    ProjectState = ProjectPipelineState.Preparing,
+                    ActiveActivities = new HashSet<WorkflowActivity> { WorkflowActivity.AnalyzingTracks },
+                    AnalysisProgress = new AnalysisProgress(WorkflowAnalysisKind.SourceTracks, value, total, percent),
+                    TotalSourceItems = total
+                });
+            }),
+            initialCompleted: total - probeRequests.Count,
+            token: token);
+
+            if (token.IsCancellationRequested)
+            {
+                EndWorkflowIfNeeded();
+                return false;
+            }
+
+        processed = 0;
+        for (var index = 0; index < trackSnapshot.Count; index++)
+        {
+            processed++;
+            if (token.IsCancellationRequested)
+            {
+                EndWorkflowIfNeeded();
+                return false;
+            }
+            if (skippedProbeIndexes.Contains(index))
+                continue;
+
+            var track = trackSnapshot[index];
             var trackPath = TrackPathService.GetTrackPath(folderPath, track);
-            var probeInfo = await _audioInfoService.ProbeAsync(trackPath, _ffmpegStatus.FfprobePath);
-            var decodeConfirmed = probeInfo.HasPlausibleAudioProperties ||
-                                  await _audioInfoService.CanDecodeAudioAsync(trackPath, _ffmpegStatus.FfmpegPath);
+            var probeInfo = index < probeResults.Length
+                ? probeResults[index]
+                : null;
+            probeInfo ??= new AudioProbeInfo
+            {
+                FilePath = trackPath,
+                Success = false,
+                ErrorMessage = LocalizationText.Get("MainWindow.AudioCheck.Warning")
+            };
+            var decodeConfirmed = (!probeInfo.IsAac && probeInfo.HasPlausibleAudioProperties) ||
+                                  await _services.Media.AudioInfoService.CanDecodeAudioAsync(
+                                      trackPath,
+                                      _ffmpegStatus.FfmpegPath,
+                                      token,
+                                      performanceContext);
 
             if (!decodeConfirmed)
             {
                 failed++;
                 track.AudioValidationPassed = false;
+                track.AacOptimizationEligible = false;
                 track.Duration = "";
                 track.DurationTicks = null;
                 track.BitrateKbps = null;
+                track.SampleRateHz = null;
                 track.Channels = null;
                 track.ChannelLayout = "";
-                track.Codec = "Ungültig";
-                track.ProcessingAction = "Ungültig";
-                track.Warning = "Keine gültige Audiodatei erkannt.";
+                track.Codec = CodecIds.Invalid;
+                track.ProcessingAction = ProcessingActionIds.Invalid;
+                track.SetWarning(LocalizationText.Get("WarningInvalidAudioSentence"), TrackWarningCodes.InvalidAudio);
 
                 if (processed % 10 == 0 || processed == total)
                     OnExportPreviewChanged();
@@ -6475,59 +9883,69 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 continue;
             }
 
-            track.AudioValidationPassed = true;
-            SetTrackDuration(track, probeInfo.Duration);
-            track.EmbeddedChapters = probeInfo.Chapters.ToList();
-            SetTrackValue(track, "BitrateKbps", probeInfo.BitrateKbps);
-            SetTrackValue(track, "Channels", probeInfo.Channels);
-            SetTrackValue(track, "ChannelLayout", AudioProcessingService.FormatChannelLayout(probeInfo.Channels));
-            SetTrackValue(track, "Codec", AudioProcessingService.NormalizeCodecName(probeInfo.CodecName));
-
-            var processingAction = AudioProcessingService.DetermineProcessingAction(probeInfo, ExportPreset.Parse(SelectedExportPreset));
-            if (processingAction == "Prüfen")
-                processingAction = "Konvertieren";
-
-            SetTrackValue(track, "ProcessingAction", processingAction);
-
-            if (track.Warning == "Keine gültige Audiodatei erkannt.")
-                SetTrackValue(track, "Warning", "");
+            _services.Media.TrackAudioProbeApplicationService.ApplySuccessfulProbe(
+                track,
+                probeInfo,
+                ExportPreset.Parse(SelectedExportPreset),
+                markAudioValidationPassed: true);
 
             if (processed % 10 == 0 || processed == total)
                 OnExportPreviewChanged();
         }
 
-        TracksGrid.Items.Refresh();
-        OnExportPreviewChanged();
+        UpdateIndexes();
 
-        if (failed > 0)
-        {
+            if (failed > 0)
+            {
+                if (publishWorkflowStatus)
+                {
+                    EndWorkflowIfNeeded();
+                    StatusText = LocalizationText.Format(
+                        failed == 1 ? "MainWindow.AudioCheck.Technical.One" : "MainWindow.AudioCheck.Technical.Many",
+                        failed);
+                }
+                return true;
+            }
+
             if (publishWorkflowStatus)
             {
-                EndWorkflowStatusOperation(workflowOperationId);
-                StatusText = failed == 1
-                    ? "Technische Audiodaten geprüft. 1 Datei konnte nicht geprüft werden."
-                    : $"Technische Audiodaten geprüft. {failed} Dateien konnten nicht geprüft werden.";
+                PublishWorkflowStatus(workflowOperationId, new WorkflowStatusSnapshot
+                {
+                    ProjectId = folderPath,
+                    ProjectKind = WorkflowProjectKind.Folder,
+                    ProjectState = ProjectPipelineState.Preparing,
+                    IsProjectPrepared = true,
+                    TotalSourceItems = total
+                });
+                EndWorkflowIfNeeded();
             }
-            return;
-        }
 
-        if (publishWorkflowStatus)
+            return true;
+        }
+        catch (OperationCanceledException)
         {
-            PublishWorkflowStatus(workflowOperationId, new WorkflowStatusSnapshot
-            {
-                ProjectId = folderPath,
-                ProjectKind = WorkflowProjectKind.Folder,
-                ProjectState = ProjectPipelineState.Preparing,
-                IsProjectPrepared = true,
-                TotalSourceItems = total
-            });
-            EndWorkflowStatusOperation(workflowOperationId);
+            EndWorkflowIfNeeded();
+            return false;
         }
     }
 
     private void UpdateFinalStatus(int trackCount)
     {
-        var issueSummary = _trackIssueSummaryService.Create(Tracks);
+        if (trackCount <= 0 || Tracks.Count == 0)
+        {
+            StatusText = NoProjectStatusText;
+            OnExportPreviewChanged();
+            return;
+        }
+
+        // A final refresh updates track presentation, not the completed pause status.
+        if (_presentationState.IsPipelinePaused)
+        {
+            OnExportPreviewChanged();
+            return;
+        }
+
+        var issueSummary = _services.Tracks.TrackIssueSummaryService.Create(Tracks);
 
         var types = Tracks
             .GroupBy(track => track.Extension)
@@ -6540,49 +9958,240 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var issueText = issueSummary.ToDisplayText();
 
-        StatusText = trackCount == 1
-            ? $"1 Audiodatei gefunden. {typeText}. Aktion: {actionText}. {issueText}."
-            : $"{trackCount} Audiodateien gefunden. {typeText}. Aktion: {actionText}. {issueText}.";
+        StatusText = LocalizationText.Format(
+            trackCount == 1 ? "MainWindow.Summary.AudioFiles.One" : "MainWindow.Summary.AudioFiles.Many",
+            trackCount, typeText, actionText, issueText);
 
         OnExportPreviewChanged();
     }
 
-    private void SuggestMetadataFromTracksAndFolder(string scannedFolderPath, string displayFolderPath)
+    private void SuggestMetadataFromTracksAndFolder(string displayFolderPath)
     {
         if (Tracks.Count == 0)
             return;
 
-        var suggestion = _bookMetadataService.GuessFromFolder(scannedFolderPath, displayFolderPath, Tracks);
+        var sourceFiles = Tracks
+            .Select(track => track.FilePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+        _services.Media.ProjectMetadataPreviewAggregationService.Apply(
+            _projectMetadata,
+            Tracks.ToArray(),
+            CreateLocalFolderAggregationOptions(displayFolderPath, sourceFiles));
 
-        if (string.IsNullOrWhiteSpace(BookTitle) && !string.IsNullOrWhiteSpace(suggestion.Title))
-            BookTitle = suggestion.Title;
+        OnExportPreviewChanged();
+    }
 
-        if (string.IsNullOrWhiteSpace(Author) && !string.IsNullOrWhiteSpace(suggestion.Author))
-            Author = suggestion.Author;
+    private async Task ShowCurrentProjectSetupDialogAsync()
+    {
+        if (!await EnsureResumeDiscPreviewAsync())
+            return;
+        var sourceKind = ResolveCurrentProjectSetupSourceKind();
+        var sourceFolder = ResolveCurrentProjectSetupSourceFolder(sourceKind);
+        var setupDialog = CreateProjectSetupDialog(new ProjectSetupDialogRequest(
+            SourceKind: sourceKind,
+            IsDiscResume: !string.IsNullOrWhiteSpace(_lockedDiscResumePreset),
+            IsContinuation: LoadedProjectState.HasLoadedProject &&
+                ProjectReviewState.Phase is not (ProjectPipelineState.Preparing or ProjectPipelineState.Completed),
+            ConfirmDiscCountOnStart: _pendingMp3DiscSetupResult is not null ||
+                (_pendingAudioDisc is not null && _isAudioDiscProjectAwaitingRip),
+            WindowTitle: sourceKind switch
+            {
+                ProjectSetupSourceKind.Mp3Disc => LocalizationText.Get("MainWindow.Setup.Mp3Prepare"),
+                ProjectSetupSourceKind.AudioDisc => LocalizationText.Get("MainWindow.Setup.AudioPrepare"),
+                _ => LocalizationText.Get("MainWindow.Setup.FolderPrepare")
+            },
+            SourceInformation: BuildCurrentProjectSetupSourceInformation(sourceKind),
+            Instruction: sourceKind == ProjectSetupSourceKind.Folder
+                ? LocalizationText.Get("MainWindow.Setup.FolderInstruction")
+                : LocalizationText.Get("MainWindow.Setup.DiscInstruction"),
+            DefaultDiscCount: ResolveCurrentProjectSetupDiscCount(sourceKind),
+            MinimumDiscs: 1,
+            MaximumDiscs: sourceKind == ProjectSetupSourceKind.Folder ? 1 : 99,
+            ExportPresets: ExportPresets,
+            SelectedExportPreset: SelectedExportPreset,
+            ParallelJobs: ParallelJobsInput,
+            OutputExtension: OutputExtension,
+            OutputFolder: OutputFolder,
+            BookTitle: BookTitle,
+            Album: Album,
+            Author: Author,
+            Narrator: Narrator,
+            Genre: Genre,
+            FileNameTemplate: FileNameTemplate,
+            CoverSourcePath: GetCoverSourcePathForProjectSetup(),
+            CoverPreviewSource: CoverPreviewSource,
+            CoverWorkFolder: GetProjectFolderStructure().CoversFolder,
+            AutoMergeAfterConversion: _settings.MergeAutomaticallyAfterConversion,
+            UsePrivateGenreList: _settings.UsePrivateGenreList,
+            GenreOptions: GenreListService.GetGenres(_settings),
+            SourceFolder: sourceFolder,
+            MaxSourceBitrateKbps: GetMaxTrackBitrateKbps(),
+            LastCoverFolder: _settings.LastCoverFolder ?? string.Empty));
 
-        if (string.IsNullOrWhiteSpace(Narrator) && !string.IsNullOrWhiteSpace(suggestion.Narrator))
-            Narrator = suggestion.Narrator;
+        var startProject = ModalDialogService.ShowDialog(setupDialog, this) == true;
+        FlushProjectSetupDiscCountPreviewRefresh();
+        ApplyDiscProjectSetup(setupDialog.Result);
+
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc &&
+            _pendingMp3DiscSetupResult is not null &&
+            _pendingMp3DiscQuickIdentity is not null)
+        {
+            StorePendingMp3DiscPreparation(
+                _pendingDiscProjectSourceFolder,
+                setupDialog.Result,
+                _pendingMp3DiscQuickIdentity,
+                _pendingMp3DiscStructureSignature);
+        }
+
+        if (!startProject)
+            return;
+        if (!await EnsureResumeDiscPreviewAsync())
+            return;
+
+        _resumeDiscPreview.MarkProcessingStarted();
+        NotifyExportUiStateChanged();
+        if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset))
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart());
+
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc && LoadedProjectState.NeedsDiscImport)
+        {
+            await ContinuePausedMp3DiscProjectAsync();
+            return;
+        }
+
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc &&
+            _pendingMp3DiscSetupResult is not null &&
+            _pendingMp3DiscQuickIdentity is not null &&
+            !string.IsNullOrWhiteSpace(_pendingMp3DiscStructureSignature))
+        {
+            await StartConfirmedMp3DiscProjectAsync(
+                _pendingDiscProjectSourceFolder,
+                setupDialog.Result,
+                _pendingMp3DiscQuickIdentity,
+                _pendingMp3DiscStructureSignature);
+            return;
+        }
+
+        if (sourceKind == ProjectSetupSourceKind.AudioDisc && _isAudioDiscProjectAwaitingRip)
+        {
+            if (_activeAudioDiscManifest is not null)
+            {
+                if (_pendingAudioDisc is not null)
+                {
+                    _pendingAudioDiscTotalDiscs = setupDialog.Result.TotalDiscs;
+                    _activeAudioDiscManifest.TotalDiscs = setupDialog.Result.TotalDiscs;
+                }
+                SaveCurrentAudioDiscProjectSnapshot(_activeAudioDiscManifest, force: true);
+            }
+
+            await RunPreparedAudioDiscRipAsync();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset))
+        {
+            await RunCurrentExportPlanAsync(_currentProjectWorkFolder,
+                sourceKind == ProjectSetupSourceKind.AudioDisc ? ProjectManifestTypes.AudioCdProject : ProjectManifestTypes.Mp3DiscProject);
+            return;
+        }
+        await RunCurrentExportPlanAsync();
+    }
+
+    private ProjectSetupSourceKind ResolveCurrentProjectSetupSourceKind()
+    {
+        if (_pendingMp3DiscSetupResult is not null || LoadedProjectState.IsMp3Disc)
+            return ProjectSetupSourceKind.Mp3Disc;
+
+        if (_activeAudioDiscManifest is not null || _pendingAudioDisc is not null || LoadedProjectState.IsAudioDisc || _isAudioDiscProjectAwaitingRip)
+            return ProjectSetupSourceKind.AudioDisc;
+
+        return ProjectSetupSourceKind.Folder;
+    }
+
+    private string ResolveCurrentProjectSetupSourceFolder(ProjectSetupSourceKind sourceKind)
+    {
+        if (sourceKind is ProjectSetupSourceKind.Mp3Disc or ProjectSetupSourceKind.AudioDisc &&
+            _resumeDiscPreview.DiscNumber is not null && !string.IsNullOrWhiteSpace(_resumeDiscStartDriveRoot))
+            return _resumeDiscStartDriveRoot;
+
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc && !string.IsNullOrWhiteSpace(_pendingDiscProjectSourceFolder))
+            return _pendingDiscProjectSourceFolder;
+
+        if (sourceKind == ProjectSetupSourceKind.AudioDisc)
+            return _activeAudioDiscManifest?.SourceDriveRoot ?? _pendingAudioDisc?.DriveRoot ?? SelectedSourceOpenPath;
+
+        return string.IsNullOrWhiteSpace(_currentFolderPath) ? SelectedSourceOpenPath : _currentFolderPath;
+    }
+
+    private int ResolveCurrentProjectSetupDiscCount(ProjectSetupSourceKind sourceKind)
+    {
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc)
+            return _pendingMp3DiscSetupResult?.TotalDiscs ??
+                TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false)?.TotalDiscs ?? 1;
+
+        if (sourceKind == ProjectSetupSourceKind.AudioDisc)
+            return _activeAudioDiscManifest?.TotalDiscs ?? _pendingAudioDiscTotalDiscs;
+
+        return 1;
+    }
+
+    private string BuildCurrentProjectSetupSourceInformation(ProjectSetupSourceKind sourceKind)
+    {
+        if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset))
+        {
+            var plan = _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(_currentProjectWorkFolder);
+            if (plan is not null)
+                return plan.NextMissingDiscNumber is { } next
+                    ? LocalizationText.Format("Disc.Resume.NextDisc", next, plan.TotalDiscs)
+                    : LocalizationText.Get("Disc.Resume.AllSourcesReady");
+        }
+        if (sourceKind == ProjectSetupSourceKind.AudioDisc && _pendingAudioDisc is not null)
+            return LocalizationText.Format("MainWindow.Setup.AudioSourceInformation", _pendingAudioDisc.TrackCount, _pendingAudioDisc.TotalDurationText);
+
+        if (sourceKind == ProjectSetupSourceKind.Mp3Disc)
+            return LocalizationText.Format("MainWindow.Setup.Mp3SourceInformation", Tracks.Count, BuildProjectSetupDurationText(Tracks));
+
+        return LocalizationText.Format("MainWindow.Setup.FolderSourceInformation", Tracks.Count, BuildProjectSetupDurationText(Tracks));
     }
 
     private async void Export_Click(object sender, RoutedEventArgs e)
     {
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isShutdownInProgress) return;
+        if (_presentationState.UiTransition is not null || _presentationState.PauseRequested) return;
+        if (_isDiscStopSaveInProgress) return;
+        if (IsPipelinePauseCommandActive())
+        {
+            await RequestPipelinePauseAsync();
+            return;
+        }
+
         if (IsBusy)
         {
-            if (_pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
+            if (ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
                 await RequestPipelinePauseAsync();
 
             return;
         }
 
-        if (_isPipelineFailed)
+        if (_presentationState.IsPipelineFailed &&
+            ProjectReviewState.Phase is not (ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed))
         {
-            await DeletePausedProjectAsync();
+            CloseCurrentProject();
             return;
         }
 
-        if (_isPipelinePaused)
+        if (_presentationState.IsPipelinePaused)
         {
             await ContinuePausedPipelineAsync();
+            return;
+        }
+
+        if (ProjectReviewState.Phase == ProjectPipelineState.Preparing &&
+            Tracks.Count > 0 &&
+            !LoadedProjectState.NeedsDiscImport)
+        {
+            await ShowCurrentProjectSetupDialogAsync();
             return;
         }
 
@@ -6592,15 +10201,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (_loadedResumeProjectNeedsDiscImport)
+        if (LoadedProjectState.NeedsDiscImport)
         {
             await ContinueLoadedMp3DiscProjectAsync();
             return;
         }
 
-        if (_loadedResumeProjectIsMp3Disc)
+        // Only this user command grants a one-run manual merge. Resume/import paths above
+        // and all automatic callers keep the default false, regardless of project history.
+        var manualMergeRequested =
+            ProjectReviewState.Phase is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed &&
+            _manualMergeReviewHasPreparedTracks && !_manualMergeReviewNeedsReconversion;
+
+        if (LoadedProjectState.IsMp3Disc)
         {
-            await RunLoadedMp3DiscProjectExportAsync();
+            await RunLoadedMp3DiscProjectExportAsync(manualMergeRequested);
             return;
         }
 
@@ -6630,11 +10245,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             !_isAudioDiscProjectAwaitingRip &&
             !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
         {
-            await RunCurrentExportPlanAsync(_currentProjectWorkFolder, ProjectManifestTypes.AudioCdProject);
+            await RunCurrentExportPlanAsync(_currentProjectWorkFolder, ProjectManifestTypes.AudioCdProject, manualMergeRequested);
             return;
         }
 
-        await RunCurrentExportPlanAsync();
+        await RunCurrentExportPlanAsync(manualMergeRequested: manualMergeRequested);
+    }
+
+    private bool IsPipelinePauseCommandActive()
+    {
+        return ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or ProjectPipelineState.Merging &&
+               (IsDiscImporting || IsExporting) &&
+               !_presentationState.IsPipelinePaused &&
+               !_presentationState.IsPipelineFailed;
     }
 
 
@@ -6645,13 +10268,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Action? restoreUiState = null,
         bool queueExistingRippedTracks = true)
     {
+        if (_isWorkspaceReplacementInProgress || _isProjectCloseInProgress || _isShutdownInProgress) return;
+        if (_sessionProject.IsUnstartedAudio(_currentProjectWorkFolder) && _activeAudioDiscManifest is { } unstarted)
+        {
+            unstarted.TargetSampleRateHz = SampleRateSettingsService.Normalize(_settings.DefaultSampleRateHz);
+            _services.Foundation.AudioDiscProjectService.Save(unstarted);
+        }
+        _sessionProject.AcceptStart(_currentProjectWorkFolder);
         var manifest = _activeAudioDiscManifest;
-        if (manifest is null || manifest.Discs.Count == 0)
+        if (manifest is null || manifest.TotalDiscs < 1)
         {
             AppDialogService.Warning(
                 this,
-                "Audio-CD-Projekt nicht bereit",
-                "Das vorbereitete Audio-CD-Projekt konnte nicht geladen werden.");
+                LocalizationText.Get("MainWindow.AudioProject.NotReady.Title"),
+                LocalizationText.Get("MainWindow.AudioProject.NotReady.Message"));
             return;
         }
 
@@ -6659,19 +10289,78 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Warning(
                 this,
-                "FFmpeg nicht bereit",
-                "Für das FLAC-Ripping muss FFmpeg eingerichtet sein.");
+                LocalizationText.Get("MainWindow.Ffmpeg.NotReady.Title"),
+                LocalizationText.Get("MainWindow.Ffmpeg.NotReady.RippingMessage"));
             return;
         }
 
+        if (!await EnsureResumeDiscPreviewAsync())
+            return;
+        if (_isShutdownInProgress || _isProjectCloseInProgress || _allowWindowClose ||
+            !ReferenceEquals(manifest, _activeAudioDiscManifest)) return;
+        var selectedStartDrive = _resumeDiscStartDriveRoot;
         AudioDiscRunPreparation runPreparation = null!;
+        var audioRequestedParallelJobs = ParallelJobsInput;
         AudioDiscLiveConversionSession liveConversionSession;
         var audioStatusOperationId = BeginWorkflowStatusOperation(manifest.ProjectFolder);
-        var statusDiscNumber = Math.Max(1, _audioDiscProjectService.GetNextRequiredDiscNumber(manifest) ?? 1);
+        var statusDiscNumber = Math.Max(1, _services.Foundation.AudioDiscProjectService.GetNextRequiredDiscNumber(manifest) ?? 1);
         var statusCurrentCompleted = 0;
         var statusCurrentTotal = 0;
         var statusCurrentDiscFinished = false;
         var statusAllDiscsFinished = false;
+        var audioPerformanceApp = Application.Current as App;
+
+        PerformanceOperationScope StartAudioDiscConversionPerformanceOperation(AudioDiscRippedTrack rippedTrack)
+        {
+            if (audioPerformanceApp is null)
+                return default;
+
+            var scope = audioPerformanceApp.StartPerformanceOperation(
+                "disc.audio.convert",
+                PerformanceProjectType.AudioCd,
+                new PerformanceWorkloadSnapshot
+                {
+                    ProjectType = PerformanceProjectType.AudioCd,
+                    DiscCount = 1,
+                    TrackCount = 1,
+                    FileCount = 1,
+                    InputAudioDurationMilliseconds = rippedTrack.Duration.TotalMilliseconds
+                });
+
+            if (!scope.IsActive)
+                return scope;
+
+            long? inputBytes = null;
+            try
+            {
+                if (File.Exists(rippedTrack.FilePath))
+                    inputBytes = new FileInfo(rippedTrack.FilePath).Length;
+            }
+            catch
+            {
+                // Workload-Größe ist best effort und darf die Konvertierung nie beeinflussen.
+            }
+
+            audioPerformanceApp.UpdatePerformanceWorkload(
+                scope.OperationId,
+                new PerformanceWorkloadSnapshot
+                {
+                    ProjectType = PerformanceProjectType.AudioCd,
+                    DiscCount = 1,
+                    TrackCount = 1,
+                    FileCount = 1,
+                    InputBytes = inputBytes,
+                    InputAudioDurationMilliseconds = rippedTrack.Duration.TotalMilliseconds
+                });
+            audioPerformanceApp.RecordPerformanceDriveRole(
+                scope.OperationId,
+                manifest.ProjectFolder,
+                PerformanceDriveRole.ProjectWorking);
+
+            audioPerformanceApp.PerformanceTraceService?.RecordParallelism(
+                scope.OperationId, audioRequestedParallelJobs, runPreparation.ParallelJobs);
+            return scope;
+        }
 
         void PublishAudioDiscStatus(AudioDiscLiveConversionSessionSnapshot conversionSnapshot, bool isPaused = false)
         {
@@ -6679,16 +10368,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var totalRippedTracks = manifest.Discs.Sum(disc => disc.Tracks.Count(track =>
                 string.Equals(track.Status, AudioDiscTrackStatus.Ripped, StringComparison.OrdinalIgnoreCase)));
             var convertedTracks = Math.Min(totalKnownTracks, conversionSnapshot.ConvertedCount);
-            var format = AudioDiscSettingsService.NormalizeWorkingFormat(manifest.WorkingFormat) switch
-            {
-                AudioDiscWorkingFormat.Aac256 => "AAC 256 kbps",
-                AudioDiscWorkingFormat.Wma => "WMA",
-                _ => "FLAC"
-            };
+            const string format = "FLAC";
 
             PublishWorkflowStatus(
                 audioStatusOperationId,
-                _audioDiscWorkflowStatusAdapter.CreateRunningSnapshot(
+                _services.Status.AudioDiscWorkflowStatusAdapter.CreateRunningSnapshot(
                     manifest.ProjectFolder,
                     statusDiscNumber,
                     manifest.TotalDiscs,
@@ -6703,45 +10387,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     isPaused,
                     statusCurrentDiscFinished,
                     statusAllDiscsFinished,
-                    extensionSnapshot is not null));
+                    extensionSnapshot is not null,
+                    driveDisplayName: DiscDriveSelectionPresentationService.FormatStatusDriveLabel(
+                        manifest.Discs.FirstOrDefault(disc => disc.DiscNumber == statusDiscNumber)?.SourceDriveRoot ?? manifest.SourceDriveRoot,
+                        _settings.DiscDriveOrder)));
         }
 
         try
         {
             restoreUiState?.Invoke();
-            runPreparation = _audioDiscRunPreparationService.Prepare(
+            BackfillMissingSourceMetadataSnapshots(manifest.ProjectFolder);
+            runPreparation = _services.Workflows.AudioDiscRunPreparationService.Prepare(
                 manifest,
                 CreateProjectSnapshotFromUi(),
                 ResolveParallelJobCount());
+            audioRequestedParallelJobs = ParallelJobsInput;
             restoreUiState?.Invoke();
-            var workManifest = _workManifestService.LoadOrCreate(
-                ProjectFolderLayout.ResolveWorkManifestPath(manifest.ProjectFolder),
+            var workManifest = _services.Foundation.WorkManifestService.LoadOrCreate(
+                ProjectFolderLayout.ResolveExportManifestPath(manifest.ProjectFolder),
                 ProjectManifestTypes.AudioCdProject,
                 manifest.ProjectFolder,
                 ProjectFolderLayout.GetOriginalsFolder(manifest.ProjectFolder),
                 runPreparation.Preset.DisplayName);
-            var existingConvertedCount = _workManifestService.CountReusableConvertedTracks(
+            var existingConvertedCount = _services.Foundation.WorkManifestService.CountReusableConvertedTracks(
                 workManifest,
                 runPreparation.Preset);
 
             liveConversionSession = new AudioDiscLiveConversionSession(
-                _audioDiscLiveConversionService,
-                _liveConversionWorkflowService,
-                _workManifestService,
+                _services.Discs.AudioDiscLiveConversionService,
+                _services.Workflows.LiveConversionWorkflowService,
+                _services.Foundation.WorkManifestService,
                 manifest,
                 runPreparation.Preset,
                 runPreparation.ParallelJobs,
                 snapshot => PublishAudioDiscStatus(snapshot),
-                existingConvertedCount);
+                existingConvertedCount,
+                startPerformanceOperation: StartAudioDiscConversionPerformanceOperation,
+                createPerformanceContext: operationId =>
+                    audioPerformanceApp?.CreatePerformanceExternalProcessContext(
+                        operationId,
+                        purpose: "audio.convert"),
+                tryFinalizePerformanceSession: () =>
+                    audioPerformanceApp?.TryFinalizeDisabledPerformanceSession(),
+                ffprobePath: _ffmpegStatus.FfprobePath ?? "",
+                isPauseRequested: () => _presentationState.PauseRequested);
 
             var initialDisc = manifest.Discs
                 .OrderBy(disc => disc.DiscNumber)
-                .FirstOrDefault(disc => disc.DiscNumber == statusDiscNumber)
-                ?? manifest.Discs.OrderBy(disc => disc.DiscNumber).First();
-            statusDiscNumber = initialDisc.DiscNumber;
-            statusCurrentTotal = Math.Max(initialDisc.TrackCount, initialDisc.Tracks.Count);
-            statusCurrentCompleted = initialDisc.Tracks.Count(track =>
-                string.Equals(track.Status, AudioDiscTrackStatus.Ripped, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(disc => disc.DiscNumber == statusDiscNumber);
+            statusDiscNumber = initialDisc?.DiscNumber ?? statusDiscNumber;
+            statusCurrentTotal = initialDisc is null ? 0 : Math.Max(initialDisc.TrackCount, initialDisc.Tracks.Count);
+            statusCurrentCompleted = initialDisc?.Tracks.Count(track =>
+                string.Equals(track.Status, AudioDiscTrackStatus.Ripped, StringComparison.OrdinalIgnoreCase)) ?? 0;
             PublishAudioDiscStatus(liveConversionSession.GetSnapshot());
         }
         catch (Exception ex)
@@ -6749,8 +10446,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             EndWorkflowStatusOperation(audioStatusOperationId);
             AppDialogService.Error(
                 this,
-                "Audio-CD-Fortsetzung konnte nicht vorbereitet werden",
-                "Das gewählte Export-Preset und der aktuelle Projektzustand konnten nicht sicher gespeichert werden.",
+                LocalizationText.Get("MainWindow.AudioProject.ResumePreparationFailed.Title"),
+                LocalizationText.Get("MainWindow.AudioProject.ResumePreparationFailed.Message"),
                 details: new[] { ex.Message });
             return;
         }
@@ -6788,25 +10485,221 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             lastAudioDiscSnapshotUtc = now;
         }
 
+        async Task QueueAudioDiscRippedTrackAsync(AudioDiscRippedTrack rippedTrack, CancellationToken token)
+        {
+            var track = new TrackInfo
+            {
+                SourceId = rippedTrack.SourceId,
+                Index = rippedTrack.GlobalIndex,
+                DiscNumber = rippedTrack.DiscNumber,
+                TrackNumber = rippedTrack.TrackNumber,
+                FilePath = rippedTrack.FilePath,
+                FileName = Path.GetFileName(rippedTrack.FilePath),
+                Extension = Path.GetExtension(rippedTrack.FilePath).TrimStart('.'),
+                Duration = rippedTrack.Duration.ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture),
+                DurationTicks = rippedTrack.Duration.Ticks,
+                BitrateKbps = 1411,
+                SampleRateHz = 44100,
+                Channels = 2,
+                Codec = "PCM"
+            };
+
+            PublishSourceMetadataSnapshot(
+                manifest.ProjectFolder,
+                rippedTrack.FilePath,
+                track,
+                evidence: "audio-disc-rip");
+            await liveConversionSession.QueueAsync(rippedTrack, token);
+        }
+
+        async Task<AudioDiscRipResult> RipAudioDiscWithPerformanceAsync(
+            AudioDiscProjectManifestDisc disc,
+            IProgress<AudioDiscRipProgress> progress,
+            CancellationToken token)
+        {
+            PerformanceOperationScope operationScope = default;
+            PerformancePhaseScope ripPhase = default;
+            AudioDiscProjectManifestTrack[] measuredTracks = [];
+            var retryCount = 0;
+
+            try
+            {
+                if (audioPerformanceApp is not null)
+                {
+                    operationScope = audioPerformanceApp.StartPerformanceOperation(
+                        "disc.audio.rip",
+                        PerformanceProjectType.AudioCd,
+                        new PerformanceWorkloadSnapshot
+                        {
+                            ProjectType = PerformanceProjectType.AudioCd,
+                            DiscCount = 1
+                        });
+                }
+
+                if (operationScope.IsActive && audioPerformanceApp is not null)
+                {
+                    measuredTracks = disc.Tracks
+                        .Where(track =>
+                            !(string.Equals(track.Status, AudioDiscTrackStatus.Ripped, StringComparison.OrdinalIgnoreCase) &&
+                              File.Exists(Path.Combine(manifest.ProjectFolder, track.RelativePath))))
+                        .ToArray();
+
+                    var inputBytes = measuredTracks
+                        .Where(track => track.SectorCount > 0)
+                        .Sum(track => (long)track.SectorCount * 2352L);
+                    var inputDurationMilliseconds = measuredTracks.Sum(track => track.Duration.TotalMilliseconds);
+
+                    audioPerformanceApp.UpdatePerformanceWorkload(
+                        operationScope.OperationId,
+                        new PerformanceWorkloadSnapshot
+                        {
+                            ProjectType = PerformanceProjectType.AudioCd,
+                            DiscCount = 1,
+                            TrackCount = measuredTracks.Length,
+                            FileCount = measuredTracks.Length,
+                            InputBytes = inputBytes,
+                            InputAudioDurationMilliseconds = inputDurationMilliseconds,
+                            RetryCount = 0
+                        });
+                    audioPerformanceApp.RecordPerformanceDriveRole(
+                        operationScope.OperationId,
+                        disc.SourceDriveRoot,
+                        PerformanceDriveRole.Source | PerformanceDriveRole.OpticalSource);
+                    audioPerformanceApp.RecordPerformanceDriveRole(
+                        operationScope.OperationId,
+                        manifest.ProjectFolder,
+                        PerformanceDriveRole.ProjectWorking);
+
+                    var knownOutputFolder =
+                        !string.IsNullOrWhiteSpace(manifest.OutputFolder) && Directory.Exists(manifest.OutputFolder)
+                            ? manifest.OutputFolder
+                            : EffectiveOutputFolder;
+                    if (!string.IsNullOrWhiteSpace(knownOutputFolder))
+                    {
+                        audioPerformanceApp.RecordPerformanceDriveRole(
+                            operationScope.OperationId,
+                            knownOutputFolder,
+                            PerformanceDriveRole.Output);
+                    }
+
+                    audioPerformanceApp.PerformanceTraceService?.RecordParallelism(
+                        operationScope.OperationId, audioRequestedParallelJobs, 1);
+                    audioPerformanceApp.PerformanceTraceService?.RecordMetric(operationScope.OperationId, "ConversionWorkerLimit", runPreparation.ParallelJobs, "workers");
+                    ripPhase = audioPerformanceApp.StartPerformancePhase(
+                        operationScope.OperationId,
+                        "disc.rip");
+                }
+
+                var performanceContext = operationScope.IsActive && audioPerformanceApp is not null
+                    ? audioPerformanceApp.CreatePerformanceExternalProcessContext(
+                        operationScope.OperationId,
+                        ripPhase.IsActive ? ripPhase.PhaseId : null,
+                        "audio.rip.flac")
+                    : null;
+
+                var result = await Task.Run(
+                    () => _services.Discs.AudioDiscRipService.RipDiscToFlacAsync(
+                        manifest,
+                        disc,
+                        _ffmpegStatus.FfmpegPath,
+                        token,
+                        progress,
+                        QueueAudioDiscRippedTrackAsync,
+                        performanceContext,
+                        operationScope.IsActive
+                            ? () => Interlocked.Increment(ref retryCount)
+                            : null,
+                        sourceReadStarted: source => PublishDiscReadSource(source, manifest.ProjectFolder, token)),
+                    token);
+
+                if (operationScope.IsActive && audioPerformanceApp is not null)
+                {
+                    var completedMeasuredTracks = measuredTracks
+                        .Where(track => string.Equals(
+                            track.Status,
+                            AudioDiscTrackStatus.Ripped,
+                            StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+                    var outputBytes = completedMeasuredTracks
+                        .Where(track => track.OutputSizeBytes.HasValue)
+                        .Sum(track => track.OutputSizeBytes!.Value);
+                    var outputDurationMilliseconds = completedMeasuredTracks
+                        .Sum(track => track.Duration.TotalMilliseconds);
+                    var inputBytes = measuredTracks
+                        .Where(track => track.SectorCount > 0)
+                        .Sum(track => (long)track.SectorCount * 2352L);
+
+                    audioPerformanceApp.UpdatePerformanceWorkload(
+                        operationScope.OperationId,
+                        new PerformanceWorkloadSnapshot
+                        {
+                            ProjectType = PerformanceProjectType.AudioCd,
+                            DiscCount = 1,
+                            TrackCount = measuredTracks.Length,
+                            FileCount = measuredTracks.Length,
+                            InputBytes = inputBytes,
+                            OutputBytes = outputBytes,
+                            InputAudioDurationMilliseconds = measuredTracks.Sum(track => track.Duration.TotalMilliseconds),
+                            OutputAudioDurationMilliseconds = outputDurationMilliseconds,
+                            RetryCount = retryCount
+                        });
+                }
+
+                if (result.Succeeded)
+                {
+                    ripPhase.Complete();
+                    operationScope.Complete();
+                }
+                else if (result.WasCanceled)
+                {
+                    ripPhase.Cancel(_presentationState.PauseRequested);
+                    operationScope.Cancel(_presentationState.PauseRequested);
+                }
+                else
+                {
+                    var performanceFailure = new InvalidOperationException("Audio-CD-Ripping fehlgeschlagen.");
+                    ripPhase.Fail(performanceFailure);
+                    operationScope.Fail(performanceFailure);
+                }
+
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                ripPhase.Cancel(_presentationState.PauseRequested);
+                operationScope.Cancel(_presentationState.PauseRequested);
+                throw;
+            }
+            catch
+            {
+                var performanceFailure = new InvalidOperationException("Audio-CD-Ripping wurde durch eine Ausnahme beendet.");
+                ripPhase.Fail(performanceFailure);
+                operationScope.Fail(performanceFailure);
+                throw;
+            }
+            finally
+            {
+                audioPerformanceApp?.TryFinalizeDisabledPerformanceSession();
+            }
+        }
+
         try
         {
-            var workflowResult = await _audioDiscRipWorkflowService.RunAsync(
+            _resumeDiscStartDriveRoot = null;
+            var firstRequiredDiscNumber = _services.Foundation.AudioDiscProjectService.GetNextRequiredDiscNumber(manifest);
+            var workflowResult = await _services.Workflows.AudioDiscRipWorkflowService.RunAsync(
                 new AudioDiscRipWorkflowRequest(
                     manifest,
                     _discImportCancellation.Token,
-                    (discNumber, token) => WaitForNextAudioDiscAsync(manifest, discNumber, token),
-                    (disc, token) => WaitForRequiredAudioDiscAsync(manifest, disc, token),
+                    (discNumber, token) => WaitForNextAudioDiscAsync(manifest, discNumber, token,
+                        startWithSelectedDrive: (extensionSnapshot is not null || selectedStartDrive is not null) && discNumber == firstRequiredDiscNumber,
+                        selectedSource: discNumber == firstRequiredDiscNumber ? selectedStartDrive : null),
+                    (disc, token) => WaitForRequiredAudioDiscAsync(manifest, disc, token,
+                        disc.DiscNumber == firstRequiredDiscNumber ? selectedStartDrive : null),
                     (disc, token) => ConfirmRequiredAudioDiscStillAvailableAsync(manifest, disc, token),
-                    (disc, progress, token) => Task.Run(
-                        () => _audioDiscRipService.RipDiscToFlacAsync(
-                            manifest,
-                            disc,
-                            _ffmpegStatus.FfmpegPath,
-                            token,
-                            progress,
-                            liveConversionSession.QueueAsync),
-                        token),
-                    disc => _discDriveService.TryEjectDisc(disc.SourceDriveRoot),
+                    (disc, progress, token) =>
+                        RipAudioDiscWithPerformanceAsync(disc, progress, token),
+                    (disc, token) => _services.Discs.DiscDriveService.TryEjectDiscAsync(disc.SourceDriveRoot, token),
                     () => queueExistingRippedTracks
                         ? liveConversionSession.QueueExistingRippedTracksAsync(
                             manifest,
@@ -6816,7 +10709,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     () => SaveCurrentAudioDiscProjectSnapshot(manifest, force: true),
                     liveConversionSession.MarkManifestCanceled,
                     liveConversionSession.MarkManifestFailed,
-                    (disc, pollingResult) => _audioDiscProjectService.UpdateDiscSourceDrive(
+                    (disc, pollingResult) => _services.Foundation.AudioDiscProjectService.UpdateDiscSourceDrive(
                         manifest,
                         disc.DiscNumber,
                         pollingResult.Disc!,
@@ -6848,19 +10741,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     },
                     (disc, ejected) =>
                     {
-                        _notificationService.Notify(NotificationEvent.DiscChangeRequired);
                         statusDiscNumber = disc.DiscNumber;
                         statusCurrentTotal = Math.Max(disc.TrackCount, disc.Tracks.Count);
                         statusCurrentCompleted = statusCurrentTotal;
                         statusCurrentDiscFinished = disc.DiscNumber < manifest.TotalDiscs;
                         statusAllDiscsFinished = disc.DiscNumber >= manifest.TotalDiscs;
                         PublishAudioDiscStatus(liveConversionSession.GetSnapshot());
+                        ApplySourceMetadataAggregation(
+                            manifest.ProjectFolder,
+                            disc.DiscNumber == 1
+                                ? ProjectMetadataInitializationState.InitialSetComplete
+                                : ProjectMetadataInitializationState.SubsequentSource,
+                            CreateAudioDiscProjectAggregationOptions());
                     }));
 
             switch (workflowResult.Outcome)
             {
                 case AudioDiscRipWorkflowOutcome.Completed:
-                    var completion = await _audioDiscRipCompletionWorkflowService.RunAsync(
+                    var completion = await _services.Workflows.AudioDiscRipCompletionWorkflowService.RunAsync(
                         new AudioDiscRipCompletionWorkflowRequest(
                             manifest,
                             Tracks,
@@ -6869,38 +10767,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                 rippedFolder,
                                 metadataSourceFolder: manifest.ProjectFolder,
                                 updateMetadata: false,
-                                removeGeneratedOrWorkFiles: false),
+                                removeGeneratedOrWorkFiles: false,
+                                prepareScannedTracksBeforeIndexUpdate: tracks =>
+                                    _services.Foundation.AudioDiscProjectService.ApplyManifestOrderAndMetadataToRippedTracks(
+                                        manifest,
+                                        tracks)),
                             ApplyPersistedTrackListState,
                             UpdateIndexes,
-                            () => TracksGrid.Items.Refresh(),
+                            RefreshTrackPresentationViews,
                             OnExportPreviewChanged,
                             NotifyExportUiStateChanged));
 
                     _isAudioDiscProjectAwaitingRip = false;
                     _currentProjectWorkFolder = manifest.ProjectFolder;
                     _activeAudioDiscManifest = manifest;
-                    _loadedResumeProjectIsAudioDisc = true;
-                    SelectedFolder = string.IsNullOrWhiteSpace(manifest.SourceDriveRoot)
-                        ? SelectedFolder
-                        : manifest.SourceDriveRoot;
-                    SetAudioDiscSourceDisplayOverride(manifest);
+                    ApplyLoadedProjectState(LoadedProjectState.WithAudioDiscState(true));
                     statusAllDiscsFinished = true;
                     statusCurrentDiscFinished = true;
-                    var completedTotal = manifest.Discs.Sum(disc => Math.Max(disc.TrackCount, disc.Tracks.Count));
-                    PublishWorkflowStatus(
-                        audioStatusOperationId,
-                        _audioDiscWorkflowStatusAdapter.CreateReadySnapshot(
-                            manifest.ProjectFolder,
-                            manifest.TotalDiscs,
-                            completedTotal,
-                            runPreparation.Preset,
-                            AudioDiscSettingsService.NormalizeWorkingFormat(manifest.WorkingFormat).ToString().ToUpperInvariant()));
+                    SetPipelineState(ProjectPipelineState.Converting);
+                    PublishAudioDiscStatus(liveConversionSession.GetSnapshot());
                     continueWithExport = true;
                     break;
 
                 case AudioDiscRipWorkflowOutcome.Canceled:
-                    extensionCanceled = extensionSnapshot is not null && !_pauseRequested;
-                    if (_pauseRequested)
+                    _discImportCancellation.Cancel();
+                    await WaitForLiveConversionsAsync();
+                    extensionCanceled = extensionSnapshot is not null && !_presentationState.PauseRequested;
+                    if (_presentationState.PauseRequested)
                     {
                         PauseAudioDiscElapsedTimer();
                         PublishAudioDiscStatus(liveConversionSession.GetSnapshot(), isPaused: true);
@@ -6908,12 +10801,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     else
                     {
-                        StatusText = $"Audio-CD-Ripping abgebrochen. {workflowResult.CompletedTracks} Tracks bleiben erhalten.";
-                        ExportProgressText = "Der Vorgang wurde abgebrochen.";
+                        StatusText = LocalizationText.Format("Disc.Audio.RipCanceledWithTracks", workflowResult.CompletedTracks);
+                        ExportProgressText = LocalizationText.Get("Disc.Audio.OperationCanceled");
                     }
                     break;
 
                 case AudioDiscRipWorkflowOutcome.WaitingForDisc:
+                    _discImportCancellation.Cancel();
+                    await WaitForLiveConversionsAsync();
                     extensionCanceled = false;
                     PauseAudioDiscElapsedTimer();
                     PublishAudioDiscStatus(liveConversionSession.GetSnapshot(), isPaused: true);
@@ -6921,21 +10816,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     break;
 
                 case AudioDiscRipWorkflowOutcome.Failed:
+                    if (extensionSnapshot is not null)
+                    {
+                        _discImportCancellation.Cancel();
+                        await WaitForLiveConversionsAsync();
+                        EnterPipelinePause(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+                    }
                     AppDialogService.Error(
                         this,
-                        "Audio-CD konnte nicht vollständig gerippt werden",
+                        LocalizationText.Get("Disc.Audio.RipIncompleteTitle"),
                         workflowResult.Message);
-                    StatusText = "Audio-CD-Ripping fehlgeschlagen.";
+                    StatusText = LocalizationText.Get("Disc.Audio.RipFailedStatus");
                     break;
             }
         }
         catch (OperationCanceledException)
         {
-            extensionCanceled = extensionSnapshot is not null && !_pauseRequested;
-            _audioDiscProjectService.MarkProjectCanceled(manifest);
+            _discImportCancellation?.Cancel();
+            await WaitForLiveConversionsAsync();
+            extensionCanceled = extensionSnapshot is not null && !_presentationState.PauseRequested;
+            _services.Foundation.AudioDiscProjectService.MarkProjectCanceled(manifest);
             SaveCurrentAudioDiscProjectSnapshot(manifest, force: true);
             liveConversionSession.MarkManifestCanceled("Audio-CD-Ripping und AAC-Vorbereitung wurden abgebrochen.");
-            if (_pauseRequested)
+            if (_presentationState.PauseRequested)
             {
                 PauseAudioDiscElapsedTimer();
                 PublishAudioDiscStatus(liveConversionSession.GetSnapshot(), isPaused: true);
@@ -6943,19 +10846,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             else
             {
-                StatusText = "Audio-CD-Ripping wurde abgebrochen.";
-                ExportProgressText = "Bereits vollständig gerippte Tracks bleiben erhalten.";
+                StatusText = LocalizationText.Get("Disc.Audio.RipCanceledStatus");
+                ExportProgressText = LocalizationText.Get("Disc.Audio.CompletedTracksPreserved");
             }
         }
         catch (Exception ex)
         {
             SaveCurrentAudioDiscProjectSnapshot(manifest, force: true);
             liveConversionSession.MarkManifestFailed(ex.Message);
-            _notificationService.Notify(NotificationEvent.Error);
+            if (extensionSnapshot is not null)
+                EnterPipelinePause(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+            _runtimeServices.NotificationService.Notify(NotificationEvent.Error);
             AppDialogService.Error(
                 this,
-                "Fehler beim Audio-CD-Ripping",
-                "Die Audio-CD konnte nicht vollständig nach FLAC gerippt werden.",
+                LocalizationText.Get("Disc.Audio.RipErrorTitle"),
+                LocalizationText.Get("Disc.Audio.RipErrorMessage"),
                 details: new[] { ex.Message });
         }
         finally
@@ -6976,54 +10881,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (extensionCanceled && extensionSnapshot is not null)
         {
-            _projectExtensionRollbackService.Rollback(extensionSnapshot);
+            _services.Pipeline.ProjectExtensionRollbackService.Rollback(extensionSnapshot);
+            ReloadCanonicalMetadataSessionAfterRollback(manifest.ProjectFolder);
             ClearProjectExtensionPauseContext();
-            var restoredManifest = _audioDiscProjectService.TryLoad(manifest.ProjectFolder);
+            var restoredManifest = _services.Foundation.AudioDiscProjectService.TryLoad(manifest.ProjectFolder);
             _activeAudioDiscManifest = restoredManifest;
             _isAudioDiscProjectAwaitingRip = false;
-            _isCurrentProjectCompleted = extensionReturnCompletedState;
-            _isWaitingForManualMergeReview = extensionReturnState == ProjectPipelineState.ReviewBeforeMerge || extensionReturnState == ProjectPipelineState.Completed;
-            SetPipelineState(extensionReturnState ?? ProjectPipelineState.ReviewBeforeMerge);
+            _projectReviewState = ProjectReviewState.WithCompletion(extensionReturnCompletedState);
+            _projectReviewState = ProjectReviewState.WithManualMergeReview(extensionReturnState == ProjectPipelineState.ReviewBeforeMerge || extensionReturnState == ProjectPipelineState.Completed);
+            _projectReviewState = ProjectReviewState.WithPhase(extensionReturnState ?? ProjectPipelineState.ReviewBeforeMerge);
             RefreshLoadedProjectTrackStateFromPersistedProject(manifest.ProjectFolder);
-            StatusText = "Hinzufügen weiterer Audio-CDs wurde abgebrochen. Das bisherige Projekt blieb unverändert.";
-            ExportProgressText = "Neu gerippte Dateien und Konvertierungen wurden entfernt.";
+            StatusText = LocalizationText.Get("Disc.AddMore.AudioCanceledStatus");
+            ExportProgressText = LocalizationText.Get("Disc.AddMore.AudioCanceledProgress");
             NotifyExportUiStateChanged();
             return;
         }
 
         if (continueWithExport)
         {
-            if (extensionSnapshot is not null)
-            {
-                ClearProjectExtensionPauseContext();
-                _pauseBeforeMergeOverride = true;
-            }
-
-            try
-            {
-                await RunCurrentExportPlanAsync(
-                    manifest.ProjectFolder,
-                    ProjectManifestTypes.AudioCdProject);
-            }
-            finally
-            {
-                if (extensionSnapshot is not null)
-                    _pauseBeforeMergeOverride = null;
-            }
+            await RunCurrentExportPlanAsync(
+                manifest.ProjectFolder,
+                ProjectManifestTypes.AudioCdProject,
+                manualMergeRequested: false);
         }
     }
 
     private void NotifyDiscPollingState(DiscPollingDisplayState state)
     {
         if (state is DiscPollingDisplayState.Unsupported or DiscPollingDisplayState.Duplicate)
-            _notificationService.Notify(NotificationEvent.Warning);
+            _runtimeServices.NotificationService.Notify(NotificationEvent.Warning);
     }
 
-    private static string CreateDiscDriveDisplayName(string sourceFolder)
-    {
-        var root = Path.GetPathRoot(sourceFolder)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar);
-        return string.IsNullOrWhiteSpace(root) ? string.Empty : $"CD-Laufwerk {root}";
-    }
+    private string CreateDiscDriveDisplayName(string sourceFolder) =>
+        DiscDriveSelectionPresentationService.FormatStatusDriveLabel(sourceFolder, _settings.DiscDriveOrder);
 
     private async Task<bool> ConfirmRequiredAudioDiscStillAvailableAsync(
         AudioDiscProjectManifest manifest,
@@ -7036,18 +10926,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             await Task.Delay(attempt == 0 ? 500 : 750, token);
 
-            var sourceReady = await Task.Run(
-                () => _discDriveService.IsDiscSourceReady(disc.SourceDriveRoot),
+            var sourceReady = await _services.Discs.DiscDriveService.IsDiscSourceReadyAsync(
+                disc.SourceDriveRoot,
                 token);
             if (!sourceReady)
                 return false;
 
-            var check = await Task.Run(
-                () => _audioDiscPollingService.CheckRequiredDisc(
-                    disc.DiscIdentity,
-                    disc.DiscNumber,
-                    manifest.TotalDiscs,
-                    _developerAudioDiscTestDriveRoot),
+            var check = await _services.Workflows.AudioDiscPollingService.CheckRequiredDiscAsync(
+                disc.DiscIdentity,
+                disc.DiscNumber,
+                manifest.TotalDiscs,
+                null,
                 token);
             if (!check.PollingResult.CanImport || check.Disc is null)
                 return false;
@@ -7059,46 +10948,75 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<AudioDiscPollingResult?> WaitForRequiredAudioDiscAsync(
         AudioDiscProjectManifest manifest,
         AudioDiscProjectManifestDisc disc,
-        CancellationToken token)
+        CancellationToken token,
+        string? selectedDriveRoot = null)
     {
-        var immediateResult = await Task.Run(
-            () => _audioDiscPollingService.CheckRequiredDisc(
-                disc.DiscIdentity,
-                disc.DiscNumber,
-                manifest.TotalDiscs,
-                _developerAudioDiscTestDriveRoot),
-            token);
+        using var statusAnimation = BeginDriveCircleStatusAnimation(token);
+        IReadOnlyList<string>? driveRoots = selectedDriveRoot is null ? null
+            : _settings.ExperimentalDriveRoundEnabled
+                ? await BuildDriveRoundAsync(selectedDriveRoot, token, startWithSelectedDrive: true)
+                : new[] { selectedDriveRoot };
+        var preferredRoot = selectedDriveRoot;
+        var immediateResult = await _services.Workflows.AudioDiscPollingService.CheckRequiredDiscAsync(
+            disc.DiscIdentity,
+            disc.DiscNumber,
+            manifest.TotalDiscs,
+            preferredRoot,
+            token,
+            driveRoots,
+            CreateDiscDriveDisplayName);
         if (immediateResult.PollingResult.CanImport && immediateResult.Disc is not null)
             return immediateResult;
+
+        NotifyDiscChangeRequired(
+            "Audio-CD",
+            source: "AudioDiscWait",
+            reason: "RequiredDiscDialog");
 
         AudioDiscPollingResult? acceptedResult = null;
         var request = new DiscWaitDialogRequest(
             disc.DiscNumber,
             manifest.TotalDiscs,
-            "Audio-CD",
-            $"Bitte Audio-CD {disc.DiscNumber} von {manifest.TotalDiscs} einlegen. BookStitch prüft automatisch alle optischen Laufwerke.",
-            "Die benötigte Disc wird anhand ihrer Disc-Identität erkannt.");
+            LocalizationText.Get("Disc.Media.Audio"),
+            LocalizationText.Format("Disc.DriveRound.RequiredAudioInstruction", disc.DiscNumber, manifest.TotalDiscs),
+            LocalizationText.Get("Disc.DriveRound.RequiredAudioHint"),
+            CreateDiscDriveDisplayName(preferredRoot ?? disc.SourceDriveRoot),
+            IsDriveCircle: _settings.ExperimentalDriveRoundEnabled);
 
-        var accepted = await _discWaitDialogService.WaitForDiscAsync(
+        var accepted = await _services.Workflows.DiscWaitDialogService.WaitForDiscAsync(
             this,
             request,
-            async cancellationToken =>
+            async (_, cancellationToken) =>
             {
-                acceptedResult = await Task.Run(
-                    () => _audioDiscPollingService.CheckRequiredDisc(
-                        disc.DiscIdentity,
-                        disc.DiscNumber,
-                        manifest.TotalDiscs,
-                        _developerAudioDiscTestDriveRoot),
-                    cancellationToken);
-                return acceptedResult.PollingResult;
+                acceptedResult = await _services.Workflows.AudioDiscPollingService.CheckRequiredDiscAsync(
+                    disc.DiscIdentity,
+                    disc.DiscNumber,
+                    manifest.TotalDiscs,
+                    preferredRoot,
+                    cancellationToken,
+                    driveRoots,
+                    CreateDiscDriveDisplayName,
+                    checkingDrive: request.IsDriveCircle ? source =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            if (!cancellationToken.IsCancellationRequested &&
+                                TrackPathService.PathEquals(manifest.ProjectFolder, _currentProjectWorkFolder))
+                                ExportProgressText = LocalizationText.Format("Disc.DriveRound.Checking.Progress", FormatDriveLetter(source));
+                        });
+                    } : null);
+                return request.IsDriveCircle && !acceptedResult.PollingResult.CanImport
+                    ? DiscDriveRoundWaitPresentation.Complete(LocalizationText.Get("Disc.Media.Audio"),
+                        disc.DiscNumber, manifest.TotalDiscs,
+                        acceptedResult.PollingResult.DisplayState == DiscPollingDisplayState.Waiting ? null : acceptedResult.PollingResult)
+                    : acceptedResult.PollingResult;
             },
             value => StatusText = value,
             value => ExportProgressText = value,
             token);
 
         if (accepted == DiscWaitDialogOutcome.Deferred)
-            _pauseRequested = true;
+            ApplyPipelinePauseRequest();
 
         return accepted == DiscWaitDialogOutcome.Ready && acceptedResult?.Disc is not null
             ? acceptedResult
@@ -7108,9 +11026,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<AudioDiscProjectManifestDisc?> WaitForNextAudioDiscAsync(
         AudioDiscProjectManifest manifest,
         int discNumber,
-        CancellationToken token)
+        CancellationToken token,
+        bool startWithSelectedDrive = false,
+        bool previewOnly = false,
+        string? selectedSource = null)
     {
-        var sourceFolder = manifest.SourceDriveRoot;
+        using var statusAnimation = BeginDriveCircleStatusAnimation(token);
+        var sourceFolder = selectedSource ?? _resumeDiscStartDriveRoot ?? manifest.SourceDriveRoot;
         var importedIdentities = manifest.Discs
             .Select(item => item.DiscIdentity)
             .Where(identity => !string.IsNullOrWhiteSpace(identity))
@@ -7120,28 +11042,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             sourceFolder,
             discNumber,
             importedIdentities,
-            token);
+            token,
+            startWithSelectedDrive);
 
         if (acceptedResult?.Disc is not null)
-            return AddAcceptedAudioDiscFromPollingResult(manifest, acceptedResult, discNumber);
+            return AcceptOrPreviewAudioDisc(manifest, acceptedResult, discNumber, previewOnly: previewOnly);
+
+        NotifyDiscChangeRequired(
+            "Audio-CD",
+            source: "AudioDiscWait",
+            reason: _settings.ExperimentalDriveRoundEnabled ? "DriveRoundWaitDialog" : "WaitDialog");
 
         acceptedResult = null;
 
         var request = new DiscWaitDialogRequest(
             discNumber,
             manifest.TotalDiscs,
-            "Audio-CD",
+            LocalizationText.Get("Disc.Media.Audio"),
             _settings.ExperimentalDriveRoundEnabled
-                ? $"Bitte Audio-CD {discNumber} von {manifest.TotalDiscs} einlegen. Die Laufwerksrunde prüft automatisch alle aktiven Laufwerke in Reihenfolge."
-                : $"Bitte Audio-CD {discNumber} von {manifest.TotalDiscs} einlegen. BookStitch prüft automatisch und startet, sobald eine neue Audio-CD erkannt wurde.",
-            "Bereits verwendete Audio-CDs werden anhand ihrer Disc-Identität erkannt, nicht erneut aufgenommen und nach Möglichkeit wieder ausgeworfen.",
+                ? LocalizationText.Format("Disc.DriveRound.InsertInstruction", LocalizationText.Get("Disc.Media.Audio"), discNumber, manifest.TotalDiscs)
+                : LocalizationText.Format("Disc.DriveRound.AudioInsertStandard", discNumber, manifest.TotalDiscs),
+            LocalizationText.Get("Disc.DriveRound.AudioDuplicateHint"),
             CreateDiscDriveDisplayName(sourceFolder),
-            NotifyDiscPollingState);
+            NotifyDiscPollingState,
+            CanCompleteImport: !previewOnly && discNumber > 1,
+            IsDriveCircle: _settings.ExperimentalDriveRoundEnabled);
 
-        var accepted = await _discWaitDialogService.WaitForDiscAsync(
+        var accepted = await _services.Workflows.DiscWaitDialogService.WaitForDiscAsync(
             this,
             request,
-            async cancellationToken =>
+            async (checkRequest, cancellationToken) =>
             {
                 if (_settings.ExperimentalDriveRoundEnabled)
                 {
@@ -7150,18 +11080,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         sourceFolder,
                         discNumber,
                         importedIdentities,
-                        cancellationToken);
+                        checkRequest.AcceptNextDuplicate,
+                        cancellationToken,
+                        startWithSelectedDrive);
                     acceptedResult = driveRoundResult.AcceptedResult;
                     return driveRoundResult.PollingResult;
                 }
 
-                acceptedResult = await Task.Run(
-                    () => _audioDiscPollingService.CheckNextDisc(
-                        sourceFolder,
-                        discNumber,
-                        manifest.TotalDiscs,
-                        importedIdentities),
-                    cancellationToken);
+                acceptedResult = await _services.Workflows.AudioDiscPollingService.CheckNextDiscAsync(
+                    sourceFolder,
+                    discNumber,
+                    manifest.TotalDiscs,
+                    importedIdentities,
+                    cancellationToken,
+                    checkRequest.AcceptNextDuplicate);
                 return acceptedResult.PollingResult;
             },
             _ => { },
@@ -7170,14 +11102,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (accepted == DiscWaitDialogOutcome.Deferred)
         {
-            _pauseRequested = true;
+            ApplyPipelinePauseRequest();
+            return null;
+        }
+
+        if (accepted == DiscWaitDialogOutcome.ImportCompleted)
+        {
+            if (previewOnly) return null;
+            DiscardChangedResumeDiscPreview(discNumber);
+            _services.Foundation.AudioDiscProjectService.CompleteDiscImportEarly(manifest);
+            SaveCurrentAudioDiscProjectSnapshot(manifest, force: true);
             return null;
         }
 
         if (acceptedResult?.Disc is null)
             return null;
 
-        return AddAcceptedAudioDiscFromPollingResult(manifest, acceptedResult, discNumber);
+        return AcceptOrPreviewAudioDisc(
+            manifest, acceptedResult, discNumber,
+            accepted == DiscWaitDialogOutcome.ReadyWithDuplicateOverride, previewOnly);
     }
 
     private sealed record AudioDriveRoundWaitResult(
@@ -7189,16 +11132,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string lastProcessedSourceFolder,
         int discNumber,
         ISet<string> importedDiscIdentities,
-        CancellationToken token)
+        bool acceptDuplicate,
+        CancellationToken token,
+        bool startWithSelectedDrive = false)
     {
-        var round = BuildDriveRound(lastProcessedSourceFolder);
+        var round = await BuildDriveRoundAsync(lastProcessedSourceFolder, token, startWithSelectedDrive);
         if (round.Count == 0)
         {
             return new AudioDriveRoundWaitResult(new DiscPollingResult(
                 false,
-                $"Bitte Audio-CD {discNumber} von {manifest.TotalDiscs} einlegen.\n\nDie Laufwerksrunde ist aktiv, aber aktuell ist kein aktives Laufwerk verfügbar.",
-                $"Warte auf Audio-CD {discNumber}: kein aktives Laufwerk verfügbar.",
-                "Laufwerksrunde aktiv: kein aktives Laufwerk verfügbar."));
+                LocalizationText.Format("Disc.DriveRound.NoDrive.Dialog", LocalizationText.Get("Disc.Media.Audio"), discNumber, manifest.TotalDiscs),
+                LocalizationText.Format("Disc.DriveRound.NoDrive.Status", LocalizationText.Get("Disc.Media.Audio"), discNumber),
+                LocalizationText.Get("Disc.DriveRound.NoDrive.Progress")));
         }
 
         DiscPollingResult? lastProblem = null;
@@ -7206,70 +11151,70 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             token.ThrowIfCancellationRequested();
             var driveLetter = FormatDriveLetter(driveRoot);
-            ExportProgressText = $"Laufwerksrunde aktiv: prüfe Laufwerk {driveLetter} …";
+            ExportProgressText = LocalizationText.Format("Disc.DriveRound.Checking.Progress", driveLetter);
 
-            var typeProbe = await Task.Run(
-                () => _discDriveCandidateProbeService.ProbeType(driveRoot, DiscMediaKind.AudioCd),
-                token);
+            var typeProbe = await _services.Workflows.DiscDriveCandidateProbeService
+                .ProbeTypeAsync(driveRoot, DiscMediaKind.AudioCd, token);
             if (!typeProbe.IsAccepted)
             {
                 WriteDriveRoundSkip("Audio-CD", discNumber, typeProbe);
-                lastProblem = CreateDriveRoundWaitingResult(
+                var candidateNotice = CreateDriveRoundWaitingResult(
                     discNumber,
                     manifest.TotalDiscs,
-                    "Audio-CD",
+                    LocalizationText.Get("Disc.Media.Audio"),
                     driveLetter,
                     typeProbe);
+                lastProblem = DiscDriveRoundWaitPresentation.KeepActionable(lastProblem, candidateNotice,
+                    typeProbe.Status == DiscDriveCandidateStatus.Error);
                 continue;
             }
 
             AudioDiscPollingResult pollingResult;
             try
             {
-                pollingResult = await Task.Run(
-                    () => _audioDiscPollingService.CheckNextDisc(
-                        typeProbe.DriveRoot,
-                        discNumber,
-                        manifest.TotalDiscs,
-                        importedDiscIdentities),
-                    token);
+                pollingResult = await _services.Workflows.AudioDiscPollingService.CheckNextDiscAsync(
+                    typeProbe.DriveRoot,
+                    discNumber,
+                    manifest.TotalDiscs,
+                    importedDiscIdentities,
+                    token,
+                    acceptDuplicate);
             }
             catch (Exception ex)
             {
-                _diagnosticLogService.WriteError($"Laufwerksrunde Audio-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
+                _runtimeServices.DiagnosticLogService.WriteError($"DriveCircle Audio-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
                 lastProblem = new DiscPollingResult(
                     false,
-                    $"Laufwerk {driveLetter} konnte gerade nicht gelesen werden.\n\nBookStitch prüft gleich automatisch weiter.",
-                    $"Warte auf Audio-CD {discNumber}: Laufwerk {driveLetter} konnte gerade nicht gelesen werden.",
-                    $"Laufwerksrunde aktiv: Laufwerk {driveLetter} konnte gerade nicht gelesen werden.");
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Dialog", driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Status", LocalizationText.Get("Disc.Media.Audio"), discNumber, driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.Unreadable.Progress", driveLetter));
                 continue;
             }
 
             if (pollingResult.PollingResult.CanImport && pollingResult.Disc is not null)
             {
-                _diagnosticLogService.WriteApplicationEvent(
-                    "DRIVE ROUND",
+                _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+                    "DRIVECIRCLE",
                     $"Audio-CD {discNumber}/{manifest.TotalDiscs}: {typeProbe.DriveRoot} akzeptiert.");
                 return new AudioDriveRoundWaitResult(new DiscPollingResult(
                     true,
-                    $"Neue Audio-CD in Laufwerk {driveLetter} erkannt. CD {discNumber} von {manifest.TotalDiscs} wird vorbereitet …",
-                    $"Audio-CD {discNumber} von {manifest.TotalDiscs} in Laufwerk {driveLetter} erkannt. Ripping startet …",
-                    $"Laufwerksrunde: Laufwerk {driveLetter} erkannt. Ripping startet …",
+                    LocalizationText.Format("Disc.DriveRound.AudioReady.Dialog", driveLetter, discNumber, manifest.TotalDiscs),
+                    LocalizationText.Format("Disc.DriveRound.AudioReady.Status", discNumber, manifest.TotalDiscs, driveLetter),
+                    LocalizationText.Format("Disc.DriveRound.AudioReady.Progress", driveLetter),
                     DiscPollingDisplayState.Ready), pollingResult);
             }
 
-            lastProblem = pollingResult.PollingResult with
+            var pollingNotice = pollingResult.PollingResult with
             {
-                ProgressText = $"Laufwerksrunde aktiv: Laufwerk {driveLetter} übersprungen – {pollingResult.PollingResult.ProgressText}",
-                StatusText = $"Warte auf Audio-CD {discNumber}: Laufwerk {driveLetter} übersprungen."
+                ProgressText = LocalizationText.Format("Disc.DriveRound.Skipped.Progress", driveLetter, pollingResult.PollingResult.ProgressText),
+                StatusText = LocalizationText.Format("Disc.DriveRound.Skipped.Status", LocalizationText.Get("Disc.Media.Audio"), discNumber, driveLetter)
             };
+            lastProblem = DiscDriveRoundWaitPresentation.KeepActionable(lastProblem, pollingNotice,
+                pollingNotice.DisplayState is DiscPollingDisplayState.Duplicate or DiscPollingDisplayState.Unsupported);
         }
 
-        return new AudioDriveRoundWaitResult(lastProblem ?? new DiscPollingResult(
-            false,
-            $"Bitte Audio-CD {discNumber} von {manifest.TotalDiscs} einlegen.\n\nDie Laufwerksrunde prüft automatisch alle aktiven Laufwerke in Reihenfolge.",
-            $"Warte auf Audio-CD {discNumber}: Laufwerksrunde aktiv.",
-            "Laufwerksrunde aktiv: keine passende Audio-CD gefunden. Nächste Prüfung läuft automatisch …"));
+        return new AudioDriveRoundWaitResult(DiscDriveRoundWaitPresentation.Complete(
+            LocalizationText.Get("Disc.Media.Audio"), discNumber, manifest.TotalDiscs, lastProblem));
     }
 
     private async Task<AudioDiscPollingResult?> TrySelectNextAudioDiscFromDriveRoundAsync(
@@ -7277,26 +11222,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         string lastProcessedSourceFolder,
         int discNumber,
         ISet<string> importedDiscIdentities,
-        CancellationToken token)
+        CancellationToken token,
+        bool startWithSelectedDrive = false)
     {
         if (!_settings.ExperimentalDriveRoundEnabled)
             return null;
 
-        var round = BuildDriveRound(lastProcessedSourceFolder);
+        var round = await BuildDriveRoundAsync(lastProcessedSourceFolder, token, startWithSelectedDrive);
         if (round.Count == 0)
             return null;
 
-        _diagnosticLogService.WriteApplicationEvent(
-            "DRIVE ROUND",
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "DRIVECIRCLE",
             $"Audio-CD {discNumber}/{manifest.TotalDiscs}: prüfe {string.Join(", ", round)} nach {lastProcessedSourceFolder}.");
 
         foreach (var driveRoot in round)
         {
             token.ThrowIfCancellationRequested();
 
-            var typeProbe = await Task.Run(
-                () => _discDriveCandidateProbeService.ProbeType(driveRoot, DiscMediaKind.AudioCd),
-                token);
+            var typeProbe = await _services.Workflows.DiscDriveCandidateProbeService
+                .ProbeTypeAsync(driveRoot, DiscMediaKind.AudioCd, token);
             if (!typeProbe.IsAccepted)
             {
                 WriteDriveRoundSkip("Audio-CD", discNumber, typeProbe);
@@ -7306,26 +11251,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AudioDiscPollingResult pollingResult;
             try
             {
-                pollingResult = await Task.Run(
-                    () => _audioDiscPollingService.CheckNextDisc(
-                        typeProbe.DriveRoot,
-                        discNumber,
-                        manifest.TotalDiscs,
-                        importedDiscIdentities),
+                pollingResult = await _services.Workflows.AudioDiscPollingService.CheckNextDiscAsync(
+                    typeProbe.DriveRoot,
+                    discNumber,
+                    manifest.TotalDiscs,
+                    importedDiscIdentities,
                     token);
             }
             catch (Exception ex)
             {
-                _diagnosticLogService.WriteError($"Laufwerksrunde Audio-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
+                _runtimeServices.DiagnosticLogService.WriteError($"DriveCircle Audio-CD {discNumber}: {driveRoot} konnte nicht geprüft werden", ex);
                 continue;
             }
 
             if (pollingResult.PollingResult.CanImport && pollingResult.Disc is not null)
             {
-                StatusText = $"Laufwerksrunde: Audio-CD {discNumber} von {manifest.TotalDiscs} in Laufwerk {FormatDriveLetter(typeProbe.DriveRoot)} erkannt.";
-                ExportProgressText = "Laufwerksrunde aktiv: Ripping wird fortgesetzt …";
-                _diagnosticLogService.WriteApplicationEvent(
-                    "DRIVE ROUND",
+            StatusText = LocalizationText.Format("Disc.DriveRound.Accepted.Status", LocalizationText.Get("Disc.Media.Audio"), discNumber, manifest.TotalDiscs, FormatDriveLetter(typeProbe.DriveRoot));
+            ExportProgressText = LocalizationText.Get("Disc.DriveRound.RippingContinues.Progress");
+                _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+                    "DRIVECIRCLE",
                     $"Audio-CD {discNumber}/{manifest.TotalDiscs}: {typeProbe.DriveRoot} akzeptiert.");
                 return pollingResult;
             }
@@ -7339,32 +11283,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 new DiscDriveCandidateResult(status, typeProbe.DriveRoot, typeProbe.MediaKind, pollingResult.PollingResult.StatusText));
         }
 
-        _diagnosticLogService.WriteApplicationEvent(
-            "DRIVE ROUND",
+        _runtimeServices.DiagnosticLogService.WriteApplicationEvent(
+            "DRIVECIRCLE",
             $"Audio-CD {discNumber}/{manifest.TotalDiscs}: keine passende neue Disc gefunden.");
         return null;
+    }
+
+    private AudioDiscProjectManifestDisc AcceptOrPreviewAudioDisc(
+        AudioDiscProjectManifest manifest, AudioDiscPollingResult result, int discNumber,
+        bool acceptDuplicate = false, bool previewOnly = false)
+    {
+        if (previewOnly)
+            return _services.Foundation.AudioDiscProjectService.BuildDiscEntry(manifest, result.Disc!,
+                discNumber, _services.Foundation.AudioDiscProjectService.GetNextGlobalTrackIndex(manifest), result.DriveInfo);
+        return AddAcceptedAudioDiscFromPollingResult(manifest, result, discNumber, acceptDuplicate);
     }
 
     private AudioDiscProjectManifestDisc AddAcceptedAudioDiscFromPollingResult(
         AudioDiscProjectManifest manifest,
         AudioDiscPollingResult acceptedResult,
-        int discNumber)
+        int discNumber,
+        bool acceptDuplicate = false)
     {
+        if (_resumeDiscPreview.DiscNumber == discNumber &&
+            !_resumeDiscPreview.MatchesAudio(discNumber, acceptedResult.Disc!.DiscIdentity))
+            DiscardChangedResumeDiscPreview(discNumber);
+        PersistTrackListState();
         SaveCurrentAudioDiscProjectSnapshot(manifest);
 
-        var addedDisc = _audioDiscProjectService.AddDisc(
+        var addedDisc = _services.Foundation.AudioDiscProjectService.AddDisc(
             manifest,
             acceptedResult.Disc!,
             discNumber,
-            acceptedResult.DriveInfo);
+            acceptedResult.DriveInfo,
+            acceptDuplicate,
+            preparedDisc: _resumeDiscPreview.AudioDisc);
         SaveCurrentAudioDiscProjectSnapshot(manifest, force: true);
 
-        Tracks.Clear();
-        foreach (var track in _audioDiscProjectService.CreateTrackPreview(manifest))
-            Tracks.Add(track);
+        Tracks.ReplaceAll(DiscResumePreviewState.AppendAudioTracks(Tracks,
+            _services.Foundation.AudioDiscProjectService.CreateTrackPreview(manifest)));
+        if (_resumeDiscPreview.DiscNumber == discNumber) _resumeDiscPreview.Clear();
 
+        RecalculateProcessingActionsForCurrentPreset(requestTrackStateRefresh: false);
         UpdateIndexes();
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
         AutoFitTrackColumnsAfterRender();
         NotifyExportUiStateChanged();
 
@@ -7372,20 +11334,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
 
-    private async Task RunLoadedMp3DiscProjectExportAsync()
+    private async Task RunLoadedMp3DiscProjectExportAsync(bool manualMergeRequested = false)
     {
         if (string.IsNullOrWhiteSpace(_currentProjectWorkFolder) || !Directory.Exists(_currentProjectWorkFolder))
         {
             AppDialogService.Warning(
                 this,
-                "Projekt nicht gefunden",
-                "Der MP3-CD-Projektordner konnte nicht gefunden werden. Öffne das Projekt bitte erneut über „Projekte“.");
+                LocalizationText.Get("MainWindow.Resume.ProjectMissing.Title"),
+                LocalizationText.Get("MainWindow.Resume.Mp3FolderMissing.Message"));
             ResetLoadedResumeProjectState();
             return;
         }
 
-        _loadedResumeProjectNeedsDiscImport = false;
-        _loadedResumeProjectIsMp3Disc = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
         NotifyExportUiStateChanged();
 
         // Geladene MP3-CD-Projekte laufen auch bei einem Presetwechsel direkt durch den
@@ -7393,7 +11355,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // dieselbe Pause-/Fortsetzen-Logik und dieselben aktiven Jobmeldungen wie bei
         // allen anderen Exportpfaden. Eine separate Vorabkonvertierung würde den
         // fachlichen Pipelinezustand umgehen und die falsche Buttongruppe stehen lassen.
-        await RunCurrentExportPlanAsync(_currentProjectWorkFolder, ProjectManifestTypes.Mp3DiscProject);
+        await RunCurrentExportPlanAsync(_currentProjectWorkFolder, ProjectManifestTypes.Mp3DiscProject, manualMergeRequested);
     }
 
     private void RestoreActiveAudioDiscManifestFromCurrentProject()
@@ -7407,7 +11369,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!File.Exists(manifestPath))
             return;
 
-        _activeAudioDiscManifest = _audioDiscProjectService.TryLoad(_currentProjectWorkFolder);
+        _activeAudioDiscManifest = _services.Foundation.AudioDiscProjectService.TryLoad(_currentProjectWorkFolder);
     }
 
     private string ResolveCurrentProjectType(string requestedProjectType)
@@ -7417,7 +11379,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_activeAudioDiscManifest is not null)
             return ProjectManifestTypes.AudioCdProject;
 
-        if (_loadedResumeProjectIsMp3Disc)
+        if (_activeMp3DiscManifest is not null || LoadedProjectState.IsMp3Disc)
             return ProjectManifestTypes.Mp3DiscProject;
 
         return requestedProjectType;
@@ -7425,10 +11387,40 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task RunCurrentExportPlanAsync(
         string? projectWorkFolderOverride = null,
-        string projectType = ProjectManifestTypes.FolderProject)
+        string projectType = ProjectManifestTypes.FolderProject,
+        bool manualMergeRequested = false)
     {
-        _isPipelineFailed = false;
+        if (!TryCheckpointEditableProject()) return;
+        var exportStartTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreateFailureClear(
+                _presentationState.IsPipelinePaused,
+                _presentationState.PauseRequested,
+                IsBusy,
+                IsExporting,
+                IsDiscImporting);
+        ApplyPipelineTransition(exportStartTransition);
         projectType = ResolveCurrentProjectType(projectType);
+
+        var presetReconversionProjectFolder =
+            string.IsNullOrWhiteSpace(projectWorkFolderOverride)
+                ? _currentProjectWorkFolder
+                : projectWorkFolderOverride;
+        var pendingPresetReconversionContext =
+            CapturePresetReconversionPauseContext(presetReconversionProjectFolder);
+        var requiresPresetReconversionRollback =
+            ProjectReviewState.Phase is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed &&
+            _manualMergeReviewNeedsReconversion;
+
+        if (requiresPresetReconversionRollback && pendingPresetReconversionContext is null)
+        {
+            AppDialogService.Error(
+                this,
+                LocalizationText.Get("MainWindow.Reconversion.StartFailed.Title"),
+                LocalizationText.Get("MainWindow.Reconversion.StartFailed.Message"));
+            return;
+        }
+
+        ActivatePresetReconversionPauseContext(pendingPresetReconversionContext);
 
         var preparedLocalProjectForReview = false;
         if (string.Equals(projectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase))
@@ -7449,11 +11441,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             projectWorkFolderOverride = _currentProjectWorkFolder;
         }
+
         if (_activeAudioDiscManifest is not null)
             TrySaveCurrentAudioDiscProjectSnapshot(_activeAudioDiscManifest, force: true);
 
         if (preparedLocalProjectForReview)
             EnterPreparedProjectReviewStateAfterPreparation();
+
+        FlushPendingChapterMetadataRefresh();
 
         // Vor jedem Export den Plan neu berechnen, damit Preset, Bitrate und Mono/Stereo wirklich berücksichtigt werden.
         RecalculateProcessingActionsForCurrentPreset();
@@ -7477,7 +11472,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             exportCheck.TrackSnapshot,
             exportCheck.OutputPath,
             projectWorkFolderOverride,
-            projectType);
+            projectType,
+            manualMergeRequested);
     }
 
     private bool IsCurrentLocalProjectSourceInternal()
@@ -7492,24 +11488,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _currentProjectWorkFolder,
             LocalProjectImportService.OriginalsFolderName);
 
-        return TrackPathService.PathEquals(_currentFolderPath, originalsFolder);
+        return TrackPathService.PathEquals(_currentFolderPath, originalsFolder) ||
+            (LoadedProjectState.IsLocal && Tracks.Count > 0 && Tracks.All(track =>
+                Path.IsPathRooted(track.FilePath) && TrackPathService.IsPathInsideFolder(track.FilePath, originalsFolder)));
     }
 
     private void EnterPreparedProjectReviewStateAfterPreparation()
     {
-        _isWaitingForManualMergeReview = true;
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(true);
         _manualMergeReviewPreparedPreset = SelectedExportPreset;
         _manualMergeReviewNeedsReconversion = false;
-        _isCurrentProjectCompleted = false;
+        _manualMergeReviewHasPreparedTracks = true;
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
         SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
-        SetTrackActionDisplayOverride("Zusammenfügen");
+        SetTrackActionDisplayOverride(LocalizationText.Get("Workflow.Review.MergeAction"));
         NotifyExportUiStateChanged();
     }
 
     private void RestoreReviewStateAfterPreExportValidationStopped()
     {
         if (IsBusy ||
-            _pipelineState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed or ProjectPipelineState.Merging ||
+            ProjectReviewState.Phase is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed or ProjectPipelineState.Merging ||
             Tracks.Count == 0 ||
             string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
         {
@@ -7529,29 +11528,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             AppDialogService.Error(
                 this,
-                "FFmpeg fehlt",
-                "FFmpeg wurde nicht gefunden. Bitte prüfe die FFmpeg-Einstellungen und starte das Projekt erneut.");
+                LocalizationText.Get("MainWindow.Export.FfmpegMissing.Title"),
+                LocalizationText.Get("MainWindow.Ffmpeg.Missing.ProjectMessage"));
             return false;
         }
 
+        if (!ShowFolderPassThroughNotice(requireAcceptance: true)) return false;
+        ApplyFolderSampleRateContext();
         var sourceFolder = Path.GetFullPath(_currentFolderPath);
         var trackSnapshot = Tracks.ToList();
         var sourceFiles = trackSnapshot
             .Select(track => TrackPathService.GetTrackPath(sourceFolder, track))
             .ToArray();
 
+        var createsNewProject = string.IsNullOrWhiteSpace(_currentProjectWorkFolder) || !Directory.Exists(_currentProjectWorkFolder);
         var projectFolder = !string.IsNullOrWhiteSpace(_currentProjectWorkFolder) &&
                             Directory.Exists(_currentProjectWorkFolder)
             ? _currentProjectWorkFolder
-            : _localProjectImportService.CreateProjectFolder(
+            : _services.Pipeline.LocalProjectImportService.CreateProjectFolder(
                 GetProjectFolderStructure().LocalProjectsFolder,
-                sourceFolder);
+                sourceFolder,
+                targetSampleRateHz: _folderRatePreview.EffectiveRate,
+                allowAacReuse: _folderRatePreview.Decision.Qualified);
 
+        if (createsNewProject)
+        {
+            _workspaceReplacementVersion++;
+            _sessionProject.Register(projectFolder, ProjectManifestTypes.FolderProject, startAccepted: true);
+        }
         var originalsFolder = Path.Combine(
             projectFolder,
             LocalProjectImportService.OriginalsFolderName);
         var preset = ExportPreset.Parse(SelectedExportPreset);
-        var exportPlan = _exportPlanService.Create(new ExportPlanRequest(
+        var exportPlan = _services.Pipeline.ExportPlanService.Create(new ExportPlanRequest(
             trackSnapshot,
             originalsFolder,
             GetProjectFolderStructure().LocalProjectsFolder,
@@ -7566,6 +11575,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Directory.CreateDirectory(exportPlan.ConvertedFolder);
         Directory.CreateDirectory(exportPlan.MergeFolder);
 
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
         var trackBySourcePath = sourceFiles
             .Select((sourcePath, index) => new
             {
@@ -7578,39 +11588,47 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 item => (item.Index, item.Track),
                 StringComparer.OrdinalIgnoreCase);
 
-        var manifest = _workManifestService.LoadOrCreate(
-            exportPlan.ManifestPath,
-            ProjectManifestTypes.FolderProject,
-            projectFolder,
-            originalsFolder,
-            preset.DisplayName);
-        var manifestSyncRoot = new object();
-        var sourceAcquisitionCompleted = false;
-
-        _currentProjectWorkFolder = projectFolder;
-        manifest.State.Status = ProjectManifestStatuses.AcquiringSources;
-        _workManifestService.Save(exportPlan.ManifestPath, manifest);
-        SetPipelineState(ProjectPipelineState.AcquiringSources);
-        IsBusy = true;
-        IsExporting = true;
-        _exportCancellation = new CancellationTokenSource();
         var workflowOperationId = BeginWorkflowStatusOperation(projectFolder);
-        PublishWorkflowStatus(
-            workflowOperationId,
-            _localWorkflowStatusAdapter.CreateRunningSnapshot(
-                projectFolder,
-                ProjectPipelineState.AcquiringSources,
-                new LocalProjectLivePreparationProgress(0, sourceFiles.Length, 0, string.Empty, [], []),
-                preset));
-
         try
         {
-            var result = await _localProjectLivePreparationService.RunAsync(
+            var manifest = _services.Foundation.WorkManifestService.LoadOrCreate(
+                exportPlan.ManifestPath,
+                ProjectManifestTypes.FolderProject,
+                projectFolder,
+                originalsFolder,
+                preset.DisplayName);
+            _activeLocalPreparation = new(projectFolder, ProjectManifestTypes.FolderProject, manifest.ProjectId);
+            var manifestSyncRoot = new object();
+            var sourceAcquisitionCompleted = false;
+
+            _currentProjectWorkFolder = projectFolder;
+            EnsureCanonicalMetadataSessionAttachedToProject(projectFolder);
+            manifest.State.Status = ProjectManifestStatuses.AcquiringSources;
+            _services.Foundation.WorkManifestService.Save(exportPlan.ManifestPath, manifest);
+            SetPipelineState(ProjectPipelineState.AcquiringSources);
+            IsBusy = true;
+            IsExporting = true;
+            _exportCancellation = new CancellationTokenSource();
+            PublishWorkflowStatus(
+                workflowOperationId,
+                _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
+                    projectFolder,
+                    ProjectPipelineState.AcquiringSources,
+                    new LocalProjectLivePreparationProgress(0, sourceFiles.Length, 0, string.Empty, [], []),
+                    preset));
+
+            await using var preparedLifecycle = new PreparedTrackLifecycleSession(
+                _services.Foundation.WorkManifestService, _services.Workflows.AacExportProcessingService,
+                manifest, exportPlan.ManifestPath, manifestSyncRoot, _ffmpegStatus.FfprobePath ?? "", exportPlan.ParallelConversions);
+            preparedLifecycle.QueuePreset(preset, _exportCancellation.Token);
+
+            var result = await _services.Workflows.LocalProjectLivePreparationService.RunAsync(
                 new LocalProjectLivePreparationRequest(
                     sourceFolder,
                     sourceFiles,
                     projectFolder,
-                    ResolveParallelJobCount()),
+                    ResolveParallelJobCount(),
+                    preparedLifecycle.DrainAsync),
                 async (copiedFile, trackPreparationProgress, token) =>
                 {
                     var sourcePath = Path.GetFullPath(copiedFile.SourceFile);
@@ -7620,6 +11638,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             $"Die kopierte Quelldatei konnte keinem Track zugeordnet werden: {copiedFile.SourceFile}");
                     }
 
+                    ApplySourceIdFromCopiedFile(mappedTrack.Track, copiedFile);
+                    PublishSourceMetadataSnapshot(
+                        projectFolder,
+                        copiedFile.TargetFile,
+                        mappedTrack.Track,
+                        evidence: "local-project-copy");
                     var convertedPath = ConvertedTrackPathService.GetConvertedTrackPath(
                         exportPlan.ConvertedFolder,
                         copiedFile.TargetFile,
@@ -7628,7 +11652,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                     lock (manifestSyncRoot)
                     {
-                        canReuseConvertedTrack = _workManifestService.CanReuseConvertedTrack(
+                        canReuseConvertedTrack = _services.Foundation.WorkManifestService.CanReuseConvertedTrack(
                             manifest,
                             mappedTrack.Index,
                             mappedTrack.Track,
@@ -7639,30 +11663,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                     if (!canReuseConvertedTrack)
                     {
-                        var durationTicks = TrackDurationService.GetEffectiveDurationTicks(mappedTrack.Track);
-                        await _aacExportProcessingService.PrepareTrackForExportAsync(
-                            mappedTrack.Track,
-                            copiedFile.TargetFile,
-                            convertedPath,
-                            preset,
-                            ffmpegPath,
-                            token,
-                            ffmpegProgress => trackPreparationProgress.Report(
-                                durationTicks <= 0
-                                    ? 0
-                                    : Math.Clamp(ffmpegProgress.Ticks / (double)durationTicks, 0d, 0.999d)));
-
-                        lock (manifestSyncRoot)
+                        preparedLifecycle.MarkStarted(mappedTrack.Index, mappedTrack.Track, copiedFile.TargetFile, convertedPath, preset, token);
+                        try
                         {
-                            _workManifestService.UpdateTrack(
-                                manifest,
-                                mappedTrack.Index,
+                            var durationTicks = TrackDurationService.GetEffectiveDurationTicks(mappedTrack.Track);
+                            await _services.Workflows.AacExportProcessingService.PrepareTrackForExportAsync(
                                 mappedTrack.Track,
                                 copiedFile.TargetFile,
                                 convertedPath,
-                                preset);
-                            _workManifestService.Save(exportPlan.ManifestPath, manifest);
+                                preset,
+                                ffmpegPath,
+                                token,
+                                ffmpegProgress => trackPreparationProgress.Report(
+                                    durationTicks <= 0
+                                        ? 0
+                                        : Math.Clamp(ffmpegProgress.Ticks / (double)durationTicks, 0d, 0.999d)));
                         }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (ExportTrackException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new ExportTrackException(
+                                mappedTrack.Track.Index > 0 ? mappedTrack.Track.Index : mappedTrack.Index + 1,
+                                mappedTrack.Track.FileName,
+                                copiedFile.SourceFile,
+                                ex);
+                        }
+
+                        preparedLifecycle.Complete(mappedTrack.Index, mappedTrack.Track,
+                            copiedFile.TargetFile, convertedPath, preset, token);
                     }
                 },
                 new Progress<LocalProjectLivePreparationProgress>(snapshot =>
@@ -7675,14 +11710,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         lock (manifestSyncRoot)
                         {
                             manifest.State.Status = ProjectManifestStatuses.Converting;
-                            _workManifestService.Save(exportPlan.ManifestPath, manifest);
+                            _services.Foundation.WorkManifestService.Save(exportPlan.ManifestPath, manifest);
                         }
                         SetPipelineState(ProjectPipelineState.Converting);
                     }
 
                     PublishWorkflowStatus(
                         workflowOperationId,
-                        _localWorkflowStatusAdapter.CreateRunningSnapshot(
+                        _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
                             projectFolder,
                             sourceAcquisitionCompleted
                                 ? ProjectPipelineState.Converting
@@ -7696,7 +11731,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 PublishWorkflowStatus(
                     workflowOperationId,
-                    _localWorkflowStatusAdapter.CreateRunningSnapshot(
+                    _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
                         projectFolder,
                         sourceAcquisitionCompleted
                             ? ProjectPipelineState.Converting
@@ -7731,24 +11766,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                                  new FileInfo(track.PreparedConvertedPath).Length > 0;
                 if (track.HasReusableConvertedFile)
                 {
-                    track.ConvertedSizeMb = new FileInfo(track.PreparedConvertedPath).Length / 1024d / 1024d;
                     track.ConvertedSizeAvailable = true;
                 }
             }
 
+            ApplySourceMetadataAggregation(
+                projectFolder,
+                ProjectMetadataInitializationState.InitialSetComplete,
+                CreateLocalFolderAggregationOptions(sourceFolder, sourceFiles));
+
             _currentFolderPath = originalsFolder;
             SelectedFolder = sourceFolder;
-            _loadedResumeProjectIsLocal = true;
-            _loadedResumeProjectIsMp3Disc = false;
-            _loadedResumeProjectIsAudioDisc = false;
+            ApplyLoadedProjectState(LoadedProjectState.WithLocalState(true));
+            ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(false));
+            ApplyLoadedProjectState(LoadedProjectState.WithAudioDiscState(false));
             SetSelectedSourceDisplayOverride(
-                $"Ordnerprojekt: {new DirectoryInfo(sourceFolder).Name}",
+                LocalizationText.Format("MainWindow.Source.FolderProject", new DirectoryInfo(sourceFolder).Name),
                 sourceFolder);
-            TracksGrid.Items.Refresh();
+            RefreshTrackPresentationViews();
             OnExportPreviewChanged();
             PublishWorkflowStatus(
                 workflowOperationId,
-                _localWorkflowStatusAdapter.CreateReadySnapshot(
+                _services.Status.LocalWorkflowStatusAdapter.CreateReadySnapshot(
                     projectFolder,
                     trackSnapshot.Count,
                     preset));
@@ -7757,7 +11796,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            var last = _workflowStatusCoordinator.Snapshot;
+            var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
             PublishWorkflowStatus(
                 workflowOperationId,
                 last with { IsPaused = true });
@@ -7769,18 +11808,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             EndWorkflowStatusOperation(workflowOperationId);
             EnterPipelineFailure(
-                "Lokale Projektvorbereitung fehlgeschlagen.",
-                "Lokale Vorbereitung fehlgeschlagen.");
+                LocalizationText.Get("MainWindow.LocalPreparation.Failed.Status"),
+                LocalizationText.Get("MainWindow.LocalPreparation.Failed.Progress"));
 
-            var errorText = ex.Message;
-            var dialogResult = ShowHardWorkflowErrorDialog(
-                "Lokale Vorbereitung fehlgeschlagen",
-                "Lokale Vorbereitung fehlgeschlagen",
-                "Die lokalen Originaldateien konnten nicht vollständig übernommen und konvertiert werden.",
-                errorText);
-
-            if (dialogResult == AppDialogResult.Yes)
-                await DeletePausedProjectAsync();
+            var convertedFolder = string.IsNullOrWhiteSpace(_currentProjectWorkFolder)
+                ? string.Empty
+                : ProjectFolderLayout.GetConvertedFolder(_currentProjectWorkFolder);
+            var details = _services.Status.ExportFailureDetailsService.BuildExportFailureDetails(
+                ex,
+                convertedFolder);
+            var errorText = string.Join(Environment.NewLine, details);
+            _ = ShowHardWorkflowErrorDialog(
+                LocalizationText.Get("MainWindow.LocalPreparation.Failed.Title"),
+                LocalizationText.Get("MainWindow.LocalPreparation.Failed.Title"),
+                LocalizationText.Get("MainWindow.LocalPreparation.Failed.Message"),
+                errorText,
+                details);
 
             return false;
         }
@@ -7796,16 +11839,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void EnterPipelineFailure(string statusText, string progressText)
     {
         if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
-            _convertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
+            _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
 
         TrySaveActiveProjectSnapshot();
         PersistTrackListState();
-        _isPipelineFailed = true;
-        _isPipelinePaused = false;
-        _pauseRequested = false;
-        IsBusy = false;
-        IsExporting = false;
-        IsDiscImporting = false;
+        var failureTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreateFailure();
+
+        ApplyPipelineTransition(failureTransition);
         StatusText = statusText;
         ExportProgressText = progressText;
         NotifyExportUiStateChanged();
@@ -7825,79 +11866,175 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ? string.Join(Environment.NewLine, detailItems)
             : errorText;
 
+        var buttons = new[]
+        {
+            new AppDialogButton(LocalizationText.Get("MainWindow.Error.Copy"), AppDialogResult.None, ClipboardText: clipboardText, ClosesDialog: false),
+            new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
+        };
+        var recoveryMessage = LocalizationText.Get("MainWindow.Error.RecoveryWithoutAbort");
+
         return AppDialogService.Show(
             this,
             title: title,
             heading: heading,
-            message: message + "\n\nDu kannst die Fehlermeldung kopieren, das Projekt prüfen oder das unvollständige Projekt abbrechen.",
+            message: message + "\n\n" + recoveryMessage,
             kind: AppDialogKind.Error,
             details: detailItems,
-            buttons: new[]
-            {
-                new AppDialogButton("Fehlermeldung kopieren", AppDialogResult.None, ClipboardText: clipboardText, ClosesDialog: false),
-                new AppDialogButton("Projekt abbrechen", AppDialogResult.Yes, IsDanger: true),
-                new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
-            },
+            buttons: buttons,
             width: 740,
             height: 420);
     }
 
 
+    private bool DiscardPausedMerge()
+    {
+        var baseline = _services.Pipeline.ProjectExtensionRollbackService.GetActive(_currentProjectWorkFolder);
+        if (baseline?.Kind == "Merge")
+        {
+            try
+            {
+                _services.Pipeline.ProjectExtensionRollbackService.Rollback(baseline);
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Text.Json.JsonException or InvalidOperationException or ArgumentException or NotSupportedException)
+            {
+                _runtimeServices.DiagnosticLogService.WriteError("Merge rollback failed; pending journal retained", error);
+                ShowHardWorkflowErrorDialog(LocalizationText.Get("ProjectAttempt.Recovery.Heading"),
+                    LocalizationText.Get("ProjectAttempt.Recovery.Heading"),
+                    LocalizationText.Get("ProjectAttempt.Recovery.Message"), error.ToString());
+                return false;
+            }
+            ReloadCanonicalMetadataSessionAfterRollback(_currentProjectWorkFolder);
+        }
+        var path = ProjectFolderLayout.ResolveExportManifestPath(_currentProjectWorkFolder);
+        var manifest = _services.Foundation.WorkManifestService.LoadOrCreate(path,
+            LoadedProjectState.IsMp3Disc ? ProjectManifestTypes.Mp3DiscProject :
+            LoadedProjectState.IsAudioDisc ? ProjectManifestTypes.AudioCdProject : ProjectManifestTypes.FolderProject,
+            _currentProjectWorkFolder, _currentFolderPath, SelectedExportPreset);
+        // Only the rollback owner above grants permission to delete its final part.
+        _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
+        manifest.Resume.MergePaused = false;
+        _services.Foundation.WorkManifestService.MarkConversionCompleted(manifest);
+        _services.Foundation.WorkManifestService.Save(path, manifest);
+        ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart());
+        ReturnToReviewAfterInterruptedExport();
+        ExportProgressPercent = 100;
+        ApplyWorkflowStatusViewState(new WorkflowStatusFormatter().Format(new WorkflowStatusSnapshot
+        {
+            ProjectId = _currentProjectWorkFolder,
+            ProjectKind = LoadedProjectState.IsMp3Disc ? WorkflowProjectKind.Mp3Disc :
+                LoadedProjectState.IsAudioDisc ? WorkflowProjectKind.AudioDisc : WorkflowProjectKind.Folder,
+            ProjectState = ProjectPipelineState.ReviewBeforeMerge,
+            IsReadyToMerge = true,
+            TotalSourceItems = Tracks.Count
+        }));
+        ExportProgressText = LocalizationText.Get("MainWindow.Export.MergeReadyAfterDiscard");
+        StatusText = ExportProgressText;
+        return true;
+    }
+
     private async void CancelExport_Click(object sender, RoutedEventArgs e)
     {
-        if (_isPipelineFailed)
+        if (_isDiscStopSaveInProgress || _presentationState.UiTransition is not null || _presentationState.PauseRequested) return;
+        if (_presentationState.IsPipelineFailed)
         {
-            await DeletePausedProjectAsync();
+            if (_presetReconversionRollbackContext is not null || _presentationState.IsProjectExtensionRun)
+            {
+                ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+                if (_presetReconversionRollbackContext is not null) await StopPausedPresetReconversionAsync();
+                else await StopPausedProjectExtensionAsync();
+            }
+            else CloseCurrentProject();
             return;
         }
 
-        if (_isPipelinePaused)
+        if (_presentationState.IsPipelinePaused && ProjectReviewState.Phase == ProjectPipelineState.Merging)
         {
-            if (_isProjectExtensionRun)
+            DiscardPausedMerge();
+            return;
+        }
+
+        if (_presentationState.IsPipelinePaused)
+        {
+            if (_presetReconversionRollbackContext is not null)
+                await StopPausedPresetReconversionAsync();
+            else if (_presentationState.IsProjectExtensionRun)
                 await StopPausedProjectExtensionAsync();
-            else
-                await DeletePausedProjectAsync();
             return;
         }
 
-        if (!IsBusy && _pipelineState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
+        if (!IsBusy && ProjectReviewState.Phase is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
         {
             CloseCurrentProject();
             return;
         }
 
         if (!IsBusy &&
-            _pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting &&
+            ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting &&
             !IsDiscImporting &&
             !IsExporting)
         {
             RestoreReviewStateAfterPreExportValidationStopped();
-            if (_pipelineState is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
+            if (ProjectReviewState.Phase is ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed)
                 return;
         }
 
-        if (_pipelineState is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
+        if (ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting)
         {
             await RequestPipelinePauseAsync();
             return;
         }
 
+        if (ProjectReviewState.Phase == ProjectPipelineState.Merging && (LoadedProjectState.IsMp3Disc || LoadedProjectState.IsAudioDisc))
+        {
+            await RequestPipelinePauseAsync();
+            return;
+        }
+
+        if (_trackAnalysisCancellation is not null && !_trackAnalysisCancellation.IsCancellationRequested)
+        {
+            StatusText = LocalizationText.Get("MainWindow.TrackAnalysis.Canceling");
+            ExportProgressText = LocalizationText.Get("MainWindow.Cancel.Requested");
+            await RequestCancellationWithFeedbackAsync(_trackAnalysisCancellation);
+            NotifyExportUiStateChanged();
+            return;
+        }
+
         if (IsDiscImporting && _discImportCancellation is not null && !_discImportCancellation.IsCancellationRequested)
         {
-            StatusText = _isAudioDiscProjectAwaitingRip
-                ? "Audio-CD-Ripping wird abgebrochen …"
-                : "MP3-CD-Import wird abgebrochen …";
-            ExportProgressText = "Abbruch wird angefordert …";
-            _discImportCancellation.Cancel();
+            StatusText = LocalizationText.Get(_isAudioDiscProjectAwaitingRip
+                ? "MainWindow.Cancel.AudioRipping"
+                : "MainWindow.Cancel.Mp3Import");
+            ExportProgressText = LocalizationText.Get("MainWindow.Cancel.Requested");
+            await RequestCancellationWithFeedbackAsync(_discImportCancellation);
             return;
         }
 
         if (!IsExporting || _exportCancellation is null || _exportCancellation.IsCancellationRequested)
             return;
 
-        StatusText = "Export wird abgebrochen …";
-        ExportProgressText = "Abbruch wird angefordert …";
-        _exportCancellation.Cancel();
+        StatusText = LocalizationText.Get("MainWindow.Export.Canceling");
+        ExportProgressText = LocalizationText.Get("MainWindow.Cancel.Requested");
+        await RequestCancellationWithFeedbackAsync(_exportCancellation);
+    }
+
+    private async Task RequestCancellationWithFeedbackAsync(CancellationTokenSource cancellation)
+    {
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.Secondary);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (ReferenceEquals(cancellation, _trackAnalysisCancellation) ||
+                ReferenceEquals(cancellation, _discImportCancellation) || ReferenceEquals(cancellation, _exportCancellation))
+                await cancellation.CancelAsync();
+            NotifyExportUiStateChanged();
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError("Cancellation request failed", ex);
+            StatusText = LocalizationText.Get("Disc.StopSave.Failed");
+            EndPipelineUiTransition(transitionOwner);
+        }
     }
 
     private void PauseAudioDiscElapsedTimer()
@@ -7908,22 +12045,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private Guid BeginWorkflowStatusOperation(string? projectId)
     {
-        _workflowStatusOperationId = _workflowStatusCoordinator.BeginOperation(projectId);
+        _workflowStatusOperationId = _services.Status.WorkflowStatusCoordinator.BeginOperation(projectId);
         return _workflowStatusOperationId;
     }
 
     private void PublishWorkflowStatus(Guid operationId, WorkflowStatusSnapshot snapshot)
     {
-        if (!_workflowStatusCoordinator.Publish(operationId, snapshot))
+        if (!_services.Status.WorkflowStatusCoordinator.Publish(operationId, snapshot))
             return;
 
-        ApplyWorkflowStatusViewState(_workflowStatusCoordinator.CurrentViewState);
+        ApplyWorkflowStatusViewState(_services.Status.WorkflowStatusCoordinator.CurrentViewState, operationId);
     }
 
-    private void ApplyWorkflowStatusViewState(WorkflowStatusViewState viewState)
+    private void ApplyWorkflowStatusViewState(WorkflowStatusViewState viewState, Guid? expectedOperationId = null)
     {
         void Apply()
         {
+            if (expectedOperationId is not null && expectedOperationId != _workflowStatusOperationId) return;
             StatusText = viewState.TeletextText;
             ExportProgressText = viewState.ProgressText;
             ExportProgressPercent = viewState.ProgressPercent;
@@ -7943,27 +12081,64 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void EndWorkflowStatusOperation(Guid operationId)
     {
-        _workflowStatusCoordinator.EndOperation(operationId);
+        _services.Status.WorkflowStatusCoordinator.EndOperation(operationId);
         if (_workflowStatusOperationId == operationId)
             _workflowStatusOperationId = Guid.Empty;
     }
 
+    private PipelineUiTransition? BeginPipelineUiTransition(PipelineUiTransitionKind kind, PipelineUiTransitionTarget target)
+    {
+        var owner = _presentationState.BeginUiTransition(kind, target);
+        NotifyExportUiStateChanged();
+        return owner;
+    }
+
+    private void EndPipelineUiTransition(PipelineUiTransition? owner)
+    {
+        _presentationState.EndUiTransition(owner);
+        NotifyExportUiStateChanged();
+    }
+
+    private void ApplyPipelinePauseRequest()
+    {
+        var pauseRequestTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreatePauseRequest(
+                _presentationState.IsPipelinePaused,
+                _presentationState.IsPipelineFailed,
+                IsBusy,
+                IsExporting,
+                IsDiscImporting);
+        ApplyPipelineTransition(pauseRequestTransition);
+    }
+
+    private void ApplyPipelineTransition(PipelinePauseTransitionPlan transition)
+    {
+        if (!transition.PauseRequested && _presentationState.UiTransition?.Kind == PipelineUiTransitionKind.Pausing)
+            _presentationState.ClearUiTransition();
+        _presentationState.IsPipelinePaused = transition.IsPipelinePaused;
+        _presentationState.IsPipelineFailed = transition.IsPipelineFailed;
+        _presentationState.PauseRequested = transition.PauseRequested;
+        IsBusy = transition.IsBusy;
+        IsExporting = transition.IsExporting;
+        IsDiscImporting = transition.IsDiscImporting;
+        NotifyExportUiStateChanged();
+    }
+
     private void EnterPipelinePause(string progressText, bool preserveWorkflowStatus = false)
     {
-        if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
-            _convertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
+        if (_discImportCancellation is null && !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(_currentProjectWorkFolder);
 
         TrySaveActiveProjectSnapshot();
         PersistTrackListState();
-        _isPipelinePaused = true;
-        _isPipelineFailed = false;
-        _pauseRequested = false;
-        IsBusy = false;
-        IsExporting = false;
-        IsDiscImporting = false;
+
+        var pauseTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause();
+
+        ApplyPipelineTransition(pauseTransition);
         if (!preserveWorkflowStatus)
         {
-            StatusText = "Projekt pausiert.";
+            StatusText = LocalizationText.Get("MainWindow.Project.Paused");
             ExportProgressText = progressText;
         }
         NotifyExportUiStateChanged();
@@ -7971,48 +12146,82 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task ContinuePausedPipelineAsync()
     {
-        if (!_isPipelinePaused || IsBusy)
+        if (!_presentationState.IsPipelinePaused || IsBusy || _isDiscStopSaveInProgress)
             return;
+        if (_discImportCancellation is not null || _exportCancellation is not null || _trackAnalysisCancellation is not null)
+        {
+            StatusText = LocalizationText.Get("Disc.StopSave.WorkersRunning");
+            return;
+        }
+        if (new DiscProjectStopSaveService().HasPendingCommit(_currentProjectWorkFolder))
+        {
+            await StopAndSaveDiscProjectAsync();
+            return;
+        }
 
-        _isPipelinePaused = false;
-        _isPipelineFailed = false;
-        _pauseRequested = false;
-        StatusText = "Projekt wird fortgesetzt …";
+        if (_resumeDiscSourceSelectionRequired)
+        {
+            await ShowCurrentProjectSetupDialogAsync();
+            return;
+        }
+
+        var resumeMerge = ProjectReviewState.Phase == ProjectPipelineState.Merging;
+        _resumeDiscPreview.MarkProcessingStarted();
+        var continuationStart =
+            _services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart();
+
+        ApplyPipelineTransition(continuationStart);
+        StatusText = LocalizationText.Get("MainWindow.Project.Continuing");
         NotifyExportUiStateChanged();
 
-        if (_isProjectExtensionRun && _pausedProjectExtensionContinuation is not null)
+        if (resumeMerge)
+        {
+            var projectType = LoadedProjectState.IsMp3Disc ? ProjectManifestTypes.Mp3DiscProject :
+                LoadedProjectState.IsAudioDisc ? ProjectManifestTypes.AudioCdProject : ProjectManifestTypes.FolderProject;
+            await RunCurrentExportPlanAsync(_currentProjectWorkFolder, projectType, manualMergeRequested: true);
+            return;
+        }
+
+        if (_presentationState.IsProjectExtensionRun && ProjectReviewState.Phase == ProjectPipelineState.Converting &&
+            !LoadedProjectState.NeedsDiscImport && !_isAudioDiscProjectAwaitingRip)
+        {
+            RefreshLoadedProjectTrackStateFromPersistedProject(_currentProjectWorkFolder);
+            await RunCurrentExportPlanAsync(_currentProjectWorkFolder, ResolveCurrentProjectType(ProjectManifestTypes.FolderProject));
+            return;
+        }
+
+        if (_presentationState.IsProjectExtensionRun && _pausedProjectExtensionContinuation is not null)
         {
             await _pausedProjectExtensionContinuation();
             return;
         }
 
-        var continuationKind = _pausedPipelineContinuationService.Resolve(
-            new PausedPipelineContinuationInput(
-                _pipelineState,
-                _isAudioDiscProjectAwaitingRip,
-                _loadedResumeProjectIsAudioDisc,
-                _loadedResumeProjectNeedsDiscImport,
-                _loadedResumeProjectIsMp3Disc));
+        var continuationPlan =
+            _services.Pipeline.PausedPipelineContinuationService.CreatePlan(
+                new PausedPipelineContinuationInput(
+                    ProjectReviewState.Phase,
+                    _isAudioDiscProjectAwaitingRip,
+                    new PipelineProjectState(
+                        LoadedProjectState.NeedsDiscImport,
+                        LoadedProjectState.IsMp3Disc,
+                        LoadedProjectState.IsAudioDisc,
+                        LoadedProjectState.IsLocal)));
 
-        if (continuationKind == PausedPipelineContinuationKind.AudioDiscRip)
+        if (continuationPlan.Kind == PausedPipelineContinuationKind.AudioDiscRip)
         {
             await RunPreparedAudioDiscRipAsync();
             return;
         }
 
-        if (continuationKind == PausedPipelineContinuationKind.Mp3DiscImport)
+        if (continuationPlan.Kind == PausedPipelineContinuationKind.Mp3DiscImport)
         {
             await ContinuePausedMp3DiscProjectAsync();
             return;
         }
 
-        var projectType = _loadedResumeProjectIsMp3Disc
-            ? ProjectManifestTypes.Mp3DiscProject
-            : _loadedResumeProjectIsAudioDisc
-                ? ProjectManifestTypes.AudioCdProject
-                : ProjectManifestTypes.FolderProject;
-
-        await RunCurrentExportPlanAsync(_currentProjectWorkFolder, projectType);
+        await RunCurrentExportPlanAsync(
+            _currentProjectWorkFolder,
+            continuationPlan.ProjectManifestType);
     }
 
     private async Task ContinuePausedMp3DiscProjectAsync()
@@ -8020,21 +12229,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var manifest = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false);
         if (manifest is null)
         {
-            EnterPipelinePause("Fortsetzen nicht möglich. Das MP3-CD-Projekt konnte nicht geladen werden.");
+            EnterPipelinePause(LocalizationText.Get("Disc.Resume.Mp3ManifestMissing"));
             return;
         }
 
-        var resumePlan = _mp3DiscProjectService.BuildResumePlan(manifest);
+        var resumePlan = _services.Foundation.Mp3DiscProjectService.BuildResumePlan(manifest);
         if (resumePlan.NextMissingDiscNumber is null)
         {
-            _loadedResumeProjectNeedsDiscImport = false;
-            _loadedResumeProjectIsMp3Disc = true;
+            ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(false));
+            ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
             await RunCurrentExportPlanAsync(manifest.ProjectFolder, ProjectManifestTypes.Mp3DiscProject);
             return;
         }
 
-        var sourceFolder = _discDriveService.ResolveResumeDiscSource(
+        if (!await EnsureResumeDiscPreviewAsync())
+            return;
+        var selectedStartDrive = _resumeDiscStartDriveRoot;
+        var sourceFolder = selectedStartDrive ?? await _services.Discs.DiscDriveService.ResolveResumeDiscSourceAsync(
             manifest.ProjectFolder,
+            default,
             manifest.SourceFolder,
             _settings.LastDiscSourceFolder,
             SelectedFolder);
@@ -8043,34 +12256,171 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             sourceFolder = ShowDiscSourceSelectionDialog();
             if (!string.IsNullOrWhiteSpace(sourceFolder))
-                sourceFolder = ResolveSelectedDiscSource(sourceFolder);
+                sourceFolder = await ResolveSelectedDiscSourceAsync(sourceFolder);
         }
 
         if (string.IsNullOrWhiteSpace(sourceFolder))
         {
-            EnterPipelinePause($"Pausiert. Bitte lege CD {resumePlan.NextMissingDiscNumber.Value} wieder ein und klicke anschließend auf Weiter.");
+            EnterPipelinePause(LocalizationText.Format("Disc.Resume.SelectDrivePaused", resumePlan.NextMissingDiscNumber.Value));
             return;
         }
 
         SelectedFolder = sourceFolder;
         _settings.LastDiscSourceFolder = sourceFolder;
         SaveSettingsIfReady();
-        _loadedResumeProjectNeedsDiscImport = true;
-        _loadedResumeProjectIsMp3Disc = true;
+        ApplyLoadedProjectState(LoadedProjectState.WithDiscImportRequirement(true));
+        ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(true));
 
         await ImportMp3DiscProjectAsync(
             manifest.ProjectFolder,
             sourceFolder,
             manifest,
             startDiscNumber: resumePlan.NextMissingDiscNumber.Value,
-            firstDiscAlreadyReady: true,
+            // Recheck availability after Pause; an accepted but uncommitted source
+            // remains the first candidate until the current disc is committed.
+            firstDiscAlreadyReady: false,
             autoExportWhenComplete: true,
-            pauseBeforeMergeOverride: _settings.MergeAutomaticallyAfterConversion ? false : true);
+            startWithSelectedDrive: selectedStartDrive is not null);
+    }
+
+    private PresetReconversionRollbackContext? CapturePresetReconversionPauseContext(string? projectFolder)
+    {
+        if (_presetReconversionRollbackContext is not null)
+            return _presetReconversionRollbackContext;
+        if (_presentationState.IsProjectExtensionRun) return null;
+        if (ProjectReviewState.Phase is not (ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed) ||
+            !_manualMergeReviewNeedsReconversion ||
+            string.IsNullOrWhiteSpace(projectFolder))
+        {
+            return null;
+        }
+
+        var previousPreset = ResolvePresetReconversionPreviousPreset(projectFolder);
+        if (string.IsNullOrWhiteSpace(previousPreset))
+            return null;
+
+        _manualMergeReviewPreparedPreset = previousPreset;
+        return _services.Pipeline.ProjectExtensionRollbackService.CapturePresetReconversion(
+            projectFolder,
+            previousPreset,
+            SelectedExportPreset) with { PreviousPhase = ProjectReviewState.Phase };
+    }
+
+    private string ResolvePresetReconversionPreviousPreset(string projectFolder)
+    {
+        if (!string.IsNullOrWhiteSpace(_manualMergeReviewPreparedPreset))
+            return _manualMergeReviewPreparedPreset.Trim();
+
+        var trackPresets = Tracks
+            .Where(track => !track.IsExcluded)
+            .Select(track => track.PreparedConvertedPreset?.Trim() ?? string.Empty)
+            .Where(preset => !string.IsNullOrWhiteSpace(preset))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (trackPresets.Length == 1)
+            return trackPresets[0];
+
+        try
+        {
+            var persistedPlan = _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(projectFolder);
+            var persistedPreset = persistedPlan?.SelectedPreset;
+            if (!string.IsNullOrWhiteSpace(persistedPreset))
+                return persistedPreset.Trim();
+        }
+        catch
+        {
+            // Starting a reconversion must fail closed below if no reliable baseline can be recovered.
+        }
+
+        return string.Empty;
+    }
+
+    private void ActivatePresetReconversionPauseContext(PresetReconversionRollbackContext? context)
+    {
+        if (context is null)
+            return;
+
+        _presetReconversionRollbackContext = context;
+        NotifyExportUiStateChanged();
+    }
+
+    private void ClearPresetReconversionPauseContext()
+    {
+        if (_presetReconversionRollbackContext is null)
+            return;
+
+        _services.Pipeline.ProjectExtensionRollbackService.Commit(_presetReconversionRollbackContext.Snapshot);
+        _presetReconversionRollbackContext = null;
+        NotifyExportUiStateChanged();
+    }
+
+    private async Task StopPausedPresetReconversionAsync()
+    {
+        var context = _presetReconversionRollbackContext;
+        if (_isDiscStopSaveInProgress || !_presentationState.IsPipelinePaused || context is null)
+            return;
+
+        _isDiscStopSaveInProgress = true;
+        IsBusy = true;
+
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Discarding, PipelineUiTransitionTarget.Secondary);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            await WaitForProjectProducersAsync();
+            _services.Pipeline.ProjectExtensionRollbackService.RollbackPresetReconversion(context);
+            ReloadCanonicalMetadataSessionAfterRollback(context.Snapshot.ProjectFolder);
+
+            if (LoadedProjectState.IsMp3Disc)
+                _activeMp3DiscManifest = _services.Foundation.Mp3DiscProjectService.TryLoad(context.Snapshot.ProjectFolder);
+            if (LoadedProjectState.IsAudioDisc)
+                _activeAudioDiscManifest = _services.Foundation.AudioDiscProjectService.TryLoad(context.Snapshot.ProjectFolder);
+
+            var neutralTransition =
+                _services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart();
+            ApplyPipelineTransition(neutralTransition);
+
+            // Restore the preset and review/completion state from before this run.
+            if (!string.Equals(SelectedExportPreset, context.PreviousPreset, StringComparison.OrdinalIgnoreCase))
+                SetSelectedExportPresetSilently(context.PreviousPreset);
+
+            RefreshLoadedProjectTrackStateFromPersistedProject(context.Snapshot.ProjectFolder);
+            _manualMergeReviewPreparedPreset = context.PreviousPreset;
+            _projectReviewState = new ProjectReviewStateSnapshot(context.PreviousPhase,
+                context.PreviousPhase == ProjectPipelineState.ReviewBeforeMerge,
+                context.PreviousPhase == ProjectPipelineState.Completed);
+            UpdateManualMergeReviewPresetState();
+            UpdateFinalStatus(Tracks.Count);
+            RefreshPartialPresetProgressText();
+            ClearPresetReconversionPauseContext();
+            NotifyExportUiStateChanged();
+        }
+        catch (Exception ex)
+        {
+            // A failed restoration keeps the rollback owner available for retry and close.
+            SetPipelineState(ProjectPipelineState.Converting);
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+            AppDialogService.Error(
+                this,
+                LocalizationText.Get("MainWindow.Preset.StopFailed.Title"),
+                LocalizationText.Get("MainWindow.Preset.StopFailed.Message"),
+                details: ExportFailureDetailsService.SplitMessageLines(ex.Message));
+            StatusText = LocalizationText.Get("MainWindow.Preset.CleanupFailed");
+            NotifyExportUiStateChanged();
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+            _isDiscStopSaveInProgress = false;
+            IsBusy = false;
+            NotifyExportUiStateChanged();
+        }
     }
 
     private void BeginProjectExtensionPauseContext(Func<Task> continuation, Action stopAction)
     {
-        _isProjectExtensionRun = true;
+        _presentationState.IsProjectExtensionRun = true;
         _pausedProjectExtensionContinuation = continuation;
         _pausedProjectExtensionStopAction = stopAction;
         NotifyExportUiStateChanged();
@@ -8078,136 +12428,397 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ClearProjectExtensionPauseContext()
     {
-        _isProjectExtensionRun = false;
+        if (_resumeDiscPreview.Mp3Disc is not null)
+        {
+            _resumeDiscPreview.Clear();
+            _resumeDiscStartDriveRoot = null;
+        }
+        if (_projectExtensionRollbackSnapshot is not null)
+            _services.Pipeline.ProjectExtensionRollbackService.Commit(_projectExtensionRollbackSnapshot);
+        _projectExtensionRollbackSnapshot = null;
+        _presentationState.IsProjectExtensionRun = false;
         _pausedProjectExtensionContinuation = null;
         _pausedProjectExtensionStopAction = null;
         NotifyExportUiStateChanged();
     }
 
-    private async Task StopPausedProjectExtensionAsync()
+    private async Task StopPausedProjectExtensionAsync(bool confirm = true)
     {
-        if (!_isPipelinePaused || !_isProjectExtensionRun)
+        if (_isDiscStopSaveInProgress || !_presentationState.IsPipelinePaused || !_presentationState.IsProjectExtensionRun)
             return;
 
-        await Task.Yield();
-        var stopAction = _pausedProjectExtensionStopAction;
-        _isPipelinePaused = false;
-        _isPipelineFailed = false;
-        _pauseRequested = false;
-        ClearProjectExtensionPauseContext();
-        stopAction?.Invoke();
+        if (confirm && !ConfirmProjectCloseIntent(ProjectCloseIntent.RollbackRun))
+            return;
+
+        var isDiscExtension = LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc;
+        _isDiscStopSaveInProgress = true;
+        IsBusy = true;
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Discarding, PipelineUiTransitionTarget.Secondary);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (isDiscExtension)
+                await WaitForProjectProducersAsync();
+            await Task.Yield();
+            var stopAction = _pausedProjectExtensionStopAction;
+            var neutralTransition =
+                _services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart();
+
+            ApplyPipelineTransition(neutralTransition);
+            stopAction?.Invoke();
+            ClearProjectExtensionPauseContext();
+        }
+        catch (Exception ex)
+        {
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+            StatusText = LocalizationText.Get("Disc.StopSave.Failed");
+            AppDialogService.Error(this, LocalizationText.Get("Disc.StopSave.Failed"), LocalizationText.Get("Common.OperationFailed"), details: new[] { ex.Message });
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+            _isDiscStopSaveInProgress = false;
+            IsBusy = false;
+            NotifyExportUiStateChanged();
+        }
     }
 
-    private async Task DeletePausedProjectAsync()
+    private async void DeleteNewProject_Click(object sender, RoutedEventArgs e)
     {
-        if (!_isPipelinePaused && !_isPipelineFailed)
-            return;
+        if (CanDeletePausedNewProject) await DeleteNewProjectAsync(confirm: true);
+    }
 
-        var wasFailed = _isPipelineFailed;
-        var keepProjectButtonText = wasFailed ? "OK" : "Weiter";
-        var result = AppDialogService.Show(
-            this,
-            title: "Projekt abbrechen",
-            heading: "Unvollständiges Projekt endgültig löschen?",
-            message:
-                "Das aktuelle Projekt wird vollständig gelöscht. Dazu gehören alle bereits kopierten, gerippten und konvertierten Dateien. Dieser Vorgang kann nicht rückgängig gemacht werden.",
-            kind: AppDialogKind.Warning,
+    private bool ConfirmProjectCloseIntent(ProjectCloseIntent intent)
+    {
+        var delete = intent == ProjectCloseIntent.DeleteNewProject;
+        var save = intent == ProjectCloseIntent.Save;
+        var actionKey = delete ? "Project.Close.Delete" : save ? "MainWindow.Action.Save" : "MainWindow.Action.Discard";
+        return AppDialogService.Show(this,
+            LocalizationText.Get(actionKey),
+            LocalizationText.Get(delete ? "Project.Close.DeleteHeading" : save ? "MainWindow.Action.Save" : "Project.Close.DiscardHeading"),
+            LocalizationText.Get(delete ? "Project.Close.DeleteMessage" : save ? "Project.Close.SaveMessage" : "Project.Close.DiscardMessage"),
+            AppDialogKind.Warning,
             buttons: new[]
             {
-                new AppDialogButton(keepProjectButtonText, AppDialogResult.Cancel, IsPrimary: true, IsDefault: true, IsCancel: true),
-                new AppDialogButton("Projekt löschen", AppDialogResult.Yes, IsDanger: true)
-            });
-
-        if (result != AppDialogResult.Yes)
-        {
-            if (!wasFailed)
-                await ContinuePausedPipelineAsync();
-            return;
-        }
-
-        await Task.Yield();
-        var projectFolder = _currentProjectWorkFolder;
-        if (!string.IsNullOrWhiteSpace(projectFolder))
-        {
-            var deletion = _projectIndexService.DeleteProject(GetWorkingRootFolder(), projectFolder);
-            if (!deletion.Deleted)
-            {
-                AppDialogService.Error(
-                    this,
-                    "Projekt konnte nicht gelöscht werden",
-                    deletion.ErrorMessage ?? "Der Projektordner konnte nicht vollständig entfernt werden.");
-                return;
-            }
-        }
-
-        _isPipelinePaused = false;
-        _isPipelineFailed = false;
-        _pauseRequested = false;
-        ClearCurrentProjectAfterDeletion();
-        ApplyWorkflowStatusViewState(_workflowStatusFormatter.Format(WorkflowStatusSnapshot.Empty));
-        RefreshResumeProjects(showStatus: false);
+                new AppDialogButton(LocalizationText.Get("Project.Close.Back"), AppDialogResult.Cancel, IsDefault: true, IsCancel: true),
+                new AppDialogButton(LocalizationText.Get(actionKey), AppDialogResult.Yes, IsDanger: true)
+            }) == AppDialogResult.Yes;
     }
 
-    private void ClearCurrentProjectAfterDeletion()
+    private async Task<bool> DeleteNewProjectAsync(bool confirm)
     {
-        _isPipelineFailed = false;
+        if (_isDiscStopSaveInProgress || !IsNewProjectPreparation || (confirm && !ConfirmProjectCloseIntent(ProjectCloseIntent.DeleteNewProject))) return false;
+        var projectFolder = _currentProjectWorkFolder;
+        _isDiscStopSaveInProgress = true;
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.DeleteNewProject);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            RequestActiveOperationCancellation();
+            await WaitForProjectProducersAsync();
+            // Release the idle workspace reference only for this explicitly authorized deletion.
+            // The normal project-management guard continues to protect loaded projects.
+            _currentProjectWorkFolder = string.Empty;
+            var deletion = _services.Foundation.ProjectIndexService.DeleteProject(GetWorkingRootFolder(), projectFolder);
+            if (!deletion.Deleted)
+            {
+                _currentProjectWorkFolder = projectFolder;
+                throw new IOException(deletion.ErrorMessage);
+            }
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart());
+            ClearCurrentProjectWorkspace();
+            RefreshResumeProjects(showStatus: false);
+            return true;
+        }
+        catch (Exception error)
+        {
+            _currentProjectWorkFolder = projectFolder;
+            AppDialogService.Error(this, LocalizationText.Get("MainWindow.Project.DeleteFailed.Title"), LocalizationText.Get("Common.OperationFailed"), details: new[] { error.Message });
+            return false;
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+            _isDiscStopSaveInProgress = false;
+            IsBusy = false;
+            NotifyExportUiStateChanged();
+        }
+    }
+
+    private async Task<bool> CloseProjectFromWindowAsync(bool confirmIntent = true, bool cancelActiveWork = false)
+    {
+        var intent = ApplicationShutdownService.ResolveProjectCloseIntent(_sessionProject.DeleteOnWindowClose(_currentProjectWorkFolder,
+                ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting),
+            _presentationState.IsProjectExtensionRun, _presetReconversionRollbackContext is not null,
+            ProjectReviewState.Phase == ProjectPipelineState.Merging);
+        // Capture eligibility before cancellation changes the presentation state.
+        var saveDiscBoundary = intent == ProjectCloseIntent.Save &&
+            (LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc) &&
+            (ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting ||
+             (_sessionProject.Owns(_currentProjectWorkFolder) && _sessionProject.StartAccepted &&
+              ProjectReviewState.Phase == ProjectPipelineState.Preparing));
+        if (confirmIntent && (intent != ProjectCloseIntent.Save || saveDiscBoundary) && !ConfirmProjectCloseIntent(intent))
+        {
+            CancelApplicationRestartRequest();
+            return false;
+        }
+        _isProjectCloseInProgress = true;
+        NotifyExportUiStateChanged();
+        var transitionOwner = BeginPipelineUiTransition(intent is ProjectCloseIntent.RollbackRun or ProjectCloseIntent.DiscardMerge
+            ? PipelineUiTransitionKind.Discarding : PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.Secondary);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (intent == ProjectCloseIntent.DeleteNewProject)
+            {
+                if (cancelActiveWork)
+                    ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateFailureClear(
+                        _presentationState.IsPipelinePaused, false, IsBusy, IsExporting, IsDiscImporting));
+                // Request a pause so producers settle without their own abort/resume dialogs.
+                if (!cancelActiveWork && !_presentationState.IsPipelinePaused) await RequestPipelinePauseAsync();
+                return await DeleteNewProjectAsync(confirm: false);
+            }
+            if (cancelActiveWork)
+            {
+                // A confirmed shutdown is a real cancellation, not a newly requested pause.
+                ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateFailureClear(
+                    _presentationState.IsPipelinePaused, false, IsBusy, IsExporting, IsDiscImporting));
+            }
+            else if (IsDiscImporting || IsExporting) await RequestPipelinePauseAsync();
+            RequestActiveOperationCancellation();
+            await WaitForProjectProducersAsync();
+            if (intent == ProjectCloseIntent.DiscardMerge && !DiscardPausedMerge()) return false;
+            if (intent == ProjectCloseIntent.RollbackRun)
+            {
+                ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateCompletedPause());
+                if (_presetReconversionRollbackContext is not null) await StopPausedPresetReconversionAsync();
+                else await StopPausedProjectExtensionAsync(confirm: false);
+                if (_presetReconversionRollbackContext is not null || _presentationState.IsProjectExtensionRun) return false;
+            }
+            if (saveDiscBoundary)
+            {
+                _isDiscStopSaveInProgress = true;
+                try
+                {
+                    await CommitStoppedDiscProjectAsync(_currentProjectWorkFolder);
+                    // The disk commit now owns manifests and track state. Detach stale UI
+                    // snapshots before any final window-close checkpoint can run.
+                    ClearCurrentProjectWorkspace();
+                    return true;
+                }
+                finally { _isDiscStopSaveInProgress = false; }
+            }
+            if (!TryCheckpointMetadataBeforeClose() || !TryCheckpointEditableProject()) return false;
+            if (ProjectReviewState.Phase is not (ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Completed))
+                _services.Workflows.ProjectSnapshotService.SaveEditableProjectSnapshot(
+                    _currentProjectWorkFolder, ResolveCurrentProjectType(ProjectManifestTypes.FolderProject),
+                    CreateProjectSnapshotFromUi(), Tracks.ToList(), BuildFinalOutputPath());
+            TrySaveActiveProjectSnapshot();
+            PersistTrackListState();
+            return true;
+        }
+        catch (Exception error)
+        {
+            AppDialogService.Error(this, LocalizationText.Get("Disc.StopSave.Failed"), LocalizationText.Get("Common.OperationFailed"), details: new[] { error.Message });
+            return false;
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+            _isProjectCloseInProgress = false;
+            NotifyExportUiStateChanged();
+        }
+    }
+
+    private void ClearCurrentProjectWorkspace()
+    {
+        _sessionProject.Clear();
+        _activeLocalPreparation = null;
+        ClearPresetReconversionPauseContext();
+        ClearProjectExtensionPauseContext();
         ClearSelectedSourceDisplayOverride();
+        _activeMp3DiscManifest = null;
         ResetLoadedResumeProjectState();
         ResetMetadataForNewFolderProject();
         SetMetadataEditingAvailable(false);
-        SetMetadataPanelExpanded(false, animate: false);
         _currentFolderPath = string.Empty;
         _currentProjectWorkFolder = string.Empty;
-        SelectedFolder = "Noch kein Ordner ausgewählt.";
+        SelectedFolder = string.Empty;
         Tracks.Clear();
         UpdateIndexes();
         ExportProgressPercent = 0;
+        ExportProgressText = BuildIdleExportProgressText();
+        StatusText = NoProjectStatusText;
+        ApplyWorkflowStatusViewState(new WorkflowStatusFormatter().Format(WorkflowStatusSnapshot.Empty));
         SetPipelineState(ProjectPipelineState.Preparing);
         NotifyExportUiStateChanged();
         OnExportPreviewChanged();
     }
 
+    private async void StopAndSaveDiscProject_Click(object sender, RoutedEventArgs e)
+    {
+        if (CanStopAndSaveDiscProject)
+            await StopAndSaveDiscProjectAsync();
+    }
+
+    private async Task StopAndSaveDiscProjectAsync()
+    {
+        if (_isDiscStopSaveInProgress || _presentationState.IsProjectExtensionRun ||
+            _presetReconversionRollbackContext is not null || ProjectReviewState.Phase == ProjectPipelineState.Merging) return;
+        _isDiscStopSaveInProgress = true;
+        var projectFolder = _currentProjectWorkFolder;
+        IsBusy = true;
+        StatusText = LocalizationText.Get("Disc.StopSave.Saving");
+        IsProgressIndeterminate = true;
+        var performanceApp = Application.Current as App;
+        using var operation = performanceApp?.StartPerformanceOperation("disc.stop-save",
+            LoadedProjectState.IsMp3Disc ? PerformanceProjectType.Mp3Disc : PerformanceProjectType.AudioCd) ?? default;
+        PerformancePhaseScope phase = default;
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.DiscStopSave);
+        try
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            phase = performanceApp?.StartPerformancePhase(operation.OperationId, "stop-save.wait-for-producers") ?? default;
+            RequestActiveOperationCancellation();
+            await WaitForProjectProducersAsync();
+            phase.Complete();
+            phase = performanceApp?.StartPerformancePhase(operation.OperationId, "stop-save.checkpoint") ?? default;
+            IsBusy = true;
+            await CommitStoppedDiscProjectAsync(projectFolder, () =>
+            {
+                phase.Complete();
+                phase = performanceApp?.StartPerformancePhase(operation.OperationId, "stop-save.commit-cleanup") ?? default;
+            });
+            phase.Complete();
+            phase = performanceApp?.StartPerformancePhase(operation.OperationId, "stop-save.workspace-catalog") ?? default;
+            ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart());
+            ClearProjectExtensionPauseContext();
+            ClearCurrentProjectWorkspace();
+            StatusText = LocalizationText.Get("Disc.StopSave.Saved");
+            RefreshResumeProjects(showStatus: false);
+            phase.Complete();
+            operation.Complete();
+        }
+        catch (Exception ex)
+        {
+            if (ex is OperationCanceledException) { phase.Cancel(); operation.Cancel(); }
+            else { phase.Fail(ex); operation.Fail(ex); }
+            StatusText = LocalizationText.Get("Disc.StopSave.Failed");
+            AppDialogService.Error(this, LocalizationText.Get("Disc.StopSave.Failed"), LocalizationText.Get("Common.OperationFailed"), details: new[] { ex.Message });
+        }
+        finally
+        {
+            EndPipelineUiTransition(transitionOwner);
+            phase.Dispose();
+            performanceApp?.TryFinalizeDisabledPerformanceSession();
+            _isDiscStopSaveInProgress = false;
+            IsProgressIndeterminate = false;
+            IsBusy = false;
+            NotifyExportUiStateChanged();
+        }
+    }
+
+    private async Task CommitStoppedDiscProjectAsync(string projectFolder, Action? checkpointCompleted = null)
+    {
+        var service = new DiscProjectStopSaveService();
+        if (!service.HasPendingCommit(projectFolder))
+        {
+            _projectMetadataSession.Flush();
+            if (_activeAudioDiscManifest is not null)
+                SaveCurrentAudioDiscProjectSnapshot(_activeAudioDiscManifest, force: true);
+            if (LoadedProjectState.IsMp3Disc)
+            {
+                var mp3 = TryLoadCurrentMp3DiscProjectManifest(resetStateWhenFolderMissing: false);
+                if (mp3 is not null)
+                    SaveCurrentMp3DiscProjectSnapshot(mp3);
+            }
+            _services.Foundation.TrackListStateService.Save(projectFolder, Tracks.ToList());
+        }
+        checkpointCompleted?.Invoke();
+        await Task.Run(() => service.Save(projectFolder));
+    }
+
+    private async Task WaitForProjectProducersAsync()
+    {
+        var wait = Stopwatch.StartNew();
+        while (_discImportCancellation is not null || _exportCancellation is not null || _trackAnalysisCancellation is not null)
+        {
+            if (wait.Elapsed > TimeSpan.FromSeconds(30))
+                throw new TimeoutException(LocalizationText.Get("Disc.StopSave.WorkersRunning"));
+            await Task.Delay(50);
+        }
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+    }
+
     private void CloseCurrentProject()
     {
-        _isPipelinePaused = false;
-        _isPipelineFailed = false;
-        _pauseRequested = false;
+        if (!TryCheckpointMetadataBeforeClose()) return;
+        if (!TryCheckpointEditableProject()) return;
+        var closeTransition =
+            _services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart();
+
+        ApplyPipelineTransition(closeTransition);
         TrySaveActiveProjectSnapshot();
         PersistTrackListState();
         ClearSelectedSourceDisplayOverride();
         ResetLoadedResumeProjectState();
         ResetMetadataForNewFolderProject();
         SetMetadataEditingAvailable(false);
-        SetMetadataPanelExpanded(false, animate: false);
         _currentFolderPath = string.Empty;
         _currentProjectWorkFolder = string.Empty;
-        SelectedFolder = "Noch kein Ordner ausgewählt.";
+        SelectedFolder = string.Empty;
         Tracks.Clear();
         UpdateIndexes();
         ExportProgressPercent = 0;
         ExportProgressText = BuildIdleExportProgressText();
-        StatusText = "Bereit für ein neues Projekt.";
+        StatusText = NoProjectStatusText;
+        NotifyExportUiStateChanged();
+        OnExportPreviewChanged();
+    }
+
+    private void ResetWorkspaceAfterCanceledTrackAnalysis(TrackAnalysisCancellationScope scope)
+    {
+        _trackAnalysisCancellation = null;
+        _trackAnalysisCancellationScope = TrackAnalysisCancellationScope.None;
+        ClearSelectedSourceDisplayOverride();
+        ClearPendingMp3DiscPreparation();
+        _activeMp3DiscManifest = null;
+        ResetLoadedResumeProjectState();
+        ResetMetadataForNewFolderProject();
+        SetMetadataEditingAvailable(false);
+        _currentFolderPath = string.Empty;
+        _currentProjectWorkFolder = string.Empty;
+        SelectedFolder = string.Empty;
+        Tracks.Clear();
+        UpdateIndexes();
+        ExportProgressPercent = 0;
+        IsProgressIndeterminate = false;
+        ExportProgressText = BuildIdleExportProgressText();
+        StatusText = scope == TrackAnalysisCancellationScope.ResumeLoad
+            ? "Projektladen abgebrochen."
+            : "Ordnerimport abgebrochen.";
         NotifyExportUiStateChanged();
         OnExportPreviewChanged();
     }
 
     private ExportCheckResult ValidateExportPlan()
     {
-        return _exportValidationService.Validate(
+        return _services.Pipeline.ExportValidationService.Validate(
             Tracks,
             _ffmpegStatus,
             _currentFolderPath,
-            OutputFolder,
+            EffectiveOutputFolder,
             OutputFileNamePreview,
             OutputExtension,
             GetWorkingRootFolder(),
-            finalOutputPathOverride: BuildFinalOutputPath());
+            finalOutputPathOverride: BuildFinalOutputPath(),
+            chapterMode: _settings.ChapterSettings?.Mode);
     }
 
     private string BuildFinalOutputPath()
     {
-        return _outputFolderLayoutService.BuildOutputPath(
-            OutputFolder,
+        return _services.Pipeline.OutputFolderLayoutService.BuildOutputPath(
+            EffectiveOutputFolder,
             Author,
             BookTitle,
             OutputFileNamePreview,
@@ -8218,7 +12829,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private string BuildOutputRelativePathPreview()
     {
-        return _outputFolderLayoutService.BuildRelativeOutputPath(
+        return _services.Pipeline.OutputFolderLayoutService.BuildRelativeOutputPath(
             Author,
             BookTitle,
             OutputFileNamePreview,
@@ -8231,18 +12842,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var result = AppDialogService.Show(
             this,
-            title: "Export prüfen",
-            heading: "Export prüfen",
-            message:
-                "Vor dem Export sind ein paar Hinweise aufgefallen.\n" +
-                "Du kannst trotzdem fortfahren. Du solltest die Liste aber kurz prüfen.\n\n" +
-                "Trotzdem exportieren?",
+            title: LocalizationText.Get("MainWindow.Export.Review.Title"),
+            heading: LocalizationText.Get("MainWindow.Export.Review.Title"),
+            message: LocalizationText.Get("MainWindow.Export.Review.Message"),
             kind: AppDialogKind.Warning,
             details: AppDialogService.LimitDetails(warnings, 80),
             buttons: new[]
             {
-                new AppDialogButton("Exportieren", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("MainWindow.Export.ExportAction"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         return result == AppDialogResult.Yes;
@@ -8253,16 +12861,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var containsInvalidAudio = errors.Any(error =>
             error.Contains("Keine gültige Audiodatei:", StringComparison.OrdinalIgnoreCase));
 
+        _runtimeServices.NotificationService.Notify(new NotificationEventContext(
+            NotificationEvent.Error,
+            RequiresUserInteraction: true,
+            IsBackgroundOperation: true,
+            Source: "ExportValidation",
+            Reason: containsInvalidAudio ? "InvalidAudio" : "BlockingErrors"));
+
         AppDialogService.Show(
             this,
-            title: containsInvalidAudio ? "Audiodateien prüfen" : "Export prüfen",
-            heading: containsInvalidAudio ? "Ungültige Audiodateien gefunden" : "Export nicht möglich",
+            title: LocalizationText.Get(containsInvalidAudio ? "MainWindow.Export.InvalidAudio.Title" : "MainWindow.Export.Review.Title"),
+            heading: LocalizationText.Get(containsInvalidAudio ? "MainWindow.Export.InvalidAudio.Heading" : "MainWindow.Export.Blocked.Heading"),
             message: containsInvalidAudio
-                ? "BookStitch kann die unten aufgeführten Dateien nicht als Audio lesen. " +
-                  "Sie sind möglicherweise beschädigt oder wurden nur umbenannt.\n\n" +
-                  "Entferne oder ersetze diese Dateien und starte den Export erneut."
-                : "Vor dem Export müssen noch ein paar Probleme behoben werden.\n\n" +
-                  "Bitte korrigieren und erneut starten.",
+                ? LocalizationText.Get("MainWindow.Export.InvalidAudio.Message")
+                : LocalizationText.Get("MainWindow.Export.Blocked.Message"),
             kind: AppDialogKind.Error,
             details: AppDialogService.LimitDetails(errors, 80),
             buttons: new[]
@@ -8275,20 +12887,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         List<TrackInfo> trackSnapshot,
         string outputPath,
         string? projectWorkFolderOverride = null,
-        string projectType = ProjectManifestTypes.FolderProject)
+        string projectType = ProjectManifestTypes.FolderProject,
+        bool manualMergeRequested = false)
     {
+        FlushPendingChapterMetadataRefresh();
         var ffmpegPath = _ffmpegStatus.FfmpegPath ?? string.Empty;
         if (string.IsNullOrWhiteSpace(ffmpegPath))
         {
             AppDialogService.Error(
                 this,
-                "FFmpeg fehlt",
-                "FFmpeg wurde nicht gefunden. Bitte prüfe die FFmpeg-Einstellungen und starte den Export erneut.");
-            StatusText = "Export nicht möglich: FFmpeg fehlt.";
+                LocalizationText.Get("MainWindow.Export.FfmpegMissing.Title"),
+                LocalizationText.Get("MainWindow.Export.FfmpegMissing.Message"));
+            StatusText = LocalizationText.Get("MainWindow.Export.FfmpegMissing.Status");
             return;
         }
 
-        var exportPlan = _exportPlanService.Create(new ExportPlanRequest(
+        var exportPlan = _services.Pipeline.ExportPlanService.Create(new ExportPlanRequest(
             trackSnapshot,
             _currentFolderPath,
             GetProjectFolderStructure().LocalProjectsFolder,
@@ -8302,6 +12916,114 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         _currentProjectWorkFolder = exportPlan.ProjectWorkFolder;
 
+        var exportPerformanceProjectType = ResolveExportPerformanceProjectType(projectType);
+        var exportPerformanceApp = Application.Current as App;
+        var exportPerformanceScope = exportPerformanceApp?.StartPerformanceOperation(
+            "export.run",
+            exportPerformanceProjectType,
+            CreateExportPerformanceWorkload(
+                trackSnapshot,
+                exportPerformanceProjectType,
+                _currentFolderPath)) ?? default;
+
+        if (exportPerformanceScope.IsActive && exportPerformanceApp is not null)
+        {
+            exportPerformanceApp.PerformanceTraceService?.RecordParallelism(
+                exportPerformanceScope.OperationId, ParallelJobsInput, exportPlan.ParallelConversions);
+            exportPerformanceApp.RecordPerformanceDriveRole(
+                exportPerformanceScope.OperationId,
+                _currentFolderPath,
+                PerformanceDriveRole.Source);
+            exportPerformanceApp.RecordPerformanceDriveRole(
+                exportPerformanceScope.OperationId,
+                exportPlan.ProjectWorkFolder,
+                PerformanceDriveRole.ProjectWorking);
+            exportPerformanceApp.RecordPerformanceDriveRole(
+                exportPerformanceScope.OperationId,
+                Path.GetDirectoryName(exportPlan.FinalOutputPath),
+                PerformanceDriveRole.Output);
+        }
+
+        void CompleteExportPerformanceOperation(ExportWorkflowResult result)
+        {
+            if (!exportPerformanceScope.IsActive || exportPerformanceApp is null)
+                return;
+
+            try
+            {
+                exportPerformanceApp.UpdatePerformanceWorkload(
+                    exportPerformanceScope.OperationId,
+                    CreateExportPerformanceWorkload(
+                        trackSnapshot,
+                        exportPerformanceProjectType,
+                        _currentFolderPath,
+                        result.Status == ExportWorkflowResultStatus.Completed
+                            ? result.OutputPath
+                            : null,
+                        result.ConversionResumeState));
+
+                switch (result.Status)
+                {
+                    case ExportWorkflowResultStatus.Completed:
+                    case ExportWorkflowResultStatus.PausedBeforeMerge:
+                        exportPerformanceScope.Complete();
+                        break;
+
+                    case ExportWorkflowResultStatus.Canceled:
+                    case ExportWorkflowResultStatus.FinalOutputDiscarded:
+                        exportPerformanceScope.Cancel(_presentationState.PauseRequested);
+                        break;
+
+                    case ExportWorkflowResultStatus.Failed:
+                        exportPerformanceScope.Fail(
+                            result.Error ?? new InvalidOperationException("Export workflow failed."));
+                        break;
+                }
+            }
+            catch
+            {
+                // Performance instrumentation must never alter export result handling.
+            }
+            finally
+            {
+                exportPerformanceScope = default;
+                exportPerformanceApp.TryFinalizeDisabledPerformanceSession();
+            }
+        }
+
+        void FailExportPerformanceOperation(Exception exception)
+        {
+            if (!exportPerformanceScope.IsActive || exportPerformanceApp is null)
+                return;
+
+            try
+            {
+                exportPerformanceScope.Fail(exception);
+            }
+            catch
+            {
+                // Performance instrumentation must never replace the export exception.
+            }
+            finally
+            {
+                exportPerformanceScope = default;
+                exportPerformanceApp.TryFinalizeDisabledPerformanceSession();
+            }
+        }
+
+        var exportPerformanceContext =
+            exportPerformanceScope.IsActive && exportPerformanceApp is not null
+                ? new ExportPerformanceContext(
+                    phaseName => exportPerformanceApp.StartPerformancePhase(
+                        exportPerformanceScope.OperationId,
+                        phaseName),
+                    (phaseId, purpose) => exportPerformanceApp.CreatePerformanceExternalProcessContext(
+                        exportPerformanceScope.OperationId,
+                        phaseId,
+                        purpose),
+                    () => _presentationState.PauseRequested)
+                : null;
+
         var audioDiscManifest = string.Equals(
                 projectType,
                 ProjectManifestTypes.AudioCdProject,
@@ -8311,7 +13033,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (audioDiscManifest is not null)
         {
-            _audioDiscProjectService.MarkExportStarted(audioDiscManifest);
+            _services.Foundation.AudioDiscProjectService.MarkExportStarted(audioDiscManifest);
             TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
         }
 
@@ -8330,10 +13052,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         IsBusy = true;
         IsExporting = true;
-        SetPipelineState(ProjectPipelineState.Converting);
+        // The shared workflow enters Converting only when audio preparation is required.
         ExportProgressPercent = 0;
         if (!useWorkflowStatus)
-            ExportProgressText = "Export wird vorbereitet …";
+            ExportProgressText = LocalizationText.Get("MainWindow.Export.Preparing");
 
         _exportCancellation = new CancellationTokenSource();
         var refreshTrackStateAfterRun = false;
@@ -8342,44 +13064,60 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : Guid.Empty;
         var exportPreset = ExportPreset.Parse(SelectedExportPreset);
 
+        void PublishPreparedAudioAnalysis(int completed, int total)
+        {
+            PublishWorkflowStatus(exportStatusOperationId, new WorkflowStatusSnapshot
+            {
+                ProjectId = exportPlan.ProjectWorkFolder,
+                ProjectKind = workflowProjectKind,
+                ProjectState = ProjectReviewState.Phase,
+                ActiveActivities = new HashSet<WorkflowActivity> { WorkflowActivity.AnalyzingConvertedTracks },
+                AnalysisProgress = new AnalysisProgress(WorkflowAnalysisKind.ConvertedTracks,
+                    completed, total, total <= 0 ? 0 : completed * 100 / total)
+            });
+        }
+
         if (useWorkflowStatus)
         {
-            PublishWorkflowStatus(exportStatusOperationId, CreateExportStatusSnapshot(
-                workflowProjectKind,
-                exportPlan.ProjectWorkFolder,
-                trackSnapshot.Count,
-                0,
-                Array.Empty<int>(),
-                exportPreset,
-                totalDiscCount: audioDiscCount));
+            PublishPreparedAudioAnalysis(0, trackSnapshot.Count);
         }
 
         try
         {
-            var continuingFromManualMergeReview =
-                _isWaitingForManualMergeReview && !_manualMergeReviewNeedsReconversion;
             var request = new ExportWorkflowRequest(
                 exportPlan,
                 _currentFolderPath,
                 ffmpegPath,
                 CreateProjectSnapshotFromUi(),
-                new FinalAudioTagData
-                {
-                    Title = BookTitle,
-                    Album = Album,
-                    Author = Author,
-                    Narrator = Narrator,
-                    Genre = Genre,
-                    CoverPath = _processedCoverPath
-                },
-                ShouldPauseBeforeMerge(continuingFromManualMergeReview));
+                CreateCurrentFinalAudioTagData(isFinalOutput: false),
+                ChapterSettings: _settings.ChapterSettings,
+                LegacyUseLeadingZerosInChapterSuggestions: false,
+                FfprobePath: _ffmpegStatus.FfprobePath ?? string.Empty,
+                CreateFinalTags: (duration, chapterCount) => CreateCurrentFinalAudioTagData(isFinalOutput: true, duration, chapterCount),
+                CanonicalChapterMetadata: ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata),
+                ManualMergeRequested: manualMergeRequested);
 
             var callbacks = new ExportWorkflowCallbacks
             {
                 SetStatusText = useWorkflowStatus ? null : text => Dispatcher.Invoke(() => StatusText = text),
                 SetProgressText = useWorkflowStatus ? null : text => Dispatcher.Invoke(() => ExportProgressText = text),
                 SetProgressPercent = useWorkflowStatus ? null : percent => Dispatcher.Invoke(() => ExportProgressPercent = percent),
-                SetPipelineState = state => Dispatcher.Invoke(() => SetPipelineState(state)),
+                BeforePrepareConvertedFile = path =>
+                {
+                    var baseline = _projectExtensionRollbackSnapshot ?? _presetReconversionRollbackContext?.Snapshot;
+                    if (baseline is not null)
+                        _services.Pipeline.ProjectExtensionRollbackService.PreserveConvertedFile(baseline, path);
+                },
+                SetPipelineState = state => Dispatcher.Invoke(() =>
+                {
+                    SetPipelineState(state);
+                    if (state == ProjectPipelineState.ReviewBeforeMerge)
+                    {
+                        ClearPresetReconversionPauseContext();
+                        ClearProjectExtensionPauseContext();
+                    }
+                }),
+                ReportPreparedAudioAnalysis = useWorkflowStatus ? PublishPreparedAudioAnalysis : null,
                 ReportConversionProgress = useWorkflowStatus
                     ? (completed, total, currentTicks, totalTicks, activeIndexes) =>
                     {
@@ -8417,24 +13155,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             MergeProgress = new MergeProgress(trackSnapshot.Count, trackSnapshot.Count, 100, IsWritingMetadata: true)
                         })
                     : null,
+                IsPauseRequested = () => _presentationState.PauseRequested,
+                MergeAutomaticallyAfterConversion = () => _settings.MergeAutomaticallyAfterConversion,
                 ResolveFinalOutputConflict = ResolveFinalOutputConflict,
                 ResolveFinalOutputFailure = ResolveFinalOutputFailure
             };
 
-            var result = await _exportWorkflowService.RunAsync(
+            var result = await _services.Workflows.ExportWorkflowService.RunAsync(
                 request,
                 callbacks,
-                _exportCancellation.Token);
+                _exportCancellation.Token,
+                exportPerformanceContext);
+
+            CompleteExportPerformanceOperation(result);
 
             switch (result.Status)
             {
                 case ExportWorkflowResultStatus.PausedBeforeMerge:
                     if (audioDiscManifest is not null)
                     {
-                        _audioDiscProjectService.MarkExportPausedBeforeMerge(audioDiscManifest);
+                        _services.Foundation.AudioDiscProjectService.MarkExportPausedBeforeMerge(audioDiscManifest);
                         TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
                     }
 
+                    ClearPresetReconversionPauseContext();
                     SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
                     if (useWorkflowStatus)
                         EndWorkflowStatusOperation(exportStatusOperationId);
@@ -8442,18 +13186,30 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     return;
 
                 case ExportWorkflowResultStatus.Completed:
+                    _lockedDiscResumePreset = null;
+                    if (LoadedProjectState.IsMp3Disc)
+                    {
+                        var completedMp3Manifest = _services.Foundation.Mp3DiscProjectService.TryLoad(exportPlan.ProjectWorkFolder);
+                        if (completedMp3Manifest is not null)
+                        {
+                            completedMp3Manifest.IsStoppedForResume = false;
+                            SaveCurrentMp3DiscProjectSnapshot(completedMp3Manifest);
+                        }
+                    }
                     if (audioDiscManifest is not null)
                     {
-                        _audioDiscProjectService.MarkExportCompleted(audioDiscManifest, result.OutputPath);
+                        _services.Foundation.AudioDiscProjectService.MarkExportCompleted(audioDiscManifest, result.OutputPath);
                         TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
                     }
 
-                    _isWaitingForManualMergeReview = true;
+                    ClearPresetReconversionPauseContext();
+                    _projectReviewState = ProjectReviewState.WithManualMergeReview(true);
                     _manualMergeReviewPreparedPreset = SelectedExportPreset;
                     _manualMergeReviewNeedsReconversion = false;
-                    _isCurrentProjectCompleted = true;
+                    _manualMergeReviewHasPreparedTracks = true;
+                    _projectReviewState = ProjectReviewState.WithCompletion(true);
                     SetPipelineState(ProjectPipelineState.Completed);
-                    SetTrackActionDisplayOverride("Zusammenfügen");
+                    SetTrackActionDisplayOverride(LocalizationText.Get("Workflow.Review.MergeAction"));
                     NotifyExportUiStateChanged();
                     if (useWorkflowStatus)
                     {
@@ -8467,7 +13223,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                 ProjectState = ProjectPipelineState.Completed,
                                 IsSuccessfulExport = true,
                                 TotalSourceItems = trackSnapshot.Count,
-                                TotalChapters = trackSnapshot.Count,
+                                TotalChapters = ExportPreviewMetricsService.CountPlannedChapters(trackSnapshot),
                                 OutputFileSizeBytes = outputSize,
                                 SourceProgress = CreateCompletedExportSourceProgress(
                                     workflowProjectKind,
@@ -8478,25 +13234,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     else
                     {
                         ExportProgressPercent = 100;
-                        ExportProgressText = "Ausgabedatei vollständig zusammengefügt und mit Tags und Cover gespeichert.";
-                        StatusText = "Hörbuch erfolgreich erstellt.";
+                        ExportProgressText = LocalizationText.Get("MainWindow.Export.SavedProgress");
+                        StatusText = LocalizationText.Get("MainWindow.Export.SavedStatus");
                     }
-                    _notificationService.Notify(NotificationEvent.ProjectCompleted);
+                    _runtimeServices.NotificationService.Notify(NotificationEvent.ProjectCompleted);
 
                     var exportFinishedResult = AppDialogService.Show(
                         this,
-                        title: "Export fertig",
-                        heading: "Export abgeschlossen",
+                        title: LocalizationText.Get("MainWindow.Export.Completed.Title"),
+                        heading: LocalizationText.Get("MainWindow.Export.Completed.Heading"),
                         message: result.OutputPath,
                         kind: AppDialogKind.Information,
                         buttons: new[]
                         {
-                            new AppDialogButton("Ordner öffnen", AppDialogResult.Yes, IsPrimary: true),
-                            new AppDialogButton("OK", AppDialogResult.Ok, IsDefault: true, IsCancel: true)
-                        });
+                            new AppDialogButton(LocalizationText.Get("MainWindow.Export.OpenFolder"), AppDialogResult.Yes, IsPrimary: true),
+                            new AppDialogButton(LocalizationText.Get("Common.OK"), AppDialogResult.Ok, IsDefault: true, IsCancel: true)
+                        },
+                        restoreOwnerFocus: false);
 
                     if (exportFinishedResult == AppDialogResult.Yes)
-                        OpenFolderInExplorer(Path.GetDirectoryName(result.OutputPath) ?? OutputFolder, "Ausgabeordner");
+                        OpenFolderInExplorer(Path.GetDirectoryName(result.OutputPath) ?? EffectiveOutputFolder, LocalizationText.Get("MainWindow.Export.OutputFolder"));
 
                     return;
 
@@ -8504,28 +13261,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     refreshTrackStateAfterRun = true;
                     if (audioDiscManifest is not null)
                     {
-                        _audioDiscProjectService.MarkExportCanceled(audioDiscManifest);
+                        _services.Foundation.AudioDiscProjectService.MarkExportCanceled(audioDiscManifest);
                         TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
                     }
 
+                    ClearPresetReconversionPauseContext();
                     ReturnToReviewAfterInterruptedExport();
-                    ExportProgressText = "Fertige Datei wurde verworfen.";
-                    StatusText = "Export abgebrochen. Die vorhandene Ausgabedatei wurde nicht verändert.";
+                    ExportProgressText = LocalizationText.Get("MainWindow.Export.DiscardedProgress");
+                    StatusText = LocalizationText.Get("MainWindow.Export.DiscardedStatus");
                     return;
 
                 case ExportWorkflowResultStatus.Canceled:
                     refreshTrackStateAfterRun = true;
                     if (audioDiscManifest is not null)
                     {
-                        _audioDiscProjectService.MarkExportCanceled(audioDiscManifest);
+                        _services.Foundation.AudioDiscProjectService.MarkExportCanceled(audioDiscManifest);
                         TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
                     }
 
-                    if (_pauseRequested && _pipelineState == ProjectPipelineState.Converting)
+                    if (_presentationState.PauseRequested &&
+                        (ProjectReviewState.Phase == ProjectPipelineState.Converting ||
+                         ProjectReviewState.Phase == ProjectPipelineState.Merging))
                     {
+                        // Keep Merging distinct from conversion while paused.
                         if (useWorkflowStatus)
                         {
-                            var last = _workflowStatusCoordinator.Snapshot;
+                            var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
                             PublishWorkflowStatus(exportStatusOperationId, last with
                             {
                                 SourceProgress = null,
@@ -8536,13 +13297,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         }
                         else
                         {
-                            EnterPipelinePause("Konvertierung pausiert. Unvollständige Dateien wurden entfernt.");
+                            EnterPipelinePause(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
                         }
                         return;
                     }
 
-                    var canceledDuringMerge = _pipelineState == ProjectPipelineState.Merging;
-                    var lastStatus = useWorkflowStatus ? _workflowStatusCoordinator.Snapshot : null;
+                    if (_isShutdownInProgress) return; // Close owns the captured rollback and confirmation.
+                    if (_presetReconversionRollbackContext is not null || _presentationState.IsProjectExtensionRun)
+                    {
+                        EnterPipelinePause(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+                        return;
+                    }
+                    ClearPresetReconversionPauseContext();
+                    var canceledDuringMerge = ProjectReviewState.Phase == ProjectPipelineState.Merging;
+                    var lastStatus = useWorkflowStatus ? _services.Status.WorkflowStatusCoordinator.Snapshot : null;
                     ReturnToReviewAfterInterruptedExport();
                     if (useWorkflowStatus && canceledDuringMerge)
                     {
@@ -8559,34 +13327,44 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                         AppDialogService.Show(
                             this,
-                            title: "Zusammenfügen abgebrochen",
-                            heading: "Zusammenfügen abgebrochen",
-                            message: "Die vorbereiteten Tracks bleiben erhalten. Das Projekt ist weiterhin bereit zum Zusammenfügen.",
+                            title: LocalizationText.Get("MainWindow.Export.MergeAborted.Title"),
+                            heading: LocalizationText.Get("MainWindow.Export.MergeAborted.Title"),
+                            message: LocalizationText.Get("MainWindow.Export.MergeAborted.Message"),
                             kind: AppDialogKind.Information,
                             buttons: new[]
                             {
-                                new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
+                                new AppDialogButton(LocalizationText.Get("Common.OK"), AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
                             });
                     }
                     else
                     {
-                        ExportProgressText = "Benutzerabbruch.";
-                        StatusText = "Export abgebrochen. Das quellenvollständige Projekt bleibt geöffnet.";
+                        ExportProgressText = LocalizationText.Get("MainWindow.Export.CanceledProgress");
+                        StatusText = LocalizationText.Get("MainWindow.Export.CanceledStatus");
                         ShowUserCanceledProjectDialog();
                     }
                     return;
 
                 case ExportWorkflowResultStatus.Failed:
+                    if (_isShutdownInProgress) return; // Preserve the rollback owner for controlled close.
+                    if (_presetReconversionRollbackContext is not null || _presentationState.IsProjectExtensionRun)
+                    {
+                        SetPipelineState(ProjectPipelineState.Converting);
+                        EnterPipelinePause(LocalizationText.Get("MainWindow.Export.ConversionPaused"));
+                        AppDialogService.Error(this, LocalizationText.Get("MainWindow.Preset.StopFailed.Title"),
+                            result.Error?.Message ?? LocalizationText.Get("MainWindow.Preset.CleanupFailed"));
+                        return;
+                    }
+                    ClearPresetReconversionPauseContext();
                     refreshTrackStateAfterRun = true;
                     if (audioDiscManifest is not null)
                     {
-                        _audioDiscProjectService.MarkExportFailed(
+                        _services.Foundation.AudioDiscProjectService.MarkExportFailed(
                             audioDiscManifest,
                             result.Error?.Message);
                         TrySaveCurrentAudioDiscProjectSnapshot(audioDiscManifest, force: true);
                     }
 
-                    var failedStatus = useWorkflowStatus ? _workflowStatusCoordinator.Snapshot : null;
+                    var failedStatus = useWorkflowStatus ? _services.Status.WorkflowStatusCoordinator.Snapshot : null;
                     ReturnToReviewAfterInterruptedExport();
                     if (useWorkflowStatus)
                     {
@@ -8597,61 +13375,75 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                 ProjectId = exportPlan.ProjectWorkFolder,
                                 ProjectKind = workflowProjectKind,
                                 ProjectState = ProjectPipelineState.ReviewBeforeMerge,
-                                Error = _workflowExportFailureStatusService.Create(result.Error)
+                                Error = _services.Status.WorkflowExportFailureStatusService.Create(result.Error)
                             });
                         EndWorkflowStatusOperation(exportStatusOperationId);
                     }
                     else
                     {
-                        ExportProgressText = "Export fehlgeschlagen.";
-                        StatusText = "Export fehlgeschlagen. Das quellenvollständige Projekt bleibt geöffnet.";
+                        ExportProgressText = LocalizationText.Get("MainWindow.Export.Failed.Progress");
+                        StatusText = LocalizationText.Get("MainWindow.Export.Failed.Status");
                     }
 
-                    _isPipelineFailed = true;
-                    _isPipelinePaused = false;
+                    var exportFailureTransition =
+                        _services.Pipeline.PipelinePauseTransitionService.CreateFailureClear(
+                            isPipelinePaused: false,
+                            pauseRequested: false,
+                            isBusy: IsBusy,
+                            isExporting: IsExporting,
+                            isDiscImporting: IsDiscImporting);
+                    ApplyPipelineTransition(exportFailureTransition);
                     NotifyExportUiStateChanged();
 
-                    _notificationService.Notify(NotificationEvent.Error);
-                    var failureDetails = _exportFailureDetailsService.BuildExportFailureDetails(
+                    _runtimeServices.NotificationService.Notify(NotificationEvent.Error);
+                    var failureDetails = _services.Status.ExportFailureDetailsService.BuildExportFailureDetails(
                         result.Error ?? new InvalidOperationException("Unbekannter Exportfehler."),
                         result.ConvertedFolder);
                     var failureText = string.Join(Environment.NewLine, failureDetails);
-                    var failureDialogResult = ShowHardWorkflowErrorDialog(
-                        "Export fehlgeschlagen",
-                        "Export fehlgeschlagen",
-                        "Beim Export ist ein Fehler aufgetreten.\n\nBetroffene Datei und technische Details:",
+                    _ = ShowHardWorkflowErrorDialog(
+                        LocalizationText.Get("MainWindow.Export.Failed.Title"),
+                        LocalizationText.Get("MainWindow.Export.Failed.Title"),
+                        LocalizationText.Get("MainWindow.Export.Failed.Message"),
                         failureText,
                         failureDetails);
-
-                    if (failureDialogResult == AppDialogResult.Yes)
-                        await DeletePausedProjectAsync();
 
                     return;
             }
         }
+        catch (Exception ex)
+        {
+            FailExportPerformanceOperation(ex);
+            throw;
+        }
         finally
         {
-            if (refreshTrackStateAfterRun)
-                RefreshLoadedProjectTrackStateFromPersistedProject(exportPlan.ProjectWorkFolder);
-
-            if (useLocalWorkflowStatus)
-                EndWorkflowStatusOperation(exportStatusOperationId);
-
-            _exportCancellation?.Dispose();
-            _exportCancellation = null;
-            IsExporting = false;
-            IsBusy = false;
+            try
+            {
+                if (refreshTrackStateAfterRun)
+                    RefreshLoadedProjectTrackStateFromPersistedProject(exportPlan.ProjectWorkFolder);
+                if (useLocalWorkflowStatus)
+                    EndWorkflowStatusOperation(exportStatusOperationId);
+            }
+            finally
+            {
+                _exportCancellation?.Dispose();
+                _exportCancellation = null;
+                IsExporting = false;
+                IsBusy = false;
+            }
         }
     }
 
 
     private void ReturnToReviewAfterInterruptedExport()
     {
-        _isWaitingForManualMergeReview = true;
-        _manualMergeReviewPreparedPreset = SelectedExportPreset;
+        // Transition first: WithManualMergeReview already sets Phase and would bypass persistence/notifications.
         SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
-        _trackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, _currentProjectWorkFolder, SelectedExportPreset);
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(true);
+        _manualMergeReviewPreparedPreset = SelectedExportPreset;
+        _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, _currentProjectWorkFolder, SelectedExportPreset);
         UpdateManualMergeReviewPresetState();
+        NotifyExportUiStateChanged();
     }
 
     private FinalOutputConflictAction ResolveFinalOutputConflict(string outputPath, string renamedOutputPath)
@@ -8664,20 +13456,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var result = AppDialogService.Show(
             this,
-            "Ausgabedatei existiert bereits",
-            "Fertige Datei speichern",
-            "Die Konvertierung und das Zusammenfügen sind abgeschlossen. Im Ausgabeordner existiert bereits eine Datei mit diesem Namen.\n\n" +
-            outputPath +
-            "\n\nBei ‚Umbenennen‘ wird die neue Datei gespeichert als:\n" +
-            Path.GetFileName(renamedOutputPath) +
-            "\n\nBei ‚Abbrechen‘ wird die neu zusammengefügte Datei verworfen. Die vorbereiteten Tracks bleiben im Projekt erhalten.",
+            LocalizationText.Get("MainWindow.Export.Conflict.Title"),
+            LocalizationText.Get("MainWindow.Export.Conflict.Heading"),
+            LocalizationText.Format("MainWindow.Export.Conflict.Message", outputPath, Path.GetFileName(renamedOutputPath)),
             AppDialogKind.Question,
             null,
             new[]
             {
-                new AppDialogButton("Überschreiben", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Umbenennen", AppDialogResult.No),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("MainWindow.Export.Conflict.Overwrite"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("MainWindow.Export.Conflict.Rename"), AppDialogResult.No),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             });
 
         return result switch
@@ -8704,21 +13492,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var result = AppDialogService.Show(
             this,
-            title: "Ausgabedatei konnte nicht gespeichert werden",
-            heading: "Fertiges Hörbuch auf dem Desktop speichern?",
-            message:
-                "Das Hörbuch wurde vollständig zusammengefügt, konnte aber nicht am gewählten Ausgabeort gespeichert werden. " +
-                "Der Ordner ist möglicherweise nicht mehr erreichbar oder die vorhandene Datei wird gerade von einem anderen Programm verwendet.\n\n" +
-                "Gewähltes Ziel:\n" + outputPath + "\n\n" +
-                "BookStitch kann die fertige Datei stattdessen auf dem Desktop speichern als:\n" +
-                Path.GetFileName(desktopOutputPath) + "\n\n" +
-                "Bei ‚Abbrechen‘ wird die fertige zusammengefügte Datei verworfen. Die vorbereiteten Tracks bleiben im Projekt erhalten.",
+            title: LocalizationText.Get("MainWindow.Export.Failure.Title"),
+            heading: LocalizationText.Get("MainWindow.Export.Failure.Heading"),
+            message: LocalizationText.Format("MainWindow.Export.Failure.Message", outputPath, Path.GetFileName(desktopOutputPath)),
             kind: AppDialogKind.Warning,
             details: new[] { error.Message },
             buttons: new[]
             {
-                new AppDialogButton("Auf Desktop speichern", AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
-                new AppDialogButton("Abbrechen", AppDialogResult.Cancel, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("MainWindow.Export.Failure.SaveDesktop"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"), AppDialogResult.Cancel, IsCancel: true)
             },
             width: 760,
             height: 460);
@@ -8729,45 +13511,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
 
-    private bool ShouldPauseBeforeMerge(bool continuingFromManualMergeReview)
+    private void PauseBeforeMergeForManualReview(bool showCompletionDialog = true)
     {
-        if (continuingFromManualMergeReview)
-            return false;
-
-        if (_pauseBeforeMergeOverride.HasValue)
-            return _pauseBeforeMergeOverride.Value;
-
-        return !_settings.MergeAutomaticallyAfterConversion;
-    }
-
-    private void PauseBeforeMergeForManualReview()
-    {
-        _isCurrentProjectCompleted = false;
-        _isWaitingForManualMergeReview = true;
+        _projectReviewState = ProjectReviewState.WithCompletion(false);
+        _projectReviewState = ProjectReviewState.WithManualMergeReview(true);
         SetPipelineState(ProjectPipelineState.ReviewBeforeMerge);
         _manualMergeReviewPreparedPreset = SelectedExportPreset;
         _manualMergeReviewNeedsReconversion = false;
-        SetTrackActionDisplayOverride("Zusammenfügen");
+        _manualMergeReviewHasPreparedTracks = true;
+        SetTrackActionDisplayOverride(LocalizationText.Get("Workflow.Review.MergeAction"));
         NotifyExportUiStateChanged();
-        if (_loadedResumeProjectIsMp3Disc)
+        if (LoadedProjectState.IsMp3Disc)
         {
             var operationId = BeginWorkflowStatusOperation(_currentProjectWorkFolder);
             var totalDiscs = Math.Max(1, Tracks.Select(track => track.DiscNumber ?? 1).DefaultIfEmpty(1).Max());
             PublishWorkflowStatus(
                 operationId,
-                _mp3DiscWorkflowStatusAdapter.CreateReadySnapshot(
+                _services.Status.Mp3DiscWorkflowStatusAdapter.CreateReadySnapshot(
                     _currentProjectWorkFolder,
                     totalDiscs,
                     Tracks.Count,
                     ExportPreset.Parse(SelectedExportPreset)));
             EndWorkflowStatusOperation(operationId);
         }
-        else if (_loadedResumeProjectIsLocal || !_loadedResumeProjectIsAudioDisc)
+        else if (LoadedProjectState.IsLocal || !LoadedProjectState.IsAudioDisc)
         {
             var operationId = BeginWorkflowStatusOperation(_currentProjectWorkFolder);
             PublishWorkflowStatus(
                 operationId,
-                _localWorkflowStatusAdapter.CreateReadySnapshot(
+                _services.Status.LocalWorkflowStatusAdapter.CreateReadySnapshot(
                     _currentProjectWorkFolder,
                     Tracks.Count,
                     ExportPreset.Parse(SelectedExportPreset)));
@@ -8776,40 +13548,205 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         else
         {
             ExportProgressPercent = 100;
-            ExportProgressText = "Konvertierung abgeschlossen. Trackliste prüfen und anschließend zusammenfügen.";
-            StatusText = "Konvertierung abgeschlossen. Du kannst die Trackliste jetzt prüfen, sortieren oder Tracks ausschließen. Danach auf „Zusammenfügen“ klicken.";
+            ExportProgressText = LocalizationText.Get("Workflow.Review.AudioProgress");
+            StatusText = LocalizationText.Get("Workflow.Review.AudioStatus");
         }
 
-        _notificationService.Notify(NotificationEvent.UserActionRequired);
+        if (!showCompletionDialog)
+            return;
+
+        _runtimeServices.NotificationService.Notify(NotificationEvent.UserActionRequired);
 
         AppDialogService.Show(
             this,
-            title: "Vor dem Zusammenfügen stoppen",
-            heading: "Konvertierung abgeschlossen",
-            message:
-                "BookStitch hat alle Tracks vorbereitet und stoppt vor dem finalen Zusammenfügen.\n\n" +
-                "Du kannst die Trackliste jetzt noch einmal prüfen, sortieren oder einzelne Tracks entfernen.\n\n" +
-                "Wenn alles passt, klicke auf „Zusammenfügen“. Änderst du das Export-Preset, werden die Tracks zuerst für das neue Preset konvertiert und danach erneut zur Prüfung angehalten.",
+            title: LocalizationText.Get("Workflow.Review.Title"),
+            heading: LocalizationText.Get("Workflow.Review.Heading"),
+            message: LocalizationText.Get("Workflow.Review.Message"),
             kind: AppDialogKind.Information,
             buttons: new[]
             {
-                new AppDialogButton("OK", AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
+                new AppDialogButton(LocalizationText.Get("UiOK"), AppDialogResult.Ok, IsPrimary: true, IsDefault: true, IsCancel: true)
             });
     }
 
     private void WriteFinalTags(string finalAudioPath)
     {
-        _finalTagService.WriteFinalTags(
+        _services.Foundation.FinalTagService.WriteFinalTags(
             finalAudioPath,
-            new FinalAudioTagData
-            {
-                Title = BookTitle,
-                Album = Album,
-                Author = Author,
-                Narrator = Narrator,
-                Genre = Genre,
-                CoverPath = _processedCoverPath
-            });
+            CreateCurrentFinalAudioTagData(isFinalOutput: true));
+    }
+
+    private FinalAudioTagData CreateCurrentFinalAudioTagData(bool isFinalOutput, TimeSpan? duration = null, int? chapterCount = null)
+    {
+        if (isFinalOutput &&
+            !string.IsNullOrWhiteSpace(_currentProjectWorkFolder) &&
+            Directory.Exists(_currentProjectWorkFolder))
+        {
+            var metadata = RequireCanonicalMetadataSessionForProject(_currentProjectWorkFolder);
+            _projectMetadataSession.Flush();
+
+            return new ProjectMetadataOutputProjectionService().Create(
+                metadata,
+                new ProjectMetadataOutputProjectionOptions(
+                    _projectMetadata.ProcessedCoverPath,
+                    _settings.CompatibilityDescriptionEnabled,
+                    CultureInfo.CurrentUICulture.Name,
+                    duration,
+                    chapterCount),
+                MetadataPreferencesService.CreateSnapshot(_settings.MetadataPreferences),
+                MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences));
+        }
+
+        return new FinalAudioTagData
+        {
+            Title = BookTitle,
+            Album = Album,
+            Author = Author,
+            Narrator = Narrator,
+            Genre = Genre,
+            CoverPath = _projectMetadata.ProcessedCoverPath,
+            Duration = duration,
+            ChapterCount = chapterCount
+        };
+    }
+
+    private FinalAudioTagData CreateCurrentCompatibilityPreviewTagData()
+    {
+        var knownDurations = Tracks
+            .Where(track => !track.IsExcluded)
+            .Select(TrackDurationService.GetPreciseDuration)
+            .Where(duration => duration.HasValue)
+            .Select(duration => duration!.Value)
+            .ToArray();
+        var duration = knownDurations.Length > 0
+            ? TimeSpan.FromTicks(knownDurations.Sum(value => value.Ticks))
+            : (TimeSpan?)null;
+        var chapterCount = _currentActiveChapterResult?.RenderedTimeline.Count
+            ?? ExportPreviewMetricsService.CountPlannedChapters(Tracks);
+
+        return new ProjectMetadataOutputProjectionService().Create(
+            _projectMetadata.CanonicalMetadata,
+            new ProjectMetadataOutputProjectionOptions(
+                _projectMetadata.ProcessedCoverPath,
+                _settings.CompatibilityDescriptionEnabled,
+                CultureInfo.CurrentUICulture.Name,
+                duration,
+                chapterCount),
+            MetadataPreferencesService.CreateSnapshot(_settings.MetadataPreferences),
+                MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences));
+    }
+
+    private void EnsureCanonicalMetadataSessionForCurrentState()
+    {
+        if (_projectMetadataSession.HasCurrent)
+            return;
+
+        var metadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.None);
+        _projectMetadataSession.BeginNew(metadata);
+    }
+
+    private void AttachCanonicalMetadataSessionToNewProject(string projectFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectFolder);
+
+        var metadata = _projectMetadata.EnsureCanonicalMetadata(MetadataOrigin.None);
+        if (!_projectMetadataSession.HasCurrent)
+            _projectMetadataSession.BeginNew(metadata);
+
+        if (!ReferenceEquals(_projectMetadataSession.Current, metadata))
+        {
+            throw new InvalidOperationException(
+                "The active ProjectMetadataState and ProjectMetadataSession do not share the same canonical metadata instance.");
+        }
+
+        if (_projectMetadataSession.IsAttached)
+            throw new InvalidOperationException("The canonical metadata session is already attached to a project.");
+
+        _projectMetadataSession.AttachNewProject(projectFolder);
+    }
+
+    private void EnsureCanonicalMetadataSessionAttachedToProject(string projectFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectFolder);
+
+        if (!_projectMetadataSession.IsAttached)
+        {
+            AttachCanonicalMetadataSessionToNewProject(projectFolder);
+            return;
+        }
+
+        _ = RequireCanonicalMetadataSessionForProject(projectFolder);
+    }
+
+    private ProjectMetadata RequireCanonicalMetadataSessionForProject(string projectFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectFolder);
+
+        if (!_projectMetadataSession.IsAttached ||
+            _projectMetadataSession.Current is null ||
+            string.IsNullOrWhiteSpace(_projectMetadataSession.ProjectFolder))
+        {
+            throw new InvalidOperationException(
+                "No canonical ProjectMetadata session is attached to the active project.");
+        }
+
+        var normalizedProjectFolder = Path.GetFullPath(projectFolder);
+        if (!string.Equals(
+                normalizedProjectFolder,
+                _projectMetadataSession.ProjectFolder,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The canonical ProjectMetadata session belongs to a different project folder.");
+        }
+
+        if (!ReferenceEquals(_projectMetadataSession.Current, _projectMetadata.CanonicalMetadata))
+        {
+            throw new InvalidOperationException(
+                "ProjectMetadataState and ProjectMetadataSession no longer share the same canonical metadata instance.");
+        }
+
+        return _projectMetadataSession.Current;
+    }
+
+    private void FlushCanonicalMetadataSessionForProject(string projectFolder)
+    {
+        StopAutomaticMaintenance();
+        _ = RequireCanonicalMetadataSessionForProject(projectFolder);
+        var saved = _projectMetadataSession.Flush();
+        if (saved) _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+    }
+
+    private bool TryFlushCanonicalMetadataBeforeExtensionSnapshot(string projectFolder)
+    {
+        try
+        {
+            FlushCanonicalMetadataSessionForProject(projectFolder);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _runtimeServices.DiagnosticLogService.WriteError(
+                "Canonical ProjectMetadata checkpoint before project extension failed.",
+                ex);
+            AppDialogService.Error(
+                this,
+                LocalizationText.Get("MainWindow.Metadata.SaveFailed.Title"),
+                LocalizationText.Get("MainWindow.Metadata.SaveFailed.Message"),
+                details: new[] { ex.Message });
+            return false;
+        }
+    }
+
+    private void ReloadCanonicalMetadataSessionAfterRollback(string projectFolder)
+    {
+        if (LoadedProjectState.IsMp3Disc)
+            _activeMp3DiscManifest = _services.Foundation.Mp3DiscProjectService.TryLoad(projectFolder);
+        if (LoadedProjectState.IsAudioDisc)
+            _activeAudioDiscManifest = _services.Foundation.AudioDiscProjectService.TryLoad(projectFolder);
+        _ = RequireCanonicalMetadataSessionForProject(projectFolder);
+        var metadata = _projectMetadataSession.ReloadFromStore();
+        _projectMetadata.ApplyCanonicalMetadata(metadata);
     }
 
     private static WorkflowStatusSnapshot CreateExportStatusSnapshot(
@@ -8939,20 +13876,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .ToList();
 
         var activeText = activeTrackNumbers.Count > 0
-            ? $" | aktiv: {string.Join(", ", activeTrackNumbers)}"
+            ? LocalizationText.Format("MainWindow.Progress.ActiveTracks", string.Join(", ", activeTrackNumbers))
             : "";
 
         Dispatcher.InvokeAsync(() =>
         {
             ExportProgressPercent = percent;
-            ExportProgressText = $"{percent:0.0}% | {completedCount}/{totalCount} fertig{activeText}";
+            ExportProgressText = LocalizationText.Format("MainWindow.Progress.Completed", percent, completedCount, totalCount, activeText);
         });
     }
 
     private string BuildIdleExportProgressText()
     {
         var total = Tracks.Count;
-        return $"0,0 % | 0/{total} fertig";
+        return LocalizationText.Format("MainWindow.Progress.Idle", total);
     }
 
     private bool SetParallelJobsInput(string? value, bool showMessage)
@@ -8968,8 +13905,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Warning(
                     this,
-                    "Ungültige Parallelität",
-                    "Bitte bei Parallel entweder Auto oder eine Zahl von 1 bis 40 eingeben.");
+                    LocalizationText.Get("MainWindow.Parallel.Invalid.Title"),
+                    LocalizationText.Get("MainWindow.Parallel.Invalid.InputMessage"));
             }
 
             OnPropertyChanged(nameof(ParallelJobsInput));
@@ -8982,8 +13919,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 AppDialogService.Warning(
                     this,
-                    "Ungültige Parallelität",
-                    "Die Parallelität darf nur zwischen 1 und 40 liegen.");
+                    LocalizationText.Get("MainWindow.Parallel.Invalid.Title"),
+                    LocalizationText.Get("MainWindow.Parallel.Invalid.RangeMessage"));
             }
 
             jobs = Math.Clamp(jobs, 1, 40);
@@ -9036,16 +13973,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private WorkFolderStructure GetProjectFolderStructure()
     {
-        var configured = _settings.WorkingFolder;
-
-        if (string.IsNullOrWhiteSpace(configured) || IsLegacyDefaultWorkingFolder(configured))
-        {
-            configured = GetDefaultWorkingFolder();
-            _settings.WorkingFolder = configured;
-            SaveSettingsIfReady();
-        }
-
-        return _workFolderStructureService.Ensure(configured);
+        return _services.Foundation.WorkFolderStructureService.Ensure(_services.Foundation.SettingsService.ProjectRootFolder);
     }
 
     private string GetWorkingRootFolder()
@@ -9053,44 +13981,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return GetProjectFolderStructure().ProjectRootFolder;
     }
 
-    private static string GetDefaultWorkingFolder()
-    {
-        return Path.Combine(GetMusicFolder(), "BookStitchProjects");
-    }
-
-    private static bool IsLegacyDefaultWorkingFolder(string? folderPath)
-    {
-        if (string.IsNullOrWhiteSpace(folderPath))
-            return false;
-
-        var legacyFolder = Path.Combine(GetMusicFolder(), "BookStitch", "Work");
-
-        try
-        {
-            return string.Equals(
-                Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                Path.GetFullPath(legacyFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string GetMusicFolder()
-    {
-        var musicFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
-
-        if (string.IsNullOrWhiteSpace(musicFolder))
-            musicFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        return musicFolder;
-    }
-
     private string BuildProjectWorkFolderName()
     {
-        return _exportPlanService.BuildProjectWorkFolderName(_currentFolderPath, Author, BookTitle);
+        return _services.Pipeline.ExportPlanService.BuildProjectWorkFolderName(_currentFolderPath, Author, BookTitle);
     }
 
     private void RemoveGeneratedOrWorkFilesFromTrackList(string folderPath)
@@ -9100,43 +13993,122 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var expectedOutputInSourceFolder = Path.Combine(folderPath, OutputFileNamePreview);
         var workRoot = _settings.WorkingFolder;
-        var removeList = _trackWorkspaceFilterService.GetGeneratedOrWorkTracks(folderPath, Tracks, expectedOutputInSourceFolder, workRoot);
+        var removeList = _services.Tracks.TrackWorkspaceFilterService.GetGeneratedOrWorkTracks(folderPath, Tracks, expectedOutputInSourceFolder, workRoot);
 
         foreach (var track in removeList)
             Tracks.Remove(track);
     }
 
-    private void RecalculateProcessingActionsForCurrentPreset()
+    private AacSampleRatePreviewState _folderRatePreview = new();
+    private DiscProjectSetupDialog? _folderSetupPreviewOwner;
+    private bool _isFolderRateDialogOpen;
+
+    private bool ShowFolderPassThroughNotice(Window? owner = null, string? selectedPreset = null, bool requireAcceptance = false)
+    {
+        if (_isFolderRateDialogOpen) return !requireAcceptance;
+        if ((!IsVisible || IsBusy || IsExporting || _isLoadingSettings) && !requireAcceptance) return true;
+        if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder) ||
+            ResolveCurrentChapterProjectType() != ProjectManifestTypes.FolderProject) return true;
+        if (owner is null && _folderSetupPreviewOwner is { IsVisible: true } setup)
+        { owner = setup; selectedPreset = setup.PresetComboBox.SelectedItem?.ToString(); }
+        if (owner is not null && !owner.IsVisible) return true;
+        var presetName = selectedPreset ?? SelectedExportPreset;
+        var preset = ExportPreset.Parse(presetName);
+        var decision = FolderSampleRateService.Decide(Tracks, preset, _settings.DefaultSampleRateHz);
+        _folderRatePreview.Refresh(FolderSampleRateService.DecisionKey(Tracks, preset, decision.StandardRate), decision);
+        if (!_folderRatePreview.ShouldPresent && !(requireAcceptance && _folderRatePreview.NeedsAcceptance)) return true;
+        _folderRatePreview.Presented();
+        _isFolderRateDialogOpen = true;
+        try
+        {
+            var dialog = new AacSampleRateDialog(decision, presetName);
+            ModalDialogService.ShowDialog(dialog, owner ?? this);
+            if (dialog.Result != AppDialogResult.Ok) return false;
+            _folderRatePreview.Accept(dialog.PreferStandard);
+            return true;
+        }
+        finally { _isFolderRateDialogOpen = false; }
+    }
+
+    private void ApplyFolderSampleRateContext()
+    {
+        if (ResolveCurrentChapterProjectType() != ProjectManifestTypes.FolderProject) return;
+        if (string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+        {
+            var preset = ExportPreset.Parse(SelectedExportPreset);
+            var decision = FolderSampleRateService.Decide(Tracks, preset, _settings.DefaultSampleRateHz);
+            _folderRatePreview.Refresh(FolderSampleRateService.DecisionKey(Tracks, preset, decision.StandardRate), decision);
+            FolderSampleRateService.Apply(Tracks, _folderRatePreview.EffectiveRate);
+            foreach (var track in Tracks) track.AllowAacReuse = decision.Qualified;
+        }
+        else
+        {
+            FolderSampleRateService.Apply(Tracks, ProjectSampleRateService.ReadTarget(_currentProjectWorkFolder));
+            foreach (var track in Tracks) track.AllowAacReuse = ProjectSampleRateService.AllowsAacReuse(_currentProjectWorkFolder);
+        }
+    }
+
+    private void RecalculateProcessingActionsForCurrentPreset(bool requestTrackStateRefresh = true)
     {
         if (Tracks.Count == 0)
             return;
 
-        _trackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, _currentProjectWorkFolder, SelectedExportPreset);
+        ApplyFolderSampleRateContext();
+        _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, _currentProjectWorkFolder, SelectedExportPreset);
         var preset = ExportPreset.Parse(SelectedExportPreset);
 
         foreach (var track in Tracks)
         {
-            track.HasReusableConvertedFile = _trackPreparedStateRefreshService.IsReusablePreparedConvertedTrack(track, SelectedExportPreset);
+            track.HasReusableConvertedFile = _services.Workflows.TrackPreparedStateRefreshService.IsReusablePreparedConvertedTrack(track, SelectedExportPreset);
             if (_isAudioDiscProjectAwaitingRip &&
                 !string.IsNullOrWhiteSpace(track.FilePath) &&
                 !File.Exists(track.FilePath))
             {
-                track.ProcessingAction = "FLAC rippen";
+                track.ProcessingAction = ProcessingActionIds.RipFlac;
                 continue;
             }
 
             track.ProcessingAction = AudioProcessingService.DetermineProcessingAction(track, preset);
         }
 
-        TracksGrid?.Items.Refresh();
+        RefreshTrackPresentationViews();
         OnExportPreviewChanged();
-        _trackStateUpdateQueueService.RequestRefresh();
+        if (requestTrackStateRefresh) _trackStateUpdateQueueService.RequestRefresh();
+        Dispatcher.BeginInvoke(() => ShowFolderPassThroughNotice(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
 
 
+    private void RefreshPartialPresetProgressText()
+    {
+        if (!ProjectReviewState.IsReviewBeforeMerge && !ProjectReviewState.IsCompleted)
+            return;
+
+        var includedTracks = Tracks.Where(track => !track.IsExcluded).ToArray();
+        var preparation = _services.Workflows.TrackPreparedStateRefreshService.GetPreparationProgress(
+            includedTracks,
+            SelectedExportPreset);
+        if (preparation.TotalCount <= 0 || preparation.PendingCount <= 0)
+            return;
+
+        IsProgressIndeterminate = false;
+        ExportProgressPercent = preparation.Percent;
+        ExportProgressText = LocalizationText.Format("MainWindow.Progress.Prepared", preparation.Percent, preparation.PreparedCount, preparation.TotalCount);
+    }
+
+
     private string BuildProcessingActionSummary()
     {
+        if (ProjectReviewState.IsReviewBeforeMerge || ProjectReviewState.IsCompleted)
+        {
+            var reviewTracks = Tracks.Where(track => !track.IsExcluded).ToArray();
+            var preparation = _services.Workflows.TrackPreparedStateRefreshService.GetPreparationProgress(
+                reviewTracks,
+                SelectedExportPreset);
+            if (preparation.TotalCount > 0 && preparation.PendingCount > 0)
+                return LocalizationText.Format("MainWindow.Summary.ConvertCount", preparation.PendingCount);
+        }
+
         if (_activeAudioDiscManifest is not null &&
             !string.Equals(_activeAudioDiscManifest.Status, AudioDiscProjectStatus.RippingCompleted, StringComparison.OrdinalIgnoreCase) &&
             Tracks.Count > 0)
@@ -9214,6 +14186,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!CanEditTrackOrder || Tracks.Count == 0)
             return;
 
+        ClearEmbeddedChapterSelection();
+
         var selected = TracksGrid
             .SelectedItems
             .OfType<TrackInfo>()
@@ -9222,11 +14196,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var sortKey = e.Column.SortMemberPath;
 
         if (string.IsNullOrWhiteSpace(sortKey))
-            sortKey = e.Column.Header?.ToString() ?? "";
+            sortKey = GetTrackGridColumnKey(e.Column);
 
         var currentOrder = Tracks.ToList();
         var direction = GetNextTrackGridSortDirection(sortKey, currentOrder);
-        var sortedTracks = _trackListActionService.Sort(currentOrder, sortKey, direction);
+        var sortedTracks = _services.Tracks.TrackListActionService.Sort(currentOrder, sortKey, direction);
 
         ClearGridSorting();
         ReplaceTrackList(sortedTracks);
@@ -9251,6 +14225,147 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             track => !string.IsNullOrWhiteSpace(track.DisplayChapterWarning),
             _lastChapterWarningJumpTrack);
         e.Handled = true;
+    }
+
+    private bool HandleTrackGridAutoScrollMouseDown(MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle || TracksGrid is null)
+            return false;
+
+        if (!_isTrackGridAutoScrollActive && !CanStartTrackGridAutoScroll())
+            return false;
+
+        if (e.OriginalSource is not DependencyObject source ||
+            FindVisualAncestor<DataGrid>(source) != TracksGrid)
+        {
+            return false;
+        }
+
+        if (_isTrackGridAutoScrollActive)
+            StopTrackGridAutoScroll();
+        else
+            StartTrackGridAutoScroll(e.GetPosition(TracksGrid));
+
+        e.Handled = true;
+        return true;
+    }
+
+    private void StartTrackGridAutoScroll(Point anchor)
+    {
+        if (TracksGrid is null || !CanStartTrackGridAutoScroll())
+            return;
+
+        if (!TracksGrid.CaptureMouse())
+            return;
+
+        _trackGridAutoScrollAnchor = anchor;
+        _trackGridAutoScrollCurrent = anchor;
+        _trackGridAutoScrollLastTimestamp = TimeSpan.Zero;
+        _trackGridCursorBeforeAutoScroll = TracksGrid.Cursor;
+        _isTrackGridAutoScrollActive = true;
+        TracksGrid.Cursor = Cursors.ScrollAll;
+        TracksGrid.Focus();
+        Keyboard.Focus(TracksGrid);
+        _trackGridAutoScrollClock.Restart();
+        _trackGridAutoScrollTimer.Start();
+    }
+
+    private void StopTrackGridAutoScroll()
+    {
+        if (!_isTrackGridAutoScrollActive)
+            return;
+
+        _trackGridAutoScrollTimer.Stop();
+        _trackGridAutoScrollClock.Reset();
+        _isTrackGridAutoScrollActive = false;
+
+        if (TracksGrid is not null)
+        {
+            if (TracksGrid.IsMouseCaptured)
+                TracksGrid.ReleaseMouseCapture();
+
+            TracksGrid.Cursor = _trackGridCursorBeforeAutoScroll;
+        }
+
+        _trackGridCursorBeforeAutoScroll = null;
+    }
+
+    private void TrackGridAutoScrollTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!_isTrackGridAutoScrollActive || TracksGrid is null)
+            return;
+
+        if (!CanStartTrackGridAutoScroll())
+        {
+            StopTrackGridAutoScroll();
+            return;
+        }
+
+        var scrollViewer = FindVisualChild<ScrollViewer>(TracksGrid);
+        if (scrollViewer is null)
+        {
+            StopTrackGridAutoScroll();
+            return;
+        }
+
+        _trackGridAutoScrollCurrent = Mouse.GetPosition(TracksGrid);
+
+        var elapsed = GetTrackGridAutoScrollElapsed();
+        var delta = _trackGridAutoScrollCurrent - _trackGridAutoScrollAnchor;
+        var vertical = CreateTrackGridAutoScrollStep(delta.Y, elapsed);
+        var horizontal = CreateTrackGridAutoScrollStep(delta.X, elapsed);
+
+        if (vertical != 0)
+            scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset + vertical);
+
+        if (horizontal != 0)
+            scrollViewer.ScrollToHorizontalOffset(scrollViewer.HorizontalOffset + horizontal);
+    }
+
+    private bool CanStartTrackGridAutoScroll()
+    {
+        if (IsBusy || IsExporting || IsDiscImporting || Tracks.Count == 0 || TracksGrid is null)
+            return false;
+
+        var scrollViewer = FindVisualChild<ScrollViewer>(TracksGrid);
+        return scrollViewer is not null &&
+               (scrollViewer.ScrollableHeight > 0 || scrollViewer.ScrollableWidth > 0);
+    }
+
+    private static double CreateTrackGridAutoScrollStep(double delta, TimeSpan interval)
+    {
+        const double deadZone = 10;
+        const double accelerationRange = 140;
+        const double maxSpeedPerSecond = 1000;
+        const double minSpeedPerSecond = 35;
+
+        var distance = Math.Abs(delta);
+        if (distance <= deadZone)
+            return 0;
+
+        var t = Math.Clamp((distance - deadZone) / accelerationRange, 0, 1);
+        var speed = Math.Max(minSpeedPerSecond, maxSpeedPerSecond * t * t);
+        return Math.Sign(delta) * speed * interval.TotalSeconds;
+    }
+
+    private TimeSpan GetTrackGridAutoScrollElapsed()
+    {
+        var now = _trackGridAutoScrollClock.Elapsed;
+        var elapsed = now - _trackGridAutoScrollLastTimestamp;
+        _trackGridAutoScrollLastTimestamp = now;
+
+        if (elapsed <= TimeSpan.Zero)
+            return _trackGridAutoScrollTimer.Interval;
+
+        return elapsed <= TrackGridAutoScrollMaxElapsed
+            ? elapsed
+            : TrackGridAutoScrollMaxElapsed;
+    }
+
+    private void TracksGrid_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_isTrackGridAutoScrollActive)
+            StopTrackGridAutoScroll();
     }
 
     private TrackInfo? JumpToNextTrackWarning(Func<TrackInfo, bool> matchesWarning, TrackInfo? lastJumpTrack)
@@ -9307,8 +14422,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private ListSortDirection GetNextTrackGridSortDirection(string sortKey, IReadOnlyList<TrackInfo> currentOrder)
     {
-        var ascending = _trackListActionService.Sort(currentOrder, sortKey, ListSortDirection.Ascending);
-        var descending = _trackListActionService.Sort(currentOrder, sortKey, ListSortDirection.Descending);
+        var ascending = _services.Tracks.TrackListActionService.Sort(currentOrder, sortKey, ListSortDirection.Ascending);
+        var descending = _services.Tracks.TrackListActionService.Sort(currentOrder, sortKey, ListSortDirection.Descending);
 
         if (string.Equals(_trackGridSortKey, sortKey, StringComparison.Ordinal))
         {
@@ -9358,7 +14473,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (FindVisualAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject) is null)
             return;
 
+        // A deliberate manual resize takes ownership from AutoFit. Persist the
+        // user's widths so the layout remains stable across refreshes/restarts.
+        _settings.TrackGridAutoFitEnabled = false;
         SaveTrackGridColumnLayout();
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
     }
 
     private void TracksGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -9384,23 +14503,485 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             BuildTrackGridRowContextMenu(TracksGrid.ContextMenu);
     }
 
+    private void EmbeddedChapterDetails_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    private void TracksGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingTrackSelectionFromChapterNavigation)
+            return;
+
+        ClearEmbeddedChapterSelection();
+    }
+
+    private void ChapterDetailsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TrackInfo track })
+            return;
+
+        if (_activeEmbeddedChapterRow is not null)
+        {
+            SelectParentTrack(track, focusGrid: true, scrollIntoView: true);
+        }
+
+        RefreshChapterTimelinePresentation();
+    }
+
+    private void EmbeddedChapterCollapse_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: TrackInfo track })
+        {
+            track.IsChapterDetailsExpanded = false;
+            if (IsActiveEmbeddedChapterFromTrack(track))
+                SelectParentTrack(track, focusGrid: true, scrollIntoView: true);
+
+            e.Handled = true;
+        }
+    }
+
+    private void EmbeddedChapterRow_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source &&
+            FindVisualAncestor<ButtonBase>(source) is not null)
+        {
+            return;
+        }
+
+        if (sender is FrameworkElement { Tag: TrackEmbeddedChapterDisplayInfo chapter } &&
+            chapter.SourceTrack is not null)
+        {
+            SelectEmbeddedChapter(chapter, focusChapter: false);
+            if (sender is IInputElement inputElement)
+                Keyboard.Focus(inputElement);
+
+            e.Handled = true;
+        }
+    }
+
+    private void EmbeddedChapterRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: TrackEmbeddedChapterDisplayInfo })
+        {
+            e.Handled = true;
+        }
+    }
+
+    private void EmbeddedChapterRow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Handled || sender is not FrameworkElement { Tag: TrackEmbeddedChapterDisplayInfo chapter })
+            return;
+
+        _activeEmbeddedChapterRow ??= chapter;
+        e.Handled = HandleActiveVisibleTrackGridRowKey(e.Key);
+    }
+
+    private void FocusEmbeddedChapterRow(object sender, TrackEmbeddedChapterDisplayInfo row)
+    {
+        if (sender is not DependencyObject source)
+            return;
+
+        var itemsControl = FindVisualAncestor<ItemsControl>(source);
+        if (itemsControl is null)
+        {
+            FocusEmbeddedChapterRow(row, scrollParentIntoView: true);
+            return;
+        }
+
+        FocusEmbeddedChapterRow(itemsControl, row);
+    }
+
+    private bool HandleActiveVisibleTrackGridRowKey(Key key)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None)
+            return false;
+
+        var direction = key switch
+        {
+            Key.Down => 1,
+            Key.Up => -1,
+            _ => 0
+        };
+
+        if (direction == 0)
+            return false;
+
+        if (_activeEmbeddedChapterRow is null && TracksGrid.SelectedItems.Count > 1)
+            return false;
+
+        var rows = BuildVisibleTrackGridRows();
+        if (rows.Count == 0)
+            return false;
+
+        var currentIndex = GetActiveVisibleTrackGridRowIndex(rows);
+        if (currentIndex < 0)
+            return false;
+
+        var nextIndex = currentIndex + direction;
+        if (nextIndex < 0 || nextIndex >= rows.Count)
+            return true;
+
+        SelectVisibleTrackGridRow(rows[nextIndex], focusTarget: true);
+        return true;
+    }
+
+    private List<VisibleTrackGridRow> BuildVisibleTrackGridRows()
+    {
+        var rows = new List<VisibleTrackGridRow>();
+
+        foreach (var track in GetVisibleTracks())
+        {
+            rows.Add(VisibleTrackGridRow.ForTrack(track));
+
+            if (!track.IsChapterDetailsExpanded)
+                continue;
+
+            foreach (var chapter in track.EmbeddedChapterRows)
+                rows.Add(VisibleTrackGridRow.ForChapter(track, chapter));
+        }
+
+        return rows;
+    }
+
+    private int GetActiveVisibleTrackGridRowIndex(IReadOnlyList<VisibleTrackGridRow> rows)
+    {
+        if (_activeEmbeddedChapterRow is { SourceTrack: { } activeTrack } activeChapter)
+        {
+            for (var index = 0; index < rows.Count; index++)
+            {
+                var row = rows[index];
+                if (ReferenceEquals(row.Track, activeTrack) &&
+                    row.Chapter is not null &&
+                    row.Chapter.StartTicks == activeChapter.StartTicks)
+                {
+                    return index;
+                }
+            }
+        }
+
+        var selectedTrack = TracksGrid.SelectedItem as TrackInfo ?? TracksGrid.CurrentItem as TrackInfo;
+        if (selectedTrack is null)
+            return -1;
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (rows[index].Chapter is null && ReferenceEquals(rows[index].Track, selectedTrack))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private void SelectVisibleTrackGridRow(VisibleTrackGridRow row, bool focusTarget)
+    {
+        if (row.Chapter is not null)
+        {
+            SelectEmbeddedChapter(row.Chapter, focusTarget);
+            return;
+        }
+
+        var shouldScrollParentIntoView = _activeEmbeddedChapterRow is null;
+        SelectParentTrack(row.Track, focusTarget, shouldScrollParentIntoView);
+    }
+
+    private void SelectParentTrack(TrackInfo track, bool focusGrid, bool scrollIntoView)
+    {
+        ClearEmbeddedChapterSelection();
+
+        _isUpdatingTrackSelectionFromChapterNavigation = true;
+        try
+        {
+            TracksGrid.SelectedItems.Clear();
+            TracksGrid.SelectedItem = track;
+            TracksGrid.CurrentItem = track;
+        }
+        finally
+        {
+            _isUpdatingTrackSelectionFromChapterNavigation = false;
+        }
+
+        if (scrollIntoView)
+            EnsureTrackRowVisible(track);
+
+        if (focusGrid)
+        {
+            TracksGrid.Focus();
+            Keyboard.Focus(TracksGrid);
+        }
+    }
+
+    private void SelectEmbeddedChapter(TrackEmbeddedChapterDisplayInfo chapter, bool focusChapter)
+    {
+        if (chapter.SourceTrack is not { } track)
+            return;
+
+        _isUpdatingTrackSelectionFromChapterNavigation = true;
+        try
+        {
+            ClearParentTrackSelection();
+        }
+        finally
+        {
+            _isUpdatingTrackSelectionFromChapterNavigation = false;
+        }
+
+        ClearEmbeddedChapterSelection();
+        _activeEmbeddedChapterRow = chapter;
+        track.SelectEmbeddedChapter(chapter.StartTicks);
+
+        if (focusChapter)
+            FocusEmbeddedChapterRow(chapter, scrollParentIntoView: false);
+    }
+
+    private void ClearEmbeddedChapterSelection()
+    {
+        if (_activeEmbeddedChapterRow?.SourceTrack is { } track)
+            track.SelectEmbeddedChapter(null);
+
+        _activeEmbeddedChapterRow = null;
+    }
+
+    private bool IsActiveEmbeddedChapterFromTrack(TrackInfo track)
+    {
+        return _activeEmbeddedChapterRow?.SourceTrack is { } activeTrack &&
+               ReferenceEquals(activeTrack, track);
+    }
+
+    private void FocusEmbeddedChapterRow(TrackEmbeddedChapterDisplayInfo row, bool scrollParentIntoView)
+    {
+        if (row.SourceTrack is not { } track)
+            return;
+
+        if (scrollParentIntoView)
+            TracksGrid.ScrollIntoView(track);
+
+        TracksGrid.UpdateLayout();
+
+        if (TracksGrid.ItemContainerGenerator.ContainerFromItem(track) is not DependencyObject trackContainer)
+            return;
+
+        var itemsControl = FindEmbeddedChapterItemsControl(trackContainer, track);
+        if (itemsControl is not null)
+            FocusEmbeddedChapterRow(itemsControl, row);
+    }
+
+    private void EnsureTrackRowVisible(TrackInfo track)
+    {
+        TracksGrid.UpdateLayout();
+
+        if (FindVisualChild<ScrollViewer>(TracksGrid) is not { } scrollViewer ||
+            TracksGrid.ItemContainerGenerator.ContainerFromItem(track) is not DataGridRow row)
+        {
+            TracksGrid.ScrollIntoView(track);
+            return;
+        }
+
+        var rowVisual = FindVisualChild<DataGridCellsPresenter>(row) as FrameworkElement ?? row;
+        if (!TryGetBoundsRelativeTo(rowVisual, scrollViewer, out var rowBounds))
+            return;
+
+        if (rowBounds.Top < 0)
+        {
+            scrollViewer.ScrollToVerticalOffset(Math.Max(0, scrollViewer.VerticalOffset + rowBounds.Top));
+        }
+        else if (rowBounds.Bottom > scrollViewer.ViewportHeight)
+        {
+            scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset + rowBounds.Bottom - scrollViewer.ViewportHeight);
+        }
+    }
+
+    private static bool TryGetBoundsRelativeTo(FrameworkElement element, Visual ancestor, out Rect bounds)
+    {
+        bounds = Rect.Empty;
+
+        if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
+            return false;
+
+        try
+        {
+            bounds = element.TransformToAncestor(ancestor)
+                .TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static void FocusEmbeddedChapterRow(ItemsControl itemsControl, TrackEmbeddedChapterDisplayInfo row)
+    {
+        itemsControl.UpdateLayout();
+        if (itemsControl.ItemContainerGenerator.ContainerFromItem(row) is not DependencyObject container)
+            return;
+
+        var focusTarget = FindVisualChild<Grid>(container);
+        if (focusTarget is null)
+            return;
+
+        Keyboard.Focus(focusTarget);
+        focusTarget.BringIntoView();
+    }
+
+    private static ItemsControl? FindEmbeddedChapterItemsControl(DependencyObject source, TrackInfo track)
+    {
+        if (source is ItemsControl itemsControl &&
+            ReferenceEquals(itemsControl.ItemsSource, track.EmbeddedChapterRows))
+        {
+            return itemsControl;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(source); index++)
+        {
+            var result = FindEmbeddedChapterItemsControl(VisualTreeHelper.GetChild(source, index), track);
+            if (result is not null)
+                return result;
+        }
+
+        return null;
+    }
+
     private void TracksGrid_ColumnReordered(object sender, DataGridColumnEventArgs e)
     {
         if (_isApplyingTrackGridColumnLayout)
             return;
 
         SaveTrackGridColumnLayout();
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
+    }
+
+    private void TracksGrid_LayoutUpdated(object sender, EventArgs e)
+    {
+        RefreshEmbeddedChapterRowColumnLayouts(force: false);
+    }
+
+    private void EmbeddedChapterRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Grid rowGrid)
+            return;
+
+        _embeddedChapterRowGrids.Add(rowGrid);
+        ApplyEmbeddedChapterRowColumnLayout(rowGrid);
+    }
+
+    private void EmbeddedChapterRow_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid rowGrid)
+            _embeddedChapterRowGrids.Remove(rowGrid);
+    }
+
+    private void RefreshEmbeddedChapterRowColumnLayouts(bool force)
+    {
+        if (TracksGrid is null || _embeddedChapterRowGrids.Count == 0)
+            return;
+
+        var signature = BuildEmbeddedChapterColumnLayoutSignature();
+        if (!force && string.Equals(_embeddedChapterColumnLayoutSignature, signature, StringComparison.Ordinal))
+            return;
+
+        _embeddedChapterColumnLayoutSignature = signature;
+
+        foreach (var rowGrid in _embeddedChapterRowGrids.ToList())
+        {
+            if (!rowGrid.IsLoaded)
+            {
+                _embeddedChapterRowGrids.Remove(rowGrid);
+                continue;
+            }
+
+            ApplyEmbeddedChapterRowColumnLayout(rowGrid);
+        }
+    }
+
+    private string BuildEmbeddedChapterColumnLayoutSignature()
+    {
+        if (TracksGrid is null)
+            return string.Empty;
+
+        var builder = new StringBuilder();
+        foreach (var column in TracksGrid.Columns.OrderBy(column => column.DisplayIndex))
+        {
+            builder
+                .Append(GetTrackGridColumnKey(column))
+                .Append(':')
+                .Append(column.DisplayIndex.ToString(CultureInfo.InvariantCulture))
+                .Append(':')
+                .Append(column.Visibility)
+                .Append(':')
+                .Append(Math.Round(GetTrackGridColumnLayoutWidth(column), 1).ToString(CultureInfo.InvariantCulture))
+                .Append('|');
+        }
+
+        return builder.ToString();
+    }
+
+    private void ApplyEmbeddedChapterRowColumnLayout(Grid rowGrid)
+    {
+        if (TracksGrid is null)
+            return;
+
+        var columns = TracksGrid.Columns
+            .OrderBy(column => column.DisplayIndex)
+            .ToList();
+        if (columns.Count == 0)
+            return;
+
+        rowGrid.MinWidth = Math.Max(0, TracksGrid.ActualWidth);
+        rowGrid.ColumnDefinitions.Clear();
+
+        var displayColumnByKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var index = 0; index < columns.Count; index++)
+        {
+            var column = columns[index];
+            var width = column.Visibility == Visibility.Visible
+                ? GetTrackGridColumnLayoutWidth(column)
+                : 0;
+
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(Math.Max(0, width))
+            });
+
+            displayColumnByKey[GetTrackGridColumnKey(column)] = index;
+        }
+
+        foreach (UIElement child in rowGrid.Children)
+        {
+            if (child is not FrameworkElement element)
+                continue;
+
+            if (TrackGridChildColumn.GetSpansAllColumns(element))
+            {
+                Grid.SetColumn(element, 0);
+                Grid.SetColumnSpan(element, columns.Count);
+                continue;
+            }
+
+            var key = TrackGridChildColumn.GetKey(element);
+            if (string.IsNullOrWhiteSpace(key) || !displayColumnByKey.TryGetValue(key, out var displayColumn))
+                continue;
+
+            Grid.SetColumn(element, displayColumn);
+            Grid.SetColumnSpan(element, 1);
+        }
     }
 
     private void BuildTrackGridRowContextMenu(ContextMenu menu)
     {
         menu.Items.Clear();
         menu.Items.Add(CreateTrackGridMenuItem(
-            "Ausgewählte Tracks ausschließen",
+            LocalizationText.Get("UiAusgewaehlteTracksAusschliessen"),
             (_, _) => RemoveSelectedTracks_Click(this, new RoutedEventArgs())));
         menu.Items.Add(CreateTrackGridMenuItem(
-            "Ausgewählte Tracks wiederherstellen",
+            LocalizationText.Get("UiAusgewaehlteTracksWiederherstellen"),
             (_, _) => RestoreSelectedTracks_Click(this, new RoutedEventArgs())));
+        menu.Items.Add(new Separator());
+        var restoreAuto = CreateTrackGridMenuItem(
+            LocalizationText.Get("MainWindow.Tracks.RestoreAutomaticOrder"),
+            (_, _) => RestoreAutomaticTrackOrder_Click(this, new RoutedEventArgs()));
+        restoreAuto.IsEnabled = CanEditTrackOrder && Tracks.Any(track => track.AutomaticOrderPosition.HasValue);
+        menu.Items.Add(restoreAuto);
     }
 
     private void BuildTrackGridColumnContextMenu(ContextMenu menu)
@@ -9417,10 +14998,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateTrackGridMenuItem(
-            CreateTrackGridCheckedMenuHeader("AutoFit verwenden", _settings.TrackGridAutoFitEnabled),
+            CreateTrackGridCheckedMenuHeader(LocalizationText.Get("MainWindow.Tracks.UseAutoFit"), _settings.TrackGridAutoFitEnabled),
             (_, _) => ToggleTrackGridAutoFit()));
         menu.Items.Add(CreateTrackGridMenuItem(
-            "Standardlayout wiederherstellen",
+            LocalizationText.Get("MainWindow.Tracks.RestoreDefaultLayout"),
             (_, _) => ResetTrackGridColumnLayout()));
     }
 
@@ -9438,7 +15019,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private static FrameworkElement CreateTrackGridColumnMenuHeader(DataGridColumn column)
     {
         return CreateTrackGridCheckedMenuHeader(
-            column.Header?.ToString() ?? GetTrackGridColumnKey(column),
+            GetTrackGridColumnKey(column) switch
+            {
+                "BitrateKbps" => LocalizationText.Get("UiOriginalBitrate"),
+                "SampleRateHz" => LocalizationText.Get("UiOriginalSampleRate"),
+                "Channels" => LocalizationText.Get("UiOriginalMonoStereo"),
+                _ => column.Header?.ToString() ?? GetTrackGridColumnKey(column)
+            },
             column.Visibility == Visibility.Visible);
     }
 
@@ -9450,7 +15037,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var check = new TextBlock
         {
-            Text = isChecked ? "✓" : "",
+            Text = isChecked ? UiSymbolResources.Checked : string.Empty,
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -9468,6 +15055,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return panel;
     }
 
+    private bool _showOriginalAudioColumns = true;
+
+    private void SetOriginalAudioColumnsVisible(bool showOriginal, bool force = false)
+    {
+        if (!force && !showOriginal && !_showOriginalAudioColumns) return;
+        _showOriginalAudioColumns = showOriginal;
+        if (TracksGrid is null) return;
+        var applyingLayout = _isApplyingTrackGridColumnLayout;
+        _isApplyingTrackGridColumnLayout = true;
+        try
+        {
+            TrackGridOriginalBitrateColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
+            TrackGridOriginalSampleRateColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
+            TrackGridOriginalChannelLayoutColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
+            TrackGridBitrateColumn.Visibility = showOriginal ? Visibility.Collapsed : Visibility.Visible;
+            TrackGridChannelLayoutColumn.Visibility = showOriginal ? Visibility.Collapsed : Visibility.Visible;
+        }
+        finally { _isApplyingTrackGridColumnLayout = applyingLayout; }
+        AutoFitTrackColumnsAfterRender();
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
+    }
+
     private void ToggleTrackGridColumnVisibility(DataGridColumn column)
     {
         column.Visibility = column.Visibility == Visibility.Visible
@@ -9475,6 +15084,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : Visibility.Visible;
 
         SaveTrackGridColumnLayout();
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
     }
 
     private void ToggleTrackGridAutoFit()
@@ -9503,6 +15113,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 column.Visibility = GetDefaultTrackGridColumnVisibility(column);
                 column.Width = GetDefaultTrackGridColumnWidth(column);
             }
+
+            ApplyDefaultTrackGridColumnOrder();
         }
         finally
         {
@@ -9511,6 +15123,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         SaveSettingsIfReady();
         AutoFitTrackColumnsAfterRender();
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
     }
 
     private void ApplyTrackGridColumnLayout()
@@ -9526,14 +15139,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (saved.Count == 0)
             return;
 
+        var shouldPersistMigratedStatusIndicator = !saved.ContainsKey("StatusIndicator");
+        var statusIndicatorDisplayIndex = ResolveMigratedStatusIndicatorDisplayIndex(saved);
         var ordered = TracksGrid.Columns
             .Select((column, originalIndex) => new
             {
                 Column = column,
                 OriginalIndex = originalIndex,
+                Key = GetTrackGridColumnKey(column),
                 Saved = saved.GetValueOrDefault(GetTrackGridColumnKey(column))
             })
-            .OrderBy(item => item.Saved?.DisplayIndex ?? int.MaxValue)
+            .OrderBy(item => ResolveSavedDisplayIndex(item.Key, item.Saved, statusIndicatorDisplayIndex))
             .ThenBy(item => item.OriginalIndex)
             .ToList();
 
@@ -9558,12 +15174,43 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     item.Column.Visibility = GetDefaultTrackGridColumnVisibility(item.Column);
                 }
+                if (GetTrackGridColumnKey(item.Column) is "BitrateKbps" or "SampleRateHz" or "Channels" or "DisplayPreparedBitrateKbps" or "DisplayPreparedChannelLayout")
+                    item.Column.Visibility = GetDefaultTrackGridColumnVisibility(item.Column);
             }
+
+            ApplyPinnedTrackGridColumnOrder();
         }
         finally
         {
             _isApplyingTrackGridColumnLayout = false;
         }
+
+        if (shouldPersistMigratedStatusIndicator)
+            SaveTrackGridColumnLayout();
+
+        RefreshEmbeddedChapterRowColumnLayouts(force: true);
+    }
+
+    private static double ResolveMigratedStatusIndicatorDisplayIndex(
+        IReadOnlyDictionary<string, TrackGridColumnLayoutItem> saved)
+    {
+        if (saved.TryGetValue("AutomaticOrderPosition", out var autoColumn))
+            return autoColumn.DisplayIndex + 0.5d;
+
+        return 1d;
+    }
+
+    private static double ResolveSavedDisplayIndex(
+        string key,
+        TrackGridColumnLayoutItem? saved,
+        double migratedStatusIndicatorDisplayIndex)
+    {
+        if (saved is not null)
+            return saved.DisplayIndex;
+
+        return string.Equals(key, "StatusIndicator", StringComparison.OrdinalIgnoreCase)
+            ? migratedStatusIndicatorDisplayIndex
+            : int.MaxValue;
     }
 
     private void SaveTrackGridColumnLayout()
@@ -9587,53 +15234,86 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static string GetTrackGridColumnKey(DataGridColumn column)
     {
-        return column.SortMemberPath
-               ?? column.Header?.ToString()
-               ?? "Column";
+        var explicitKey = TrackGridChildColumn.GetKey(column);
+        if (!string.IsNullOrWhiteSpace(explicitKey))
+            return explicitKey;
+
+        return !string.IsNullOrWhiteSpace(column.SortMemberPath)
+            ? column.SortMemberPath
+            : throw new InvalidOperationException("Track grid column has no stable key.");
+    }
+
+    private void ApplyPinnedTrackGridColumnOrder()
+    {
+        if (TracksGrid is null)
+            return;
+
+        var fileColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "FileName", StringComparison.Ordinal));
+        var startColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "Start", StringComparison.Ordinal));
+        var chapterColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "ChapterProposal", StringComparison.Ordinal));
+        if (fileColumn is null || startColumn is null || chapterColumn is null)
+            return;
+
+        var audioColumns = TracksGrid.Columns.OrderBy(column => column.DisplayIndex)
+            .Where(column => column != TrackGridOriginalBitrateColumn && column != TrackGridOriginalSampleRateColumn && column != TrackGridOriginalChannelLayoutColumn).ToList();
+        var bitrateIndex = audioColumns.IndexOf(TrackGridBitrateColumn);
+        audioColumns.Insert(bitrateIndex, TrackGridOriginalBitrateColumn);
+        audioColumns.Insert(bitrateIndex + 1, TrackGridOriginalSampleRateColumn);
+        audioColumns.Insert(bitrateIndex + 2, TrackGridOriginalChannelLayoutColumn);
+        for (var index = 0; index < audioColumns.Count; index++)
+            audioColumns[index].DisplayIndex = index;
+
+        startColumn.DisplayIndex = Math.Min(fileColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
+        chapterColumn.DisplayIndex = Math.Min(startColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
+    }
+
+    private void ApplyDefaultTrackGridColumnOrder()
+    {
+        if (TracksGrid is null)
+            return;
+
+        var autoColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "AutomaticOrderPosition", StringComparison.Ordinal));
+        var statusColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "StatusIndicator", StringComparison.Ordinal));
+        if (autoColumn is not null && statusColumn is not null)
+            statusColumn.DisplayIndex = Math.Min(autoColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
+
+        ApplyPinnedTrackGridColumnOrder();
     }
 
     private static double? GetTrackGridColumnWidth(DataGridColumn column)
     {
-        var width = column.ActualWidth > 0
-            ? column.ActualWidth
-            : column.Width.IsAbsolute
-                ? column.Width.Value
-                : 0;
+        var width = GetTrackGridColumnLayoutWidth(column);
 
         return width > 0
             ? Math.Round(width, 1)
             : null;
     }
 
-    private static Visibility GetDefaultTrackGridColumnVisibility(DataGridColumn column)
+    private static double GetTrackGridColumnLayoutWidth(DataGridColumn column)
     {
+        if (column.ActualWidth > 0)
+            return column.ActualWidth;
+
+        if (column.Width.IsAbsolute)
+            return column.Width.Value;
+
+        return 0;
+    }
+
+    private Visibility GetDefaultTrackGridColumnVisibility(DataGridColumn column)
+    {
+        var key = GetTrackGridColumnKey(column);
+        if (key is "BitrateKbps" or "SampleRateHz" or "Channels")
+            return _showOriginalAudioColumns ? Visibility.Visible : Visibility.Collapsed;
+        if (key is "DisplayPreparedBitrateKbps" or "DisplayPreparedChannelLayout")
+            return _showOriginalAudioColumns ? Visibility.Collapsed : Visibility.Visible;
         return string.Equals(GetTrackGridColumnKey(column), "Extension", StringComparison.Ordinal)
             ? Visibility.Collapsed
             : Visibility.Visible;
     }
 
-    private static DataGridLength GetDefaultTrackGridColumnWidth(DataGridColumn column)
-    {
-        return GetTrackGridColumnKey(column) switch
-        {
-            "#" => DataGridLength.Auto,
-            "DiscNumber" => new DataGridLength(55),
-            "TrackNumber" => new DataGridLength(60),
-            "FileName" => new DataGridLength(200),
-            "RelativeFolder" => new DataGridLength(100),
-            "TagTitle" => new DataGridLength(220),
-            "ChapterTitle" => new DataGridLength(160),
-            "Duration" => new DataGridLength(75),
-            "BitrateKbps" => new DataGridLength(70),
-            "ChannelLayout" => new DataGridLength(95),
-            "FileWarningText" => new DataGridLength(150),
-            "ChapterWarningText" => new DataGridLength(130),
-            "Extension" => new DataGridLength(60),
-            "Codec" => new DataGridLength(75),
-            "ConvertedSizeMb" => new DataGridLength(90),
-            _ => DataGridLength.Auto
-        };
-    }
+    private static DataGridLength GetDefaultTrackGridColumnWidth(DataGridColumn column) =>
+        DataGridLength.Auto;
 
     private static T? FindVisualAncestor<T>(DependencyObject? source)
         where T : DependencyObject
@@ -9644,7 +15324,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (current is T match)
                 return match;
 
-            current = VisualTreeHelper.GetParent(current);
+            current = current switch
+            {
+                Visual or Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement contentElement => contentElement.Parent,
+                _ => null
+            };
         }
 
         return null;
@@ -9669,12 +15354,44 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void TracksGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_isTrackGridAutoScrollActive && e.Key == Key.Escape)
+        {
+            StopTrackGridAutoScroll();
+            e.Handled = true;
+            return;
+        }
+
         HandleTracksGridDeleteKey(e);
+        if (HandleActiveVisibleTrackGridRowKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        HandleTracksGridChapterToggleKey(e);
     }
 
     private void TracksGrid_KeyDown(object sender, KeyEventArgs e)
     {
         HandleTracksGridDeleteKey(e);
+    }
+
+    private void HandleTracksGridChapterToggleKey(KeyEventArgs e)
+    {
+        if (e.Handled || (e.Key != Key.Enter && e.Key != Key.Space))
+            return;
+
+        if (e.OriginalSource is DependencyObject source &&
+            FindVisualAncestor<ButtonBase>(source) is not null)
+        {
+            return;
+        }
+
+        if (TracksGrid.SelectedItem is not TrackInfo track || !track.HasEmbeddedChapterDetails)
+            return;
+
+        track.IsChapterDetailsExpanded = !track.IsChapterDetailsExpanded;
+        e.Handled = true;
     }
 
     private void HandleTracksGridDeleteKey(KeyEventArgs e)
@@ -9698,7 +15415,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var visibleTracks = GetVisibleTracks();
         var selected = GetSelectedTracksInVisibleOrder(visibleTracks);
-        var result = _trackListActionService.ToggleSelectedForDelete(selected);
+        var result = _services.Tracks.TrackListActionService.ToggleSelectedForDelete(selected);
         if (result.ChangedCount == 0)
             return false;
 
@@ -9707,11 +15424,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         UpdateFinalStatus(Tracks.Count(track => !track.IsExcluded));
         ExportProgressText = BuildIdleExportProgressText();
         StatusText = result.Action == TrackExclusionToggleAction.Restored
-            ? result.ChangedCount == 1 ? "1 Track wurde wiederhergestellt." : $"{result.ChangedCount} Tracks wurden wiederhergestellt."
-            : result.ChangedCount == 1 ? "1 Track wurde ausgeschlossen." : $"{result.ChangedCount} Tracks wurden ausgeschlossen.";
+            ? LocalizationText.Format(result.ChangedCount == 1 ? "MainWindow.Tracks.Restored.One" : "MainWindow.Tracks.Restored.Many", result.ChangedCount)
+            : LocalizationText.Format(result.ChangedCount == 1 ? "MainWindow.Tracks.Excluded.One" : "MainWindow.Tracks.Excluded.Many", result.ChangedCount);
         OnPropertyChanged(nameof(CanStartExport));
         OnExportPreviewChanged();
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
         RestoreSelection(selected);
         return true;
     }
@@ -9726,7 +15443,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (selected.Count == 0)
             return false;
 
-        var changed = _trackListActionService.ExcludeSelected(selected);
+        var changed = _services.Tracks.TrackListActionService.ExcludeSelected(selected);
         if (changed == 0)
             return false;
 
@@ -9734,10 +15451,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         PersistTrackListState();
         UpdateFinalStatus(Tracks.Count(track => !track.IsExcluded));
         ExportProgressText = BuildIdleExportProgressText();
-        StatusText = changed == 1 ? "1 Track wurde ausgeschlossen." : $"{changed} Tracks wurden ausgeschlossen.";
+        StatusText = LocalizationText.Format(changed == 1 ? "MainWindow.Tracks.Excluded.One" : "MainWindow.Tracks.Excluded.Many", changed);
         OnPropertyChanged(nameof(CanStartExport));
         OnExportPreviewChanged();
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
         return true;
     }
 
@@ -9748,7 +15465,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var visibleTracks = GetVisibleTracks();
         var selected = GetSelectedTracksInVisibleOrder(visibleTracks);
-        var changed = _trackListActionService.RestoreSelected(selected);
+        var changed = _services.Tracks.TrackListActionService.RestoreSelected(selected);
         if (changed == 0)
             return;
 
@@ -9756,10 +15473,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         PersistTrackListState();
         UpdateFinalStatus(Tracks.Count(track => !track.IsExcluded));
         ExportProgressText = BuildIdleExportProgressText();
-        StatusText = changed == 1 ? "1 Track wurde wiederhergestellt." : $"{changed} Tracks wurden wiederhergestellt.";
+        StatusText = LocalizationText.Format(changed == 1 ? "MainWindow.Tracks.Restored.One" : "MainWindow.Tracks.Restored.Many", changed);
         OnPropertyChanged(nameof(CanStartExport));
         OnExportPreviewChanged();
-        TracksGrid.Items.Refresh();
+        RefreshTrackPresentationViews();
     }
 
     private void MoveSelectedUp_Click(object sender, RoutedEventArgs e)
@@ -9775,10 +15492,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ClearGridSorting();
 
-        var newOrder = _trackListActionService.MoveSelectedUp(visibleTracks, selected);
+        var newOrder = _services.Tracks.TrackListActionService.MoveSelectedUp(visibleTracks, selected);
 
         ReplaceTrackList(newOrder);
         RestoreSelection(selected);
+    }
+
+    private void RestoreAutomaticTrackOrder_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanEditTrackOrder || Tracks.All(track => !track.AutomaticOrderPosition.HasValue))
+            return;
+
+        ClearGridSorting();
+        var selected = TracksGrid
+            .SelectedItems
+            .OfType<TrackInfo>()
+            .ToList();
+        var restored = _services.Tracks.TrackListActionService.RestoreAutomaticOrder(Tracks);
+
+        ReplaceTrackList(restored);
+        RestoreSelection(selected);
+        StatusText = LocalizationText.Get("MainWindow.Tracks.AutoOrderRestored");
     }
 
     private void MoveSelectedDown_Click(object sender, RoutedEventArgs e)
@@ -9794,7 +15528,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ClearGridSorting();
 
-        var newOrder = _trackListActionService.MoveSelectedDown(visibleTracks, selected);
+        var newOrder = _services.Tracks.TrackListActionService.MoveSelectedDown(visibleTracks, selected);
 
         ReplaceTrackList(newOrder);
         RestoreSelection(selected);
@@ -9813,7 +15547,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ClearGridSorting();
 
-        var newOrder = _trackListActionService.MoveSelectedToTop(visibleTracks, selected);
+        var newOrder = _services.Tracks.TrackListActionService.MoveSelectedToTop(visibleTracks, selected);
 
         ReplaceTrackList(newOrder);
         RestoreSelection(selected);
@@ -9832,7 +15566,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ClearGridSorting();
 
-        var newOrder = _trackListActionService.MoveSelectedToBottom(visibleTracks, selected);
+        var newOrder = _services.Tracks.TrackListActionService.MoveSelectedToBottom(visibleTracks, selected);
 
         ReplaceTrackList(newOrder);
         RestoreSelection(selected);
@@ -9861,10 +15595,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ReplaceTrackList(List<TrackInfo> newOrder)
     {
-        Tracks.Clear();
-
-        foreach (var track in newOrder)
-            Tracks.Add(track);
+        Tracks.ReplaceAll(newOrder);
 
         UpdateIndexes();
         PersistTrackListState();
@@ -9873,19 +15604,40 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void PersistTrackListState()
     {
+        if (_isWorkspaceTransitioning)
+            return;
+        if (_isDiscStopSaveInProgress ||
+            new DiscProjectStopSaveService().HasPendingCommit(_currentProjectWorkFolder))
+            return;
+
         var folder = !string.IsNullOrWhiteSpace(_currentProjectWorkFolder)
             ? _currentProjectWorkFolder
             : string.Empty;
         if (!string.IsNullOrWhiteSpace(folder))
-            _trackListStateService.Save(folder, Tracks.ToList());
+        {
+            StopAutomaticMaintenance();
+            _services.Foundation.TrackListStateService.Save(folder, Tracks.ToList());
+        }
     }
 
     private void ApplyPersistedTrackListState(string projectFolder)
     {
-        var ordered = _trackListStateService.Apply(projectFolder, Tracks);
-        Tracks.Clear();
-        foreach (var track in ordered)
-            Tracks.Add(track);
+        var projectOrderType = _loadedProjectState.IsAudioDisc
+            ? TrackOrderProjectType.AudioDisc
+            : _loadedProjectState.IsMp3Disc
+                ? TrackOrderProjectType.Mp3Disc
+                : TrackOrderProjectType.LocalFolder;
+        var confirmedContexts = _loadedProjectState.IsAudioDisc
+            ? TrackOrderConfirmedContextFactory.CreateAudioDiscContexts(Tracks)
+            : _loadedProjectState.IsMp3Disc
+                ? TrackOrderConfirmedContextFactory.CreateMp3DiscContexts(Tracks)
+                : null;
+        var ordered = _services.Foundation.TrackListStateService.Apply(
+            projectFolder,
+            Tracks,
+            projectOrderType,
+            confirmedContexts);
+        Tracks.ReplaceAll(ordered);
     }
 
     private void RestoreSelection(List<TrackInfo> selected)
@@ -9913,11 +15665,199 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UpdateIndexes()
     {
-        _trackListActionService.Renumber(Tracks, _settings.UseLeadingZerosInChapterSuggestions);
-        _trackListWarningService.Apply(Tracks);
+        if (_isWorkspaceTransitioning)
+            return;
 
-        TracksGrid?.Items.Refresh();
+        var effectiveActiveChapterCount = EstimateEffectiveActiveChapterCountForCurrentProject();
+        _currentActiveChapterResult = _services.Foundation.ChapterModeEngineService.Apply(
+            CreateCurrentChapterAutoEngineRequest(effectiveActiveChapterCount));
+        _currentAutoChapterResult = _currentActiveChapterResult.EngineResult;
+        _services.Tracks.TrackListWarningService.Apply(Tracks);
+        RefreshChapterTimelinePresentation();
+
+        RefreshTrackPresentationViews();
         OnExportPreviewChanged();
+    }
+
+    private void RefreshChapterTimelinePresentation()
+    {
+        _services.Foundation.ChapterTimelinePresentationService.ApplyResolvedTimeline(
+            Tracks,
+            _currentActiveChapterResult?.RenderedTimeline ?? []);
+    }
+
+    private ChapterAutoEngineRequest CreateCurrentChapterAutoEngineRequest(
+        int? effectiveActiveChapterCount)
+    {
+        var projectType = ResolveCurrentChapterProjectType();
+        var projectIdentity = ResolveCurrentChapterProjectIdentity(projectType);
+
+        return new ChapterAutoEngineRequest(
+            Tracks,
+            projectType,
+            projectIdentity,
+            _currentProjectWorkFolder,
+            ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata),
+            _settings.ChapterSettings,
+            LegacyUseLeadingZeros: false,
+            effectiveActiveChapterCount,
+            _activeMp3DiscManifest,
+            _activeAudioDiscManifest,
+            AllowTransientLocalFilenameEvidence:
+                string.Equals(projectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(_currentProjectWorkFolder),
+            PendingMp3Discs: BuildCurrentMp3DiscChapterSources(),
+            PendingAudioDiscIdentity: _activeAudioDiscManifest is null
+                ? _pendingAudioDisc?.DiscIdentity
+                : null,
+            PendingAudioDisc: _resumeDiscPreview.AudioDisc);
+    }
+
+    private string ResolveCurrentChapterProjectType()
+    {
+        if (_activeAudioDiscManifest is not null || _pendingAudioDisc is not null || LoadedProjectState.IsAudioDisc)
+            return ProjectManifestTypes.AudioCdProject;
+
+        if (_activeMp3DiscManifest is not null || _transientMp3DiscChapterPreview is not null || LoadedProjectState.IsMp3Disc)
+            return ProjectManifestTypes.Mp3DiscProject;
+
+        return ProjectManifestTypes.FolderProject;
+    }
+
+    private string ResolveCurrentChapterProjectIdentity(string projectType)
+    {
+        if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            return _currentProjectWorkFolder;
+
+        if (string.Equals(projectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) &&
+            _transientMp3DiscChapterPreview is not null)
+        {
+            return "mp3-preview:" + _transientMp3DiscChapterPreview.Signature;
+        }
+
+        if (string.Equals(projectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase) &&
+            _pendingAudioDisc is not null)
+        {
+            return "audio-preview:" + _pendingAudioDisc.DiscIdentity;
+        }
+
+        return !string.IsNullOrWhiteSpace(_currentFolderPath)
+            ? _currentFolderPath
+            : "current-project";
+    }
+
+    private IReadOnlyCollection<Mp3DiscPendingChapterDisc> BuildCurrentMp3DiscChapterSources()
+    {
+        var current = _mp3DiscChapterSourceCatalog.Snapshot().ToList();
+        if (_transientMp3DiscChapterPreview is null)
+            return current;
+
+        if (!current.Any(item =>
+                item.DiscNumber == _transientMp3DiscChapterPreview.DiscNumber ||
+                string.Equals(
+                    item.Signature,
+                    _transientMp3DiscChapterPreview.Signature,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            current.Add(_transientMp3DiscChapterPreview);
+        }
+
+        return current
+            .OrderBy(item => item.DiscNumber)
+            .ToArray();
+    }
+
+    private void QueueChapterMetadataRefreshIfNeeded()
+    {
+        if (_isWorkspaceTransitioning || _isLoadingSettings || Tracks.Count == 0 || !ChapterSettingsUseProjectMetadata())
+            return;
+
+        _chapterMetadataRefreshTimer.Stop();
+        _chapterMetadataRefreshTimer.Start();
+    }
+
+    private void ChapterMetadataRefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        FlushPendingChapterMetadataRefresh();
+    }
+
+    private void FlushPendingChapterMetadataRefresh()
+    {
+        if (!_chapterMetadataRefreshTimer.IsEnabled)
+            return;
+
+        _chapterMetadataRefreshTimer.Stop();
+        UpdateIndexes();
+        PersistTrackListState();
+    }
+
+    private bool ChapterSettingsUseProjectMetadata()
+    {
+        var settings = ChapterSettingsService.Normalize(
+            _settings.ChapterSettings,
+            legacyUseLeadingZeros: false);
+
+        if (!string.Equals(settings.Mode, ChapterSettingsService.ModeCustom, StringComparison.Ordinal))
+            return true;
+
+        return IsProjectMetadataSlot(settings.Slot1) ||
+               IsProjectMetadataSlot(settings.Slot2) ||
+               IsProjectMetadataSlot(settings.Slot3);
+    }
+
+    private static bool IsProjectMetadataSlot(string? slot)
+    {
+        var normalized = ChapterSettingsService.NormalizeSlot(slot);
+        return string.Equals(normalized, "BookTitle", StringComparison.Ordinal) ||
+               string.Equals(normalized, "Album", StringComparison.Ordinal);
+    }
+
+    private int? EstimateEffectiveActiveChapterCountForCurrentProject()
+    {
+        if (_activeAudioDiscManifest?.TotalDiscs is > 1)
+            return ChapterEffectiveCountService.EstimateEffectiveActiveChapterCount(
+                Tracks,
+                _activeAudioDiscManifest.TotalDiscs);
+
+        if (_activeMp3DiscManifest?.TotalDiscs is > 1)
+            return ChapterEffectiveCountService.EstimateEffectiveActiveChapterCount(
+                Tracks,
+                _activeMp3DiscManifest.TotalDiscs);
+
+        if (_previewEffectiveTotalDiscs is > 1)
+            return ChapterEffectiveCountService.EstimateEffectiveActiveChapterCount(
+                Tracks,
+                _previewEffectiveTotalDiscs.Value);
+
+        return null;
+    }
+
+    private static ChapterSettings CloneChapterSettings(ChapterSettings? settings)
+    {
+        settings = ChapterSettingsService.Normalize(settings, legacyUseLeadingZeros: true);
+        return new ChapterSettings
+        {
+            Mode = settings.Mode,
+            NumberingStyle = settings.NumberingStyle,
+            Slot1 = settings.Slot1,
+            Separator1 = settings.Separator1,
+            Slot2 = settings.Slot2,
+            Separator2 = settings.Separator2,
+            Slot3 = settings.Slot3
+        };
+    }
+
+    private static bool ChapterSettingsEqual(ChapterSettings? left, ChapterSettings? right)
+    {
+        var a = CloneChapterSettings(left);
+        var b = CloneChapterSettings(right);
+        return string.Equals(a.Mode, b.Mode, StringComparison.Ordinal)
+               && string.Equals(a.NumberingStyle, b.NumberingStyle, StringComparison.Ordinal)
+               && string.Equals(a.Slot1, b.Slot1, StringComparison.Ordinal)
+               && string.Equals(a.Separator1, b.Separator1, StringComparison.Ordinal)
+               && string.Equals(a.Slot2, b.Slot2, StringComparison.Ordinal)
+               && string.Equals(a.Separator2, b.Separator2, StringComparison.Ordinal)
+               && string.Equals(a.Slot3, b.Slot3, StringComparison.Ordinal);
     }
 
     private void AutoFitTrackColumnsAfterRender()
@@ -9935,12 +15875,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             TracksGrid.UpdateLayout();
 
             foreach (var column in TracksGrid.Columns)
-            {
-                if (IsFixedTrackColumnWidth(column))
-                    continue;
-
                 column.Width = DataGridLength.Auto;
-            }
 
             TracksGrid.UpdateLayout();
 
@@ -9948,76 +15883,41 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 var header = column.Header?.ToString() ?? "";
 
-                if (IsFixedTrackColumnWidth(column))
-                    continue;
-
-                var width = Math.Max(column.ActualWidth + 12, EstimateTrackColumnWidth(header, allTracks));
-
-                width = header switch
-                {
-                    "#" => Math.Max(width, 45),
-                    "Disc" => Math.Max(width, 55),
-                    "Track" => Math.Max(width, 60),
-                    "Datei" => Math.Clamp(width, 160, 420),
-                    "Ordner" => Math.Clamp(width, 70, 360),
-                    "Tag-Titel" => Math.Clamp(width, 120, 520),
-                    "Kapitelvorschlag" => Math.Clamp(width, 120, 480),
-                    "Dauer" => Math.Max(width, 75),
-                    "Bitrate" => Math.Max(width, 70),
-                    "Kanäle" => Math.Max(width, 65),
-                    "Mono/Stereo" => Math.Max(width, 95),
-                    "Warnung" => Math.Clamp(width, 75, 420),
-                    "Dateiwarnung" => Math.Clamp(width, 175, 420),
-                    "Kapitelwarnung" => Math.Clamp(width, 145, 360),
-                    "Typ" => Math.Max(width, 60),
-                    "Codec" => Math.Max(width, 75),
-                    "Aktion" => Math.Max(width, 110),
-                    "Quellgröße MB" => Math.Max(width, 105),
-                    "AAC-Größe MB" => Math.Max(width, 105),
-                    "Output MB" => Math.Max(width, 90),
-                    _ => width
-                };
-
+                var width = Math.Max(column.ActualWidth + 12, EstimateTrackColumnWidth(GetTrackGridColumnKey(column), header, allTracks));
                 column.Width = new DataGridLength(width);
             }
         });
     }
 
-    private static bool IsFixedTrackColumnWidth(DataGridColumn column)
-    {
-        var header = column.Header?.ToString() ?? string.Empty;
-        return string.Equals(header, "Dateiwarnung", StringComparison.Ordinal) ||
-               string.Equals(header, "Kapitelwarnung", StringComparison.Ordinal);
-    }
 
-    private static double EstimateTrackColumnWidth(string header, IReadOnlyList<TrackInfo> tracks)
+    private static double EstimateTrackColumnWidth(string key, string header, IReadOnlyList<TrackInfo> tracks)
     {
         var maxTextLength = EstimateTextWidth(header) + 28;
 
         foreach (var track in tracks)
         {
-            var text = header switch
+            var text = key switch
             {
-                "#" => track.Index.ToString(CultureInfo.InvariantCulture),
-                "Disc" => track.DiscNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
-                "Track" => track.TrackNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
-                "Datei" => track.FileName,
-                "Ordner" => track.RelativeFolder,
-                "Tag-Titel" => track.TagTitle,
-                "Kapitelvorschlag" => track.ChapterTitle,
-                "Dauer" => track.Duration,
-                "Bitrate" => track.BitrateKbps?.ToString(CultureInfo.InvariantCulture) ?? "",
-                "Kanäle" => track.ChannelLayout,
-                "Mono/Stereo" => track.ChannelLayout,
-                "Warnung" => track.Warning,
-                "Dateiwarnung" => track.DisplayFileWarning,
-                "Kapitelwarnung" => track.DisplayChapterWarning,
-                "Typ" => track.Extension,
-                "Codec" => track.Codec,
-                "Aktion" => track.ProcessingAction,
-                "Quellgröße MB" => track.SizeMb > 0 ? track.SizeMb.ToString("0.00", CultureInfo.InvariantCulture) : "",
-                "AAC-Größe MB" => track.DisplayOutputSizeMb,
-                "Output MB" => track.DisplayOutputSizeMb,
+                "DiscNumber" => track.DiscNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
+                "TrackNumber" => track.TrackNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
+                "FileName" => track.FileName,
+                "Start" => track.DisplayChapterStart,
+                "DisplayFolder" => track.DisplayFolder,
+                "TagTitle" => track.TagTitle,
+                "ChapterProposal" => track.DisplayChapterProposal,
+                "Duration" => track.Duration,
+                "BitrateKbps" => track.BitrateKbps?.ToString(CultureInfo.InvariantCulture) ?? "",
+                "SampleRateHz" => track.DisplayOriginalSampleRateHz,
+                "Channels" => track.DisplayOriginalChannelLayout,
+                "DisplayPreparedChannelLayout" => track.DisplayPreparedChannelLayout,
+                "DisplayPreparedBitrateKbps" => track.DisplayPreparedBitrateKbps?.ToString(CultureInfo.InvariantCulture) ?? "",
+                "ChannelLayout" => track.ChannelLayout,
+                "FileWarningText" => track.DisplayFileWarning,
+                "ChapterWarningText" => track.DisplayChapterWarning,
+                "Extension" => track.Extension,
+                "Codec" => track.DisplayCodec,
+                "ProcessingAction" => track.DisplayProcessingAction,
+                "SizeMb" => track.SizeMb > 0 ? track.SizeMb.ToString("0.00", CultureInfo.InvariantCulture) : "",
                 _ => ""
             };
 
@@ -10048,32 +15948,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         return width;
-    }
-
-    private static void SetTrackDuration(TrackInfo track, TimeSpan? duration)
-    {
-        if (duration is null)
-            return;
-
-        var property = typeof(TrackInfo).GetProperty("Duration");
-
-        if (property is null || !property.CanWrite)
-            return;
-
-        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-
-        if (targetType == typeof(string))
-        {
-            property.SetValue(track, FormatDuration(duration.Value));
-            track.DurationTicks = duration.Value.Ticks;
-            return;
-        }
-
-        if (targetType == typeof(TimeSpan))
-        {
-            property.SetValue(track, duration.Value);
-            track.DurationTicks = duration.Value.Ticks;
-        }
     }
 
     private static void SetTrackValue(TrackInfo track, string propertyName, object? value)
@@ -10144,17 +16018,161 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(TrackWarningSummaryVisibility));
     }
 
+    private void InitializeEmptyProjectSweepState()
+    {
+        try
+        {
+            var service = new ProjectFormatSweepService(Path.Combine(SettingsService.GetSettingsFolder(GetWorkingRootFolder()),
+                ProjectFormatSweepService.StateFileName), ProjectIndexService.DiscoverProjectFolders);
+            // Automatic update prompts are disabled for release. Only a proven
+            // empty inventory receives an initial baseline; manual checks remain.
+            service.TryInitializeEmptyRoot(GetWorkingRootFolder());
+        }
+        catch (Exception ex) { _runtimeServices.DiagnosticLogService.WriteError("PROJECT SWEEP INITIALIZATION", ex); }
+    }
+    private async void RunProjectIntegritySweep(Window owner,bool fullHashes)=>await RunProjectIntegrityOperation(owner,fullHashes,null);
+    private async Task<ProjectOperationOutcome> RunProjectRebuild(Window owner,string projectFolder,bool fullHashes)
+    {
+        var result=AppDialogService.Show(owner,LocalizationText.Get("Integrity.Rebuild"),LocalizationText.Get("Integrity.Rebuild"),
+            LocalizationText.Get("Integrity.RebuildConfirm"),AppDialogKind.Warning,buttons:[
+                new AppDialogButton(LocalizationText.Get("Integrity.Rebuild"),AppDialogResult.Yes,IsPrimary:true),
+                new AppDialogButton(LocalizationText.Get("Common.Cancel"),AppDialogResult.Cancel)]);
+        if(result!=AppDialogResult.Yes)return ProjectOperationOutcome.Canceled;
+        return await RunProjectIntegrityOperation(owner,fullHashes,projectFolder);
+    }
+    private async Task<ProjectOperationOutcome> RunProjectIntegrityOperation(Window owner, bool fullHashes,string? rebuildProject)
+    {
+        if (_integritySweepRunning || IsBusy || IsExporting || IsDiscImporting || _isWorkspaceTransitioning ||
+            _isResumeLoading || _isDiscStopSaveInProgress || _isProjectCloseInProgress || _trackAnalysisCancellation is not null ||
+            ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or ProjectPipelineState.Merging)
+        {
+            AppDialogService.Show(owner, LocalizationText.Get("Integrity.Title"), LocalizationText.Get("Integrity.Title"),
+                LocalizationText.Get("Integrity.Busy"), AppDialogKind.Warning); return ProjectOperationOutcome.Failed;
+        }
+        if (!File.Exists(_ffmpegStatus.FfprobePath))
+        { ConfigureFfmpeg_Click(this, new RoutedEventArgs()); return ProjectOperationOutcome.Canceled; }
+        if (!TryCheckpointEditableProject()) return ProjectOperationOutcome.Canceled;
+        _integritySweepRunning = true;
+        try
+        {
+            CheckAutomaticMaintenance();
+            var dialog = new ProjectIntegrityDialog(GetWorkingRootFolder(), _services.Media.AudioProbeBatchService,
+                new(_ffmpegStatus.FfprobePath!, ParallelJobsInput, fullHashes), _runtimeServices.DiagnosticLogService,
+                () => _maintenanceCoordinator?.StopAsync() ?? Task.CompletedTask,rebuildProject) { Owner = owner };
+            ModalDialogService.ShowDialog(dialog, owner);
+            if(dialog.Outcome!=ProjectOperationOutcome.Completed)return dialog.Outcome;
+            // Reload from checked documents rather than retaining a stale canonical editing session.
+            var checkedFolder = _currentProjectWorkFolder;
+            if (!string.IsNullOrWhiteSpace(checkedFolder))
+            {
+                owner.IsEnabled = false;
+                try
+                {
+                    var healthPath = new[] { ProjectFolderLayout.GetFolderManifestPath(checkedFolder), ProjectFolderLayout.GetMp3DiscManifestPath(checkedFolder),
+                        ProjectFolderLayout.GetAudioDiscManifestPath(checkedFolder) }.FirstOrDefault(File.Exists);
+                    var health = healthPath is null ? "Damaged" : ProjectIntegrityValidator.Text(ProjectIntegrityValidator.Read(healthPath)["Health"], "LastIntegrityStatus");
+                    if (health == "Damaged") ClearCurrentProjectWorkspace();
+                    else
+                    {
+                        var plan = await Task.Run(() => _services.Foundation.ProjectResumePlanService.BuildFromProjectFolder(checkedFolder));
+                        if (plan is not null) await LoadResumeProjectIntoWorkspaceAsync(plan);
+                        else ClearCurrentProjectWorkspace();
+                    }
+                }
+                catch { ClearCurrentProjectWorkspace(); throw; }
+                finally { owner.IsEnabled = true; }
+            }
+            _services.Foundation.ProjectIndexService.Catalog.MarkDirty();
+            RefreshResumeProjects(showStatus: false);
+            return ProjectOperationOutcome.Completed;
+        }
+        catch (Exception ex) { _runtimeServices.DiagnosticLogService.WriteError("PROJECT INTEGRITY", ex); return ProjectOperationOutcome.Failed; }
+        finally { _integritySweepRunning = false; CheckAutomaticMaintenance(); }
+    }
+
+    private void CheckAutomaticMaintenance()
+    {
+        if (_maintenanceCoordinator is null) return;
+        var safeSpace = MaintenanceSafeSpace.None;
+        if (_openSettingsContexts > 0) safeSpace |= MaintenanceSafeSpace.GlobalSettings;
+        if (_openMetadataContexts > 0) safeSpace |= MaintenanceSafeSpace.Metadata;
+        if (ProjectReviewState.Phase == ProjectPipelineState.Completed) safeSpace |= MaintenanceSafeSpace.Complete;
+        var eligibility = new MaintenanceEligibility(safeSpace,
+            ActiveWork: IsBusy || IsExporting || IsDiscImporting || _trackAnalysisCancellation is not null ||
+                ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or ProjectPipelineState.Merging,
+            WorkspaceTransition: _isWorkspaceTransitioning,
+            ProjectOperation: _integritySweepRunning || !_mainWindowReady || _isResumeLoading || _isProjectBrowserOpen || _isDiscStopSaveInProgress ||
+                _isProjectCloseInProgress || _isShutdownInProgress || _windowCloseCleanupCompleted);
+        _maintenanceCoordinator.SetEligibility(eligibility);
+        if (eligibility.CanRun && _maintenanceCoordinator.IsDue(_settings.LastAutomaticMaintenanceUtc, DateTime.UtcNow))
+            _ = RunAutomaticMaintenanceAsync();
+    }
+
+    private async Task RunAutomaticMaintenanceAsync()
+    {
+        try
+        {
+            var folders = WorkFolderStructure.FromRoot(_services.Foundation.SettingsService.ProjectRootFolder);
+            var request = new ProjectMaintenanceRequest(folders.ProjectRootFolder, folders.CoversFolder,
+                ProjectIndexService.NormalizeRetentionDays(_settings.ProjectRetentionDays), _settings.ProjectRetentionMode, DateTime.UtcNow);
+            var completed = await _maintenanceCoordinator!.TryStartAsync(request, _settings.LastAutomaticMaintenanceUtc, timestamp =>
+            {
+                var previous = _settings.LastAutomaticMaintenanceUtc;
+                _settings.LastAutomaticMaintenanceUtc = timestamp;
+                if (_services.Foundation.GlobalSettingsManager.SaveImmediate()) return true;
+                _settings.LastAutomaticMaintenanceUtc = previous;
+                return false;
+            });
+            if (!_windowCloseCleanupCompleted && completed)
+            {
+                ProjectCoverThumbnailCache.Shared.InvalidateDeletedFiles();
+                RefreshResumeProjects(showStatus: false);
+            }
+        }
+        catch (Exception error)
+        {
+            if (!_windowCloseCleanupCompleted)
+                _runtimeServices.DiagnosticLogService.WriteError("Automatic maintenance failed", error);
+        }
+    }
+
+    private bool _wasPreparationProcessing;
+
     private void NotifyExportUiStateChanged()
     {
+        // Producer-finally paths also cover fast normal completion and cancellation failures.
+        if (!IsBusy && !IsExporting && !IsDiscImporting &&
+            _exportCancellation is null && _discImportCancellation is null && _trackAnalysisCancellation is null &&
+            !_isDiscStopSaveInProgress && !_isProjectCloseInProgress && !_isShutdownInProgress)
+        {
+            _presentationState.ClearUiTransition();
+        }
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StopAndSaveDiscProjectButtonText));
+        OnPropertyChanged(nameof(DeleteNewProjectButtonText));
+        OnPropertyChanged(nameof(DeleteNewProjectVisibility));
+        CheckAutomaticMaintenance();
+        var processing = ExportUiStateService.IsPreparationProcessing(ProjectReviewState.Phase,
+            IsExporting, IsDiscImporting, _presentationState.IsPipelinePaused, _presentationState.IsPipelineFailed);
+        if (!_wasPreparationProcessing && processing && _isMetadataPanelExpanded)
+            SetMetadataPanelExpanded(false, animate: true);
+        _wasPreparationProcessing = processing;
         OnPropertyChanged(nameof(CanSelectFolder));
         OnPropertyChanged(nameof(CanStartNewProject));
+        OnPropertyChanged(nameof(FolderDiscActionVisualState));
+        OnPropertyChanged(nameof(ProjectsActionVisualState));
+        OnPropertyChanged(nameof(MetadataActionVisualState));
         OnPropertyChanged(nameof(CanConfigureFfmpeg));
         OnPropertyChanged(nameof(CanEditTrackOrder));
         OnPropertyChanged(nameof(CanStartExport));
         OnPropertyChanged(nameof(ExportButtonText));
+        OnPropertyChanged(nameof(ExportButtonVisibility));
         OnPropertyChanged(nameof(SecondaryButtonText));
         OnPropertyChanged(nameof(SecondaryButtonVisibility));
         OnPropertyChanged(nameof(CanCancelExport));
+        OnPropertyChanged(nameof(CanDeletePausedNewProject));
+        OnPropertyChanged(nameof(CanStopAndSaveDiscProject));
+        OnPropertyChanged(nameof(StopAndSaveDiscProjectVisibility));
         OnPropertyChanged(nameof(CanAddProjectSources));
         OnPropertyChanged(nameof(AddProjectSourcesVisibility));
         OnPropertyChanged(nameof(AddProjectSourcesButtonText));
@@ -10162,18 +16180,53 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(CanChangeExportOptions));
         OnPropertyChanged(nameof(CanChangeExportPreset));
         OnPropertyChanged(nameof(CanOpenSettings));
+        OnPropertyChanged(nameof(DriveCircleVisibility));
+        OnPropertyChanged(nameof(DriveCircleEnabled));
         OnPropertyChanged(nameof(CanChangeBookMetadata));
+        OnPropertyChanged(nameof(CanRemoveCover));
         OnPropertyChanged(nameof(CoverHintVisibility));
         OnPropertyChanged(nameof(CanRefreshResumeProjects));
         OnPropertyChanged(nameof(CanInspectSelectedResumeProject));
         OnPropertyChanged(nameof(ExportProgressVisibility));
-
-        if (_isWaitingForManualMergeReview && !_isMetadataPanelExpanded)
-            SetMetadataPanelExpanded(true, animate: true);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+public static class TrackGridChildColumn
+{
+    public static readonly DependencyProperty KeyProperty = DependencyProperty.RegisterAttached(
+        "Key",
+        typeof(string),
+        typeof(TrackGridChildColumn),
+        new FrameworkPropertyMetadata(string.Empty));
+
+    public static readonly DependencyProperty SpansAllColumnsProperty = DependencyProperty.RegisterAttached(
+        "SpansAllColumns",
+        typeof(bool),
+        typeof(TrackGridChildColumn),
+        new FrameworkPropertyMetadata(false));
+
+    public static string GetKey(DependencyObject element)
+    {
+        return (string)element.GetValue(KeyProperty);
+    }
+
+    public static void SetKey(DependencyObject element, string value)
+    {
+        element.SetValue(KeyProperty, value);
+    }
+
+    public static bool GetSpansAllColumns(DependencyObject element)
+    {
+        return (bool)element.GetValue(SpansAllColumnsProperty);
+    }
+
+    public static void SetSpansAllColumns(DependencyObject element, bool value)
+    {
+        element.SetValue(SpansAllColumnsProperty, value);
     }
 }

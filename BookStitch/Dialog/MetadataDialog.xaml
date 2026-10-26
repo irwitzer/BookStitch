@@ -1,0 +1,1948 @@
+<Window x:Class="BookStitch.Dialog.MetadataDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:dialog="clr-namespace:BookStitch.Dialog"
+        xmlns:services="clr-namespace:BookStitch.Services"
+        xmlns:presentation="clr-namespace:BookStitch.Presentation"
+        xmlns:controls="clr-namespace:BookStitch.Controls"
+        Title="{services:LocalizedText Key=UiMetadaten}"
+        Width="960"
+        Height="720"
+        MinWidth="920"
+        MinHeight="590"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        PreviewKeyDown="MetadataDialog_PreviewKeyDown"
+        FontFamily="Segoe UI"
+        Style="{StaticResource LargeResizableWindowStyle}">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/BookStitch;component/Themes/ConceptDialogStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+        <Style x:Key="ConceptImmediateEnumCandidateStyle" TargetType="ComboBoxItem" BasedOn="{StaticResource ConceptCandidateComboBoxItemStyle}">
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="ConceptEnumCandidateComboBox_PreviewMouseLeftButtonUp"/>
+        </Style>
+        <BooleanToVisibilityConverter x:Key="ConceptBooleanToVisibilityConverter"/>
+
+        <Style x:Key="ConceptHelpBodyTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="ConceptHelpItemTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="ConceptHelpSectionHeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="ConceptHelpSectionHeaderStyle" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Margin" Value="0,8,0,10"/>
+        </Style>
+
+
+
+
+        <DataTemplate x:Key="ConceptMetadataFamilyCoverTemplate">
+            <Border Width="170"
+                    Height="170"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Cursor="Hand"
+                    Style="{StaticResource CoverDisplayBorderStyle}"
+                    MouseLeftButtonUp="ConceptQuickAccessCoverPreview_MouseLeftButtonUp"
+                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.CoverNavigate}">
+                <Image Source="{Binding}"
+                       Style="{StaticResource CoverDisplayImageStyle}"/>
+            </Border>
+        </DataTemplate>
+
+
+
+        <Style x:Key="ConceptSegmentButtonStyle"
+               TargetType="Button" BasedOn="{StaticResource StandardButtonGeometryStyle}">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource BookStitchKeyboardFocusVisualStyle}"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="ConceptAddButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource ConceptSegmentButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="SegmentBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8,0,0,8">
+                            <TextBlock x:Name="Glyph"
+                                       Text="+"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentForegroundBrush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="SegmentBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource OnAccentTextBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="{DynamicResource NeutralPressedBackgroundBrush}"/>
+                                <Setter TargetName="SegmentBorder" Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+                                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource OnAccentTextBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ConceptRemoveButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource ConceptSegmentButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="SegmentBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="0,8,8,0">
+                            <TextBlock x:Name="Glyph"
+                                       Text="×"
+                                       FontSize="18"
+                                       Foreground="{DynamicResource WarningProgressForegroundBrush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="{DynamicResource QuietDangerHoverBackgroundBrush}"/>
+                                <Setter TargetName="SegmentBorder" Property="BorderBrush" Value="{DynamicResource QuietDangerHoverBorderBrush}"/>
+                                <Setter TargetName="Glyph" Property="Foreground" Value="{DynamicResource QuietDangerHoverTextBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="{DynamicResource QuietDangerPressedBackgroundBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ConceptFamilyListItemStyle"
+               TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,0,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="FamilyItemBorder"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FamilyItemBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource InputBorderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="FamilyItemBorder"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource AccentForegroundBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+
+
+        <Style x:Key="ConceptSingleValueBadgeStyle"
+               TargetType="Border">
+            <EventSetter Event="MouseLeftButtonDown" Handler="SingleValueBadge_MouseLeftButtonDown"/>
+            <Setter Property="MinHeight" Value="23"/>
+            <Setter Property="Padding" Value="9,3,4,3"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsDuplicateHighlighted}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource DuplicateWarningBackgroundBrush}"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="TrackNumber"/>
+                        <Condition Binding="{Binding DataContext.IsTrackNumberLocked, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Padding" Value="9,3,9,3"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="TrackCount"/>
+                        <Condition Binding="{Binding DataContext.IsTrackCountLocked, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Padding" Value="9,3,9,3"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="46"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <controls:LargeResizableWindowHeader Grid.Row="0"
+                                             TitleAreaWidth="200"
+                                             Padding="0,0,8,0"
+                                             CloseRequested="Close_Click">
+            <controls:LargeResizableWindowHeader.TitleContent>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{services:LocalizedText Key=UiMetadaten}"
+                           Margin="16,0,0,0"
+                           Style="{StaticResource LargeResizableWindowHeaderTitleTextStyle}"/>
+                    <Button Width="34"
+                            Margin="6,0,0,0"
+                            Style="{StaticResource DeveloperToolsButtonStyle}"
+                            AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.OpenDeveloperTools}"
+                            Command="{x:Static services:DeveloperToolsCommands.OpenDeveloperToolsWindow}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
+            </controls:LargeResizableWindowHeader.TitleContent>
+
+            <controls:LargeResizableWindowHeader.CenterContent>
+                <Grid Height="28"
+                      Width="{Binding ActualWidth, ElementName=ConceptEditorColumnMetric}"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <TextBox x:Name="ConceptSearchTextBox"
+                             Style="{StaticResource ConceptSearchTextBoxStyle}"
+                             TextChanged="ConceptSearchTextBox_TextChanged"
+                             PreviewKeyDown="ConceptSearchTextBox_PreviewKeyDown"
+                             AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SearchMetadata}"
+                             AutomationProperties.HelpText="{services:LocalizedText Key=Metadata.Automation.SearchHelp}"
+                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+
+                    <Button Style="{StaticResource ConceptSearchAdornmentButtonStyle}"
+                            Content="{Binding SearchAdornment}"
+                            Click="ConceptSearchAdornment_Click"
+                            AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SearchClearOrFocus}"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </Grid>
+            </controls:LargeResizableWindowHeader.CenterContent>
+
+            <controls:LargeResizableWindowHeader.HeaderActions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+
+                    <Button Width="34"
+                            Margin="0"
+                            Style="{StaticResource GlobalSettingsButtonStyle}"
+                            AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.OpenGlobalSettings}"
+                            Click="OpenSettings_Click"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
+            </controls:LargeResizableWindowHeader.HeaderActions>
+        </controls:LargeResizableWindowHeader>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="{DynamicResource AppBackgroundBrush}"
+                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid Margin="12,16,12,12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Text="{services:LocalizedText Key=UiMetadatengruppen}"
+                                   Margin="8,0,8,8"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+
+                        <ListBox x:Name="ConceptFamilyList"
+                                 Grid.Row="1"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 ItemContainerStyle="{StaticResource ConceptFamilyListItemStyle}"
+                                 SelectionChanged="ConceptFamilyList_SelectionChanged"
+                                 AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.MetadataGroups}">
+                            <ListBoxItem x:Name="ConceptQuickAccessFamilyItem"
+                                         Content="{services:LocalizedText Key=UiSchnellzugriff}"/>
+                            <ListBoxItem x:Name="ConceptWorkOutputFamilyItem"
+                                         Content="{services:LocalizedText Key=UiWerk}"/>
+                            <ListBoxItem x:Name="ConceptPeopleFamilyItem"
+                                         Content="{services:LocalizedText Key=UiPersonen}"/>
+                            <ListBoxItem x:Name="ConceptPublicationFamilyItem"
+                                         Content="{services:LocalizedText Key=UiVeroeffentlichung}"/>
+                            <ListBoxItem x:Name="ConceptLanguageFamilyItem"
+                                         Content="{services:LocalizedText Key=UiSprache}"/>
+                            <ListBoxItem x:Name="ConceptCatalogDataFamilyItem"
+                                         Content="{DynamicResource MetadataGroupCatalogData}"/>
+                            <ListBoxItem x:Name="ConceptSortingFamilyItem"
+                                         Content="{services:LocalizedText Key=UiSortierung}"/>
+                            <ListBoxItem x:Name="ConceptDescriptionFamilyItem"
+                                         Content="{services:LocalizedText Key=UiBeschreibung}"/>
+                            <ListBoxItem x:Name="ConceptCompatibilityFamilyItem"
+                                         Content="{DynamicResource MetadataGroupCompatibility}"/>
+                            <ListBoxItem x:Name="ConceptCoverFamilyItem"
+                                         Content="{services:LocalizedText Key=UiCover}"/>
+                            <ListBoxItem x:Name="ConceptTechnicalDataFamilyItem"
+                                         Content="{services:LocalizedText Key=UiTechnischeDaten}"
+                                         Visibility="Collapsed"/>
+                        </ListBox>
+
+                        <StackPanel Grid.Row="3">
+                            <Border Style="{StaticResource ConceptNavigationSectionSeparatorStyle}"/>
+                            <ListBox x:Name="ConceptUtilityFamilyList"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ItemContainerStyle="{StaticResource ConceptFamilyListItemStyle}"
+                                     SelectionChanged="ConceptFamilyList_SelectionChanged"
+                                     AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.LowerMetadataGroups}">
+                                <ListBoxItem x:Name="ConceptChapterFamilyItem"
+                                             Content="{services:LocalizedText Key=UiKapitel}"/>
+                                <ListBoxItem x:Name="ConceptPassThroughFamilyItem"
+                                             Content="{services:LocalizedText Key=UiPassThrough}"/>
+                                <ListBoxItem x:Name="ConceptHelpFamilyItem"
+                                             Content="{DynamicResource MetadataHelpNavigation}"/>
+                            </ListBox>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4"
+                                    Margin="8,16,8,0"
+                                    HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <CheckBox x:Name="ConceptRememberLastGroupCheckBox"
+                                          Content="{DynamicResource MetadataNavigationRememberGroup}"
+                                          Style="{StaticResource ConceptCompactNavigationCheckBoxStyle}"
+                                          Checked="ConceptRememberLastGroupCheckBox_Changed"
+                                          Unchecked="ConceptRememberLastGroupCheckBox_Changed"
+                                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RememberLastGroup}"/>
+                                <controls:InfoPoint Style="{StaticResource ConceptCompactNavigationInfoPointStyle}" Margin="4,0,0,0"
+                                                    Title="{DynamicResource MetadataNavigationRememberGroupInfoTitle}"
+                                                    Body="{DynamicResource MetadataNavigationRememberGroupInfoBody}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <CheckBox Content="{DynamicResource MetadataNavigationInputWarning}"
+                                          Style="{StaticResource ConceptCompactNavigationCheckBoxStyle}"
+                                          IsChecked="{Binding WarnBeforeDiscardingConceptDrafts, Mode=TwoWay}"
+                                          ToolTip="{services:LocalizedToolTip Key=MetadataNavigationInputWarningFull}"
+                                          AutomationProperties.Name="{DynamicResource MetadataNavigationInputWarningFull}"
+                                          AutomationProperties.HelpText="{DynamicResource MetadataNavigationInputWarningFull}"/>
+                                <controls:InfoPoint Style="{StaticResource ConceptCompactNavigationInfoPointStyle}" Margin="4,0,0,0"
+                                                    Title="{DynamicResource MetadataNavigationInputWarningInfoTitle}"
+                                                    Body="{DynamicResource MetadataNavigationInputWarningInfoBody}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Content="{DynamicResource MetadataNavigationTechnicalNames}"
+                                          Style="{StaticResource ConceptCompactNavigationCheckBoxStyle}"
+                                          IsChecked="{Binding ShowTechnicalFieldNames, Mode=TwoWay}"
+                                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.ShowTechnicalFieldNames}"/>
+                                <controls:InfoPoint Style="{StaticResource ConceptCompactNavigationInfoPointStyle}" Margin="4,0,0,0"
+                                                    Title="{DynamicResource MetadataNavigationTechnicalNamesInfoTitle}"
+                                                    Body="{DynamicResource MetadataNavigationTechnicalNamesInfoBody}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Column="1">
+                    <Grid x:Name="ConceptEditorColumnMetrics"
+                          Height="0"
+                          Margin="20,0,20,0"
+                          VerticalAlignment="Top"
+                          IsHitTestVisible="False">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="ConceptEditorColumnMetric" Width="29*"/>
+                            <ColumnDefinition Width="11*"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                    <ScrollViewer x:Name="ConceptScrollViewer"
+                                  Style="{StaticResource ConceptStableVerticalGutterScrollViewerStyle}">
+                        <Grid>
+                        <Grid x:Name="ConceptQuickAccessPanel"
+                              Margin="20"
+                              MinWidth="560">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+
+                        <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessTitleField"
+                                                              Grid.Row="0"/>
+
+                        <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessAlbumField"
+                                                              Grid.Row="1"/>
+
+                        <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessAuthorField" Grid.Row="2"/>
+
+                        <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessSpeakerField" Grid.Row="3"/>
+
+                        <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessGenreField" Grid.Row="4"/>
+
+                        <Grid x:Name="ConceptQuickAccessYearIsbnRow" Grid.Row="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="29*"/>
+                                <ColumnDefinition Width="11*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid x:Name="ConceptQuickAccessYearField"
+                                      Grid.Column="0"
+                                      Margin="0,0,0,14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0"
+                                  Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="0"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock x:Name="ConceptQuickAccessYearLabel"
+                                               Grid.Column="0"
+                                               Text="{Binding YearLabel}"
+                                               Margin="0,4,0,0"
+                                               VerticalAlignment="Top"
+                                               FontWeight="SemiBold"/>
+
+                                    <TextBlock Grid.Column="2" Text="{Binding YearOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+
+                                    <ToggleButton x:Name="ConceptYearOutputToggle"
+                                                  Grid.Column="4"
+                                                  HorizontalAlignment="Right"
+                                                  Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                                  IsChecked="{Binding IsYearIncluded, Mode=TwoWay}"
+                                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.YearOutputState}"/>
+                            </Grid>
+
+                            <Grid x:Name="ConceptYearEditorColumnHost"
+                                  Grid.Row="1">
+                                    <Border Height="27"
+                                            Visibility="{Binding IsYearIncluded, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                            Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                        <Grid>
+                                            <TextBlock Text="{x:Static services:MetadataDateParser.YearWatermark}"
+                                                       Margin="6,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MutedTextBrush}"
+                                                       Opacity="0.62"
+                                                       IsHitTestVisible="False">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding Text, ElementName=ConceptYearTextBox}" Value=""/>
+                                                                    <Condition Binding="{Binding IsKeyboardFocused, ElementName=ConceptYearTextBox}" Value="False"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBox x:Name="ConceptYearTextBox" Text="{Binding SpecialDrafts.Year, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Tag="Year"
+                                                     MaxLength="4"
+                                                     PreviewTextInput="ConceptYearTextBox_PreviewTextInput"
+                                                     DataObject.Pasting="ConceptYearTextBox_Pasting"
+                                                     PreviewKeyDown="ConceptSingleValueTextBox_PreviewKeyDown"
+                                                     VerticalContentAlignment="Center"
+                                                     Background="Transparent"
+                                                     Foreground="{DynamicResource MainTextBrush}"
+                                                     BorderThickness="0"
+                                                     CaretBrush="{DynamicResource MainTextBrush}"
+                                                     Padding="6,1"
+                                                     AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.Year}"/>
+                                        </Grid>
+                                    </Border>
+                            </Grid>
+
+                            <ItemsControl x:Name="ConceptYearValuesControl"
+                                          Grid.Row="2"
+                                          ItemsSource="{Binding YearValues}"
+                                          Width="{Binding ActualWidth, ElementName=ConceptYearEditorColumnHost}"
+                                          HorizontalAlignment="Left"
+                                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.YearValue}">
+                                <ItemsControl.Style>
+                                    <Style TargetType="ItemsControl">
+                                        <Setter Property="Margin" Value="0,8,0,0"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="HasItems" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsYearIncluded}" Value="False">
+                                                <Setter Property="Margin" Value="0"/>
+                                                <Setter Property="Opacity" Value="0.62"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ItemsControl.Style>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,6,6"
+                                                HorizontalAlignment="Left"
+                                                Tag="Year"
+                                                Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Value}"
+                                                           Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Tag="Year"
+                                                        IsEnabled="{Binding DataContext.IsYearIncluded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                        Click="EditSingleValue_Click"
+                                                        AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.EditYear}"
+                                                        Style="{StaticResource ConceptValueBadgeEditButtonStyle}"/>
+                                                <Button Tag="Year"
+                                                        Click="RemoveSingleValue_Click"
+                                                        AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveYear}"
+                                                        Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                                </Grid>
+
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptQuickAccessIsbnField"
+                                                                      Grid.Column="2"
+                                                                      UseFullWidth="True"/>
+                            </Grid>
+                        </Grid>
+
+                        <Grid x:Name="ConceptQuickAccessSeriesHost" Grid.Row="6" Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="29*"/>
+                                <ColumnDefinition Width="11*"/>
+                            </Grid.ColumnDefinitions>
+                            <controls:ConceptSeriesFieldControl x:Name="ConceptQuickAccessSeriesField"
+                                                                Grid.Column="0"/>
+                        </Grid>
+
+                        <Grid x:Name="ConceptQuickAccessWorkTypeEditionRow"
+                              Grid.Row="7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="29*"/>
+                                <ColumnDefinition Width="11*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid x:Name="ConceptQuickAccessWorkTypeField"
+                                      Grid.Column="2"
+                                      Margin="0,0,0,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0"
+                                          Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Grid.Column="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="0"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock x:Name="ConceptQuickAccessWorkTypeLabel"
+                                                       Grid.Column="0"
+                                                       Text="{Binding WorkTypeLabel}"
+                                                       Margin="0,4,0,0"
+                                                       VerticalAlignment="Top"
+                                                       FontWeight="SemiBold"/>
+
+                                            <TextBlock Grid.Column="2" Text="{Binding WorkTypeOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+
+                                            <ToggleButton Grid.Column="3" Margin="0,0,8,0" Style="{StaticResource ConceptMetadataLockToggleStyle}" IsChecked="{Binding WorkTypeFieldState.IsLocked, Mode=TwoWay}" AutomationProperties.Name="{Binding WorkTypeFieldState.LockToggleAutomationName}"/>
+                                            <ToggleButton x:Name="ConceptWorkTypeOutputToggle" IsEnabled="{Binding WorkTypeFieldState.CanToggleOutput}"
+                                                          Grid.Column="4"
+                                                          HorizontalAlignment="Right"
+                                                          Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                                          IsChecked="{Binding IsWorkTypeIncluded, Mode=TwoWay}"
+                                                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.WorkTypeOutputState}"/>
+                                        </Grid>
+                                    </Grid>
+
+                                    <Grid x:Name="ConceptWorkTypeEditorWidthGrid"
+                                          Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0"
+                                                Height="27"
+                                                Visibility="{Binding WorkTypeFieldState.IsEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <ComboBox x:Name="ConceptWorkTypeComboBox" SelectedValuePath="ValueToCommit" SelectedValue="{Binding SpecialDrafts.WorkType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      Tag="WorkType"
+                                                      ItemsSource="{Binding WorkTypeCandidates}"
+                                                      ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}"
+                                                      TextSearch.TextPath="DisplayValue"
+                                                      IsTextSearchEnabled="True"
+                                                      IsEditable="False"
+                                                      PreviewKeyDown="ConceptEnumCandidateComboBox_PreviewKeyDown" ItemContainerStyle="{StaticResource ConceptImmediateEnumCandidateStyle}"
+                                                      Style="{StaticResource ConceptComboBoxStyle}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.WorkType}"/>
+                                        </Border>
+                                    </Grid>
+
+                                    <ItemsControl x:Name="ConceptWorkTypeValuesControl"
+                                                  Grid.Row="2"
+                                                  ItemsSource="{Binding WorkTypeValues}"
+                                                  Width="{Binding ActualWidth, ElementName=ConceptWorkTypeEditorWidthGrid}"
+                                                  HorizontalAlignment="Left"
+                                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedWorkType}">
+                                        <ItemsControl.Style>
+                                            <Style TargetType="ItemsControl">
+                                        <Setter Property="Margin" Value="0,8,0,0"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="HasItems" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsWorkTypeIncluded}" Value="False">
+                                                <Setter Property="Margin" Value="0"/>
+                                                        <Setter Property="Opacity" Value="0.62"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.Style>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,6,6"
+                                                        HorizontalAlignment="Left"
+                                                        Tag="WorkType"
+                                                        Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Value}"
+                                                                   Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <Button Tag="WorkType" IsEnabled="{Binding DataContext.WorkTypeFieldState.CanRemoveValues, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                Click="RemoveSingleValue_Click"
+                                                                AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveWorkType}"
+                                                                Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+
+                                <Grid x:Name="ConceptQuickAccessAbridgedStatusField"
+                                      Grid.Column="0"
+                                      Margin="0,0,0,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0"
+                                          Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Grid.Column="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="0"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock x:Name="ConceptQuickAccessAbridgedStatusLabel"
+                                                       Grid.Column="0"
+                                                       Text="{Binding AbridgedStatusLabel}"
+                                                       Margin="0,4,0,0"
+                                                       VerticalAlignment="Top"
+                                                       FontWeight="SemiBold"/>
+
+                                            <TextBlock Grid.Column="2" Text="{Binding AbridgedStatusOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+
+                                            <ToggleButton x:Name="ConceptAbridgedStatusOutputToggle"
+                                                          Grid.Column="4"
+                                                          HorizontalAlignment="Right"
+                                                          Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                                          IsChecked="{Binding IsAbridgedStatusIncluded, Mode=TwoWay}"
+                                                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.AbridgedStatusOutputState}"/>
+                                        </Grid>
+                                    </Grid>
+
+                                    <Grid x:Name="ConceptAbridgedStatusEditorWidthGrid"
+                                          Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0"
+                                                Height="27"
+                                                Visibility="{Binding IsAbridgedStatusIncluded, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <ComboBox x:Name="ConceptAbridgedStatusComboBox" SelectedValuePath="ValueToCommit" SelectedValue="{Binding SpecialDrafts.AbridgedStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      Tag="AbridgedStatus"
+                                                      ItemsSource="{Binding AbridgedStatusCandidates}"
+                                                      ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}"
+                                                      TextSearch.TextPath="DisplayValue"
+                                                      IsTextSearchEnabled="True"
+                                                      IsEditable="False"
+                                                      PreviewKeyDown="ConceptEnumCandidateComboBox_PreviewKeyDown" ItemContainerStyle="{StaticResource ConceptImmediateEnumCandidateStyle}"
+                                                      Style="{StaticResource ConceptComboBoxStyle}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.AbridgedStatus}"/>
+                                        </Border>
+                                    </Grid>
+
+                                    <ItemsControl x:Name="ConceptAbridgedStatusValuesControl"
+                                                  Grid.Row="2"
+                                                  ItemsSource="{Binding AbridgedStatusValues}"
+                                                  Width="{Binding ActualWidth, ElementName=ConceptAbridgedStatusEditorWidthGrid}"
+                                                  HorizontalAlignment="Left"
+                                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedAbridgedStatus}">
+                                        <ItemsControl.Style>
+                                            <Style TargetType="ItemsControl">
+                                        <Setter Property="Margin" Value="0,8,0,0"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="HasItems" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsAbridgedStatusIncluded}" Value="False">
+                                                <Setter Property="Margin" Value="0"/>
+                                                        <Setter Property="Opacity" Value="0.62"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.Style>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,6,6"
+                                                        HorizontalAlignment="Left"
+                                                        Tag="AbridgedStatus"
+                                                        Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Value}"
+                                                                   Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <Button Tag="AbridgedStatus"
+                                                                Click="RemoveSingleValue_Click"
+                                                                AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveAbridgedStatus}"
+                                                                Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+
+
+
+                        <controls:ConceptDescriptionFieldControl x:Name="ConceptQuickAccessDescriptionField"
+                                                             Grid.Row="8"/>
+                        </Grid>
+                        <StackPanel x:Name="ConceptSearchResultsPanel"
+                                    Visibility="Collapsed"
+                                    Margin="20"
+                                    MinWidth="560"/>
+                        <Grid x:Name="ConceptWorkOutputPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptWorkOutputTitleField"/>
+
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptWorkSubtitleField"/>
+
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptWorkOutputAlbumField"/>
+
+
+
+
+
+                            <Grid x:Name="ConceptWorkSeriesHost" Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="29*"/>
+                                    <ColumnDefinition Width="11*"/>
+                                </Grid.ColumnDefinitions>
+                                <controls:ConceptSeriesFieldControl x:Name="ConceptWorkSeriesField"
+                                                                    Grid.Column="0"/>
+                            </Grid>
+
+                            <Grid x:Name="ConceptWorkAbridgedWorkTypeRow">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="29*"/>
+                                    <ColumnDefinition Width="11*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="18"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Grid x:Name="ConceptWorkAbridgedStatusField"
+                                          Grid.Column="0"
+                                          Margin="0,0,0,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="0"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding AbridgedStatusLabel}" Margin="0,4,0,0" VerticalAlignment="Top" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding AbridgedStatusOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                                            <ToggleButton Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource ConceptOutputChipToggleStyle}" IsChecked="{Binding IsAbridgedStatusIncluded, Mode=TwoWay}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.AbridgedStatusOutputState}"/>
+                                        </Grid>
+                                        <Border x:Name="ConceptWorkAbridgedStatusEditorColumnHost"
+                                                Grid.Row="1"
+                                                Height="27"
+                                                Visibility="{Binding IsAbridgedStatusIncluded, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <ComboBox x:Name="ConceptWorkAbridgedStatusComboBox" SelectedValuePath="ValueToCommit" SelectedValue="{Binding SpecialDrafts.AbridgedStatus, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="AbridgedStatus" ItemsSource="{Binding AbridgedStatusCandidates}" ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}" TextSearch.TextPath="DisplayValue" IsTextSearchEnabled="True" IsEditable="False" PreviewKeyDown="ConceptEnumCandidateComboBox_PreviewKeyDown" ItemContainerStyle="{StaticResource ConceptImmediateEnumCandidateStyle}" Style="{StaticResource ConceptComboBoxStyle}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.AbridgedStatus}"/>
+                                        </Border>
+                                        <ItemsControl x:Name="ConceptWorkAbridgedStatusValuesControl" Grid.Row="2" ItemsSource="{Binding AbridgedStatusValues}" Width="{Binding ActualWidth, ElementName=ConceptWorkAbridgedStatusEditorColumnHost}" HorizontalAlignment="Left" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedAbridgedStatus}">
+                                            <ItemsControl.Style><Style TargetType="ItemsControl"><Setter Property="Margin" Value="0,8,0,0"/><Style.Triggers><Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger><DataTrigger Binding="{Binding IsAbridgedStatusIncluded}" Value="False"><Setter Property="Margin" Value="0"/><Setter Property="Opacity" Value="0.62"/></DataTrigger></Style.Triggers></Style></ItemsControl.Style>
+                                            <ItemsControl.ItemTemplate><DataTemplate><Border Margin="0,0,6,6" HorizontalAlignment="Left" Tag="AbridgedStatus" Style="{StaticResource ConceptSingleValueBadgeStyle}"><StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Value}" Style="{StaticResource ConceptValueBadgeTextStyle}" VerticalAlignment="Center"/><Button Tag="AbridgedStatus" Click="RemoveSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveAbridgedStatus}" Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+
+                                    <Grid x:Name="ConceptWorkWorkTypeField"
+                                          Grid.Column="2"
+                                          Margin="0,0,0,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="0"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding WorkTypeLabel}" Margin="0,4,0,0" VerticalAlignment="Top" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding WorkTypeOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                                            <ToggleButton Grid.Column="3" Margin="0,0,8,0" Style="{StaticResource ConceptMetadataLockToggleStyle}" IsChecked="{Binding WorkTypeFieldState.IsLocked, Mode=TwoWay}" AutomationProperties.Name="{Binding WorkTypeFieldState.LockToggleAutomationName}"/>
+                                            <ToggleButton Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource ConceptOutputChipToggleStyle}" IsChecked="{Binding IsWorkTypeIncluded, Mode=TwoWay}" IsEnabled="{Binding WorkTypeFieldState.CanToggleOutput}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.WorkTypeOutputState}"/>
+                                        </Grid>
+                                        <Border x:Name="ConceptWorkWorkTypeEditorColumnHost"
+                                                Grid.Row="1"
+                                                Height="27"
+                                                Visibility="{Binding WorkTypeFieldState.IsEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <ComboBox x:Name="ConceptWorkWorkTypeComboBox" SelectedValuePath="ValueToCommit" SelectedValue="{Binding SpecialDrafts.WorkType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="WorkType" ItemsSource="{Binding WorkTypeCandidates}" ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}" TextSearch.TextPath="DisplayValue" IsTextSearchEnabled="True" IsEditable="False" PreviewKeyDown="ConceptEnumCandidateComboBox_PreviewKeyDown" ItemContainerStyle="{StaticResource ConceptImmediateEnumCandidateStyle}" Style="{StaticResource ConceptComboBoxStyle}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.WorkType}"/>
+                                        </Border>
+                                        <ItemsControl x:Name="ConceptWorkWorkTypeValuesControl" Grid.Row="2" ItemsSource="{Binding WorkTypeValues}" HorizontalAlignment="Stretch" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedWorkTypePlural}">
+                                            <ItemsControl.Style><Style TargetType="ItemsControl"><Setter Property="Margin" Value="0,8,0,0"/><Style.Triggers><Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger><DataTrigger Binding="{Binding IsWorkTypeIncluded}" Value="False"><Setter Property="Margin" Value="0"/><Setter Property="Opacity" Value="0.62"/></DataTrigger></Style.Triggers></Style></ItemsControl.Style>
+                                            <ItemsControl.ItemTemplate><DataTemplate><Border Margin="0,0,6,6" HorizontalAlignment="Left" Tag="WorkType" Style="{StaticResource ConceptSingleValueBadgeStyle}"><StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Value}" Style="{StaticResource ConceptValueBadgeTextStyle}" VerticalAlignment="Center"/><Button Tag="WorkType" IsEnabled="{Binding DataContext.WorkTypeFieldState.CanRemoveValues, RelativeSource={RelativeSource AncestorType=Window}}" Click="RemoveSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveWorkType}" Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+
+
+
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptWorkVolumeField"/>
+
+                            </StackPanel>
+                        </Grid>
+                        <Grid x:Name="ConceptPeoplePanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptPeopleAuthorField"/>
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptPeopleSpeakerField"/>
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptPeopleComposerField"/>
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptPeopleTranslatorField"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid x:Name="ConceptCatalogDataPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptCatalogGenreField"/>
+                                <ItemsControl ItemsSource="{Binding CatalogDataFields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ConceptPublicationPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptPublicationPublisherField"/>
+                            <Grid x:Name="ConceptPublicationReleaseDateField" Margin="0,0,0,14">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="29*"/>
+                                        <ColumnDefinition Width="11*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="0"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding ReleaseDateLabel}" Margin="0,4,0,0" VerticalAlignment="Top" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding ReleaseDateOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                                        <ToggleButton Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource ConceptOutputChipToggleStyle}" IsChecked="{Binding IsReleaseDateIncluded, Mode=TwoWay}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.ReleaseDateOutputState}"/>
+                                    </Grid>
+                                </Grid>
+                                <Grid Grid.Row="1">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="29*"/><ColumnDefinition Width="11*"/></Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0" x:Name="ConceptPublicationReleaseDateEditorColumnHost">
+                                        <Border Height="27"
+                                                Visibility="{Binding IsReleaseDateIncluded, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <ComboBox x:Name="ConceptPublicationReleaseDateComboBox"
+                                                      Tag="ReleaseDate"
+                                                      ItemsSource="{Binding ReleaseDateCandidates}"
+                                                      ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}"
+                                                      TextSearch.TextPath="DisplayValue"
+                                                      IsEditable="True"
+                                                      IsTextSearchEnabled="False"
+                                                      StaysOpenOnEdit="True"
+                                                      PreviewKeyDown="ConceptCandidateComboBox_PreviewKeyDown"
+                                                      Style="{StaticResource ConceptComboBoxStyle}"
+                                                      Padding="6,1"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.ReleaseDate}"/>
+                                        </Border>
+                                    </Grid>
+                                </Grid>
+                                <ItemsControl Grid.Row="2" ItemsSource="{Binding ReleaseDateValues}" Width="{Binding ActualWidth, ElementName=ConceptPublicationReleaseDateEditorColumnHost}" HorizontalAlignment="Left" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedReleaseDate}">
+                                    <ItemsControl.Style>
+                                        <Style TargetType="ItemsControl">
+                                            <Setter Property="Margin" Value="0,8,0,0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+                                                <DataTrigger Binding="{Binding IsReleaseDateIncluded}" Value="False"><Setter Property="Margin" Value="0"/><Setter Property="Opacity" Value="0.62"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ItemsControl.Style>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,6,6" HorizontalAlignment="Left" Tag="ReleaseDate" MouseLeftButtonDown="SingleValueBadge_MouseLeftButtonDown" Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Value}" Style="{StaticResource ConceptValueBadgeTextStyle}" VerticalAlignment="Center"/>
+                                                    <Button Tag="ReleaseDate" IsEnabled="{Binding DataContext.IsReleaseDateIncluded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Click="EditSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.EditReleaseDate}" Style="{StaticResource ConceptValueBadgeEditButtonStyle}"/>
+                                                    <Button Tag="ReleaseDate" Click="RemoveSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveReleaseDate}" Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                            <Grid x:Name="ConceptPublicationYearField" Margin="0,0,0,14">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="29*"/><ColumnDefinition Width="11*"/></Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="0"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding YearLabel}" Margin="0,4,0,0" VerticalAlignment="Top" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding YearOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                                        <ToggleButton Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource ConceptOutputChipToggleStyle}" IsChecked="{Binding IsYearIncluded, Mode=TwoWay}" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.YearOutputState}"/>
+                                    </Grid>
+                                </Grid>
+                                <Grid Grid.Row="1">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="29*"/><ColumnDefinition Width="11*"/></Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0" x:Name="ConceptPublicationYearEditorColumnHost">
+                                        <Border Height="27" Visibility="{Binding IsYearIncluded, Converter={StaticResource ConceptBooleanToVisibilityConverter}}" Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                            <Grid>
+                                                <TextBlock Text="{x:Static services:MetadataDateParser.YearWatermark}" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Opacity="0.62" IsHitTestVisible="False">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding SpecialDrafts.Year}" Value=""/>
+                                                                        <Condition Binding="{Binding IsKeyboardFocused, ElementName=ConceptPublicationYearTextBox}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBox x:Name="ConceptPublicationYearTextBox" Text="{Binding SpecialDrafts.Year, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Tag="Year" MaxLength="4"
+                                                         PreviewKeyDown="ConceptSingleValueTextBox_PreviewKeyDown"
+                                                         PreviewTextInput="ConceptYearTextBox_PreviewTextInput"
+                                                         DataObject.Pasting="ConceptYearTextBox_Pasting"
+                                                         VerticalContentAlignment="Center" Background="Transparent" Foreground="{DynamicResource MainTextBrush}"
+                                                         BorderThickness="0" CaretBrush="{DynamicResource MainTextBrush}" Padding="6,1"
+                                                         AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.Year}"/>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </Grid>
+                                <ItemsControl Grid.Row="2" ItemsSource="{Binding YearValues}" Width="{Binding ActualWidth, ElementName=ConceptPublicationYearEditorColumnHost}" HorizontalAlignment="Left">
+                                    <ItemsControl.Style><Style TargetType="ItemsControl"><Setter Property="Margin" Value="0,8,0,0"/><Style.Triggers><Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></ItemsControl.Style>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,6,6" HorizontalAlignment="Left" Tag="Year" MouseLeftButtonDown="SingleValueBadge_MouseLeftButtonDown" Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Value}" Style="{StaticResource ConceptValueBadgeTextStyle}" VerticalAlignment="Center"/>
+                                                    <Button Tag="Year" Click="EditSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.EditYear}" Style="{StaticResource ConceptValueBadgeEditButtonStyle}"/>
+                                                    <Button Tag="Year" Click="RemoveSingleValue_Click" AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveYear}" Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptPublicationLicenseField"/>
+
+                            <ItemsControl ItemsSource="{Binding PublicationAdditionalFields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <controls:ConceptMetadataFieldControl x:Name="ConceptPublicationEditionField"/>
+</StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ConceptLanguagePanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding LanguageFields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            </StackPanel>
+                        </Grid>
+
+
+
+                        <Grid x:Name="ConceptSortingPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding SortingFields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid x:Name="ConceptSortingTrackRow"
+                              >
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="29*"/>
+                                <ColumnDefinition Width="11*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="18"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Grid x:Name="ConceptWorkTrackNumberField"
+                                      Grid.Column="0"
+                                      Margin="0,0,0,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock x:Name="ConceptWorkTrackNumberLabel"
+                                                   Grid.Column="0"
+                                                   Text="{Binding TrackNumberLabel}"
+                                                   Margin="0,4,0,0"
+                                                   VerticalAlignment="Top"
+                                                   FontWeight="SemiBold"/>
+
+                                        <ToggleButton Grid.Column="3"
+                                                      HorizontalAlignment="Right"
+                                                      Style="{StaticResource ConceptMetadataLockToggleStyle}"
+                                                      IsChecked="{Binding IsTrackNumberLocked, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackNumberLockState}"/>
+
+                                        <ToggleButton x:Name="ConceptWorkTrackNumberOutputToggle"
+                                                      Grid.Column="4"
+                                                      HorizontalAlignment="Right"
+                                                      Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                                      IsChecked="{Binding IsTrackNumberIncluded, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackNumberOutputState}"/>
+                                    </Grid>
+
+                                    <Border Grid.Row="1"
+                                            Height="27"
+                                            Visibility="{Binding IsTrackNumberEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                            Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                        <TextBox x:Name="ConceptWorkTrackNumberTextBox" Text="{Binding SpecialDrafts.TrackNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Tag="TrackNumber"
+                                                 PreviewKeyDown="ConceptSingleValueTextBox_PreviewKeyDown"
+                                                 PreviewTextInput="ConceptNumericTextBox_PreviewTextInput"
+                                                 DataObject.Pasting="ConceptNumericTextBox_Pasting"
+                                                 VerticalContentAlignment="Center"
+                                                 Background="Transparent"
+                                                 Foreground="{DynamicResource MainTextBrush}"
+                                                 BorderThickness="0"
+                                                 CaretBrush="{DynamicResource MainTextBrush}"
+                                                 Padding="6,1"
+                                                 AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackNumber}"/>
+                                    </Border>
+
+                                    <ItemsControl x:Name="ConceptWorkTrackNumberValuesControl"
+                                                  Grid.Row="2"
+                                                  ItemsSource="{Binding TrackNumberValues}"
+                                                  Width="{Binding ActualWidth, ElementName=ConceptWorkTrackNumberField}"
+                                                  HorizontalAlignment="Left"
+                                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedTrackNumber}">
+                                        <ItemsControl.Style>
+                                            <Style TargetType="ItemsControl">
+                                        <Setter Property="Margin" Value="0,8,0,0"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="HasItems" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsTrackNumberIncluded}" Value="False">
+                                                <Setter Property="Margin" Value="0"/>
+                                                        <Setter Property="Opacity" Value="0.62"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsTrackNumberLocked}" Value="True">
+                                                        <Setter Property="Margin" Value="0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.Style>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,6,6"
+                                                        HorizontalAlignment="Left"
+                                                        Tag="TrackNumber"
+                                                        MouseLeftButtonDown="SingleValueBadge_MouseLeftButtonDown"
+                                                        Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Value}"
+                                                                   Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <StackPanel.Style>
+                                                                <Style TargetType="StackPanel">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.IsTrackNumberLocked, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </StackPanel.Style>
+                                                            <Button Tag="TrackNumber"
+                                                                    Visibility="{Binding DataContext.CanEditTrackNumber, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                                    IsEnabled="{Binding DataContext.CanEditTrackNumber, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                    Click="EditSingleValue_Click"
+                                                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.EditTrackNumber}"
+                                                                    Style="{StaticResource ConceptValueBadgeEditButtonStyle}"/>
+                                                            <Button Tag="TrackNumber"
+                                                                    IsEnabled="{Binding DataContext.CanRemoveTrackNumber, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                    Click="RemoveSingleValue_Click"
+                                                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveTrackNumber}"
+                                                                    Style="{StaticResource ConceptValueBadgeRemoveButtonStyle}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+
+                                <Grid x:Name="ConceptWorkTrackCountField"
+                                      Grid.Column="2"
+                                      Margin="0,0,0,14">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock x:Name="ConceptWorkTrackCountLabel"
+                                                   Grid.Column="0"
+                                                   Text="{Binding TrackCountLabel}"
+                                                   Margin="0,4,0,0"
+                                                   VerticalAlignment="Top"
+                                                   FontWeight="SemiBold"/>
+
+                                        <ToggleButton Grid.Column="3"
+                                                      HorizontalAlignment="Right"
+                                                      Style="{StaticResource ConceptMetadataLockToggleStyle}"
+                                                      IsChecked="{Binding IsTrackCountLocked, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackCountLockState}"/>
+
+                                        <ToggleButton x:Name="ConceptWorkTrackCountOutputToggle"
+                                                      Grid.Column="4"
+                                                      HorizontalAlignment="Right"
+                                                      Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                                      IsChecked="{Binding IsTrackCountIncluded, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackCountOutputState}"/>
+                                    </Grid>
+
+                                    <Border Grid.Row="1"
+                                            Height="27"
+                                            Visibility="{Binding IsTrackCountEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                            Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                        <TextBox x:Name="ConceptWorkTrackCountTextBox" Text="{Binding SpecialDrafts.TrackCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Tag="TrackCount"
+                                                 PreviewKeyDown="ConceptSingleValueTextBox_PreviewKeyDown"
+                                                 PreviewTextInput="ConceptNumericTextBox_PreviewTextInput"
+                                                 DataObject.Pasting="ConceptNumericTextBox_Pasting"
+                                                 VerticalContentAlignment="Center"
+                                                 Background="Transparent"
+                                                 Foreground="{DynamicResource MainTextBrush}"
+                                                 BorderThickness="0"
+                                                 CaretBrush="{DynamicResource MainTextBrush}"
+                                                 Padding="6,1"
+                                                 AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.TrackCount}"/>
+                                    </Border>
+
+                                    <ItemsControl x:Name="ConceptWorkTrackCountValuesControl"
+                                                  Grid.Row="2"
+                                                  ItemsSource="{Binding TrackCountValues}"
+                                                  Width="{Binding ActualWidth, ElementName=ConceptWorkTrackCountField}"
+                                                  HorizontalAlignment="Left"
+                                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedTrackCount}">
+                                        <ItemsControl.Style>
+                                            <Style TargetType="ItemsControl">
+                                        <Setter Property="Margin" Value="0,8,0,0"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="HasItems" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                    <DataTrigger Binding="{Binding IsTrackCountIncluded}" Value="False">
+                                                <Setter Property="Margin" Value="0"/>
+                                                        <Setter Property="Opacity" Value="0.62"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsTrackCountLocked}" Value="True">
+                                                        <Setter Property="Margin" Value="0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.Style>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,6,6"
+                                                        HorizontalAlignment="Left"
+                                                        Tag="TrackCount"
+                                                        MouseLeftButtonDown="SingleValueBadge_MouseLeftButtonDown"
+                                                        Style="{StaticResource ConceptSingleValueBadgeStyle}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Value}"
+                                                                   Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <StackPanel.Style>
+                                                                <Style TargetType="StackPanel">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.IsTrackCountLocked, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </StackPanel.Style>
+                                                            <Button Tag="TrackCount"
+                                                                    Visibility="{Binding DataContext.CanEditTrackCount, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                                    IsEnabled="{Binding DataContext.CanEditTrackCount, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                    Click="EditSingleValue_Click"
+                                                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.EditTrackCount}"
+                                                                    Style="{StaticResource ConceptValueBadgeEditButtonStyle}"/>
+                                                            <Button Tag="TrackCount"
+                                                                    IsEnabled="{Binding DataContext.CanRemoveTrackCount, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                    Click="RemoveSingleValue_Click"
+                                                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveTrackCount}"
+                                                                    Style="{StaticResource ConceptValueBadgeRemoveButtonStyle}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ConceptDescriptionPanel"
+                              Visibility="Collapsed"
+                              Margin="20,0,20,0"
+                              MinWidth="560"
+                              Height="{Binding ViewportHeight, ElementName=ConceptScrollViewer}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="29*"/>
+                                <ColumnDefinition Width="11*"/>
+                            </Grid.ColumnDefinitions>
+                            <controls:ConceptDescriptionFieldControl x:Name="ConceptDescriptionFullField"
+                                                                     Grid.Column="0"
+                                                                     Margin="0,20,0,20"
+                                                                     PresentationMode="Stretch"/>
+                        </Grid>
+
+                        <Grid x:Name="ConceptCompatibilityPanel"
+                              Visibility="Collapsed"
+                              Margin="20,0,20,0"
+                              MinWidth="560"
+                              MinHeight="{Binding ViewportHeight, ElementName=ConceptScrollViewer}">
+                            <Grid Margin="0,20,0,20">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptCompatibilityComposerField" Grid.Row="0"/>
+
+                                <Grid Grid.Row="1" Margin="0,0,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="29*"/>
+                                        <ColumnDefinition Width="11*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <controls:ConceptCompatibilityFieldControl x:Name="ConceptCompatibilityField"
+                                                                                Grid.Column="0"/>
+                                </Grid>
+
+                                <Grid x:Name="ConceptCompatibilityDescriptionPreview"
+                                      Grid.Row="2"
+                                      Margin="0,0,0,10"
+                                  MinHeight="0"
+                                  Visibility="{Binding CompatibilityDescriptionOutputPreviewVisibility}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="29*"/>
+                                    <ColumnDefinition Width="11*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" MinHeight="0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding CompatibilityDescriptionOutputPreviewLabel}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <controls:InfoPoint Margin="6,0,0,0" VerticalAlignment="Center"
+                                                            Title="{DynamicResource InfoDescriptionOutputPreviewTitle}"
+                                                            Body="{DynamicResource InfoDescriptionOutputPreviewBody}"/>
+                                    </StackPanel>
+                                    <Border Grid.Row="1" MinHeight="0" Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                                        <TextBox Text="{Binding CompatibilityDescriptionOutputPreview, Mode=OneWay}"
+                                                 IsReadOnly="True"
+                                                 IsTabStop="False"
+                                                 Focusable="False"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Padding="6,4"
+                                                 AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.DescriptionOutputPreview}">
+                                            <TextBox.Style>
+                                                <Style TargetType="TextBox">
+                                                    <Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDescriptionIncluded}" Value="False">
+                                                            <Setter Property="Foreground" Value="{DynamicResource ErrorTextBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBox.Style>
+                                        </TextBox>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                            </Grid>
+                        </Grid>
+
+                        <Grid x:Name="ConceptTechnicalDataPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding TechnicalFields}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ConceptPassThroughPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding PassThroughFields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <controls:ConceptMetadataFieldControl DataContext="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ConceptCoverPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <Grid x:Name="ConceptCoverWidthWrapper">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="29*"/>
+                                    <ColumnDefinition Width="11*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="ConceptCoverBorder"
+                                    Grid.Column="0"
+                                    Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Top"
+                                    Style="{StaticResource CoverPickerBorderStyle}"
+                                    MouseLeftButtonUp="ConceptCover_MouseLeftButtonUp"
+                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectCover}">
+                                <Border.ContextMenu>
+                                    <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}"
+                                                 DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                        <MenuItem Header="{services:LocalizedText Key=UiCoverEntfernen}"
+                                                  Style="{StaticResource BookStitchContextMenuItemStyle}"
+                                                  IsEnabled="{Binding CanRemoveCover}"
+                                                  Click="ConceptRemoveCover_Click"/>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                                <Grid ClipToBounds="True">
+                                    <Image Source="{Binding CoverPreviewSource}"
+                                           Style="{StaticResource CoverPickerImageStyle}"/>
+                                    <Border Style="{StaticResource CoverPickerHintBorderStyle}"
+                                            Visibility="{Binding CoverHintVisibility}">
+                                        <ContentControl Style="{StaticResource CoverPickerHintContentStyle}"/>
+                                    </Border>
+                                </Grid>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
+                        <Grid x:Name="ConceptHelpPanel"
+                              Visibility="Collapsed"
+                              Margin="20"
+                              MinWidth="560">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource MetadataHelpTitle}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpIntro}" Style="{StaticResource ConceptHelpBodyTextStyle}" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,0,18"/>
+
+                                <controls:ConceptMetadataFieldControl x:Name="ConceptHelpDemoField">
+                                    <controls:ConceptMetadataFieldControl.HeaderLabelAccessory>
+                                        <TextBlock Text="{DynamicResource MetadataHelpDemoFieldQualifier}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                                    </controls:ConceptMetadataFieldControl.HeaderLabelAccessory>
+                                </controls:ConceptMetadataFieldControl>
+
+                                <StackPanel Style="{StaticResource ConceptHelpSectionHeaderStyle}">
+                                    <TextBlock Text="•" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}" Margin="0,0,6,0"/>
+                                    <TextBlock Text="{DynamicResource MetadataHelpControlsTitle}" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}"/>
+                                    <TextBlock Text="•" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}" Margin="6,0,0,0"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,2,0,16">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="{DynamicResource MetadataHelpDropdownTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}" VerticalAlignment="Center"/>
+                                        <Border Style="{StaticResource ConceptRoundedInputBorderStyle}" Width="180" Margin="8,0,0,0">
+                                            <ComboBox x:Name="ConceptHelpDropdownExample"
+                                                      ItemsSource="{Binding HelpDemoField.Candidates}"
+                                                      ItemTemplate="{DynamicResource ConceptMetadataCandidateTemplate}"
+                                                      Style="{StaticResource ConceptComboBoxStyle}"
+                                                      AutomationProperties.Name="{DynamicResource MetadataHelpDropdownTitle}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource MetadataHelpDropdownText}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,0,0,12"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="{DynamicResource MetadataHelpTagChipsTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}" VerticalAlignment="Center"/>
+                                        <Border Style="{StaticResource ConceptValueBadgeStyle}" IsHitTestVisible="False" Margin="8,0,0,0">
+                                            <TextBlock Text="{DynamicResource MetadataHelpDemoStartAdventure}" Style="{StaticResource ConceptValueBadgeTextStyle}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource MetadataHelpTagChipsText}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,0,0,12"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="{DynamicResource MetadataHelpOutputTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}" VerticalAlignment="Center"/>
+                                        <ToggleButton Style="{StaticResource ConceptOutputChipToggleStyle}" IsChecked="False" IsHitTestVisible="False" Focusable="False" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource MetadataHelpOutputToggleText}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,0,0,12"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="{DynamicResource MetadataHelpLockTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}" VerticalAlignment="Center"/>
+                                        <ToggleButton Style="{StaticResource ConceptMetadataLockToggleStyle}" IsChecked="False" IsHitTestVisible="False" Focusable="False" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource MetadataHelpLockText}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,0,0,12"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="{DynamicResource MetadataHelpSearchTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource MetadataHelpSearchText}" Style="{StaticResource ConceptHelpBodyTextStyle}"/>
+                                </StackPanel>
+
+                                <StackPanel Style="{StaticResource ConceptHelpSectionHeaderStyle}">
+                                    <TextBlock Text="•" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}" Margin="0,0,6,0"/>
+                                    <TextBlock Text="{DynamicResource MetadataHelpTermsTitle}" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}"/>
+                                    <TextBlock Text="•" Style="{StaticResource ConceptHelpSectionHeaderTextStyle}" Margin="6,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="{DynamicResource MetadataHelpAuthorsNarratorsTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpAuthorsNarratorsBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpCoverTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpCoverBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpSeriesTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpSeriesBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpPlayerLibraryTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpPlayerLibraryBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpCompatibilityDescriptionTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpCompatibilityDescriptionBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpPassThroughTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpPassThroughBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,16"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpSpeakerAsComposerTitle}" Style="{StaticResource ConceptHelpItemTitleStyle}"/>
+                                <TextBlock Text="{DynamicResource MetadataHelpComposerSpeakerBody}" Style="{StaticResource ConceptHelpBodyTextStyle}" Margin="0,2,0,10"/>
+                            </StackPanel>
+                        </Grid>
+                        </Grid>
+                    </ScrollViewer>
+
+                    <Grid x:Name="ConceptMetadataContextColumn"
+                          Visibility="Collapsed"
+                          Margin="20"
+                          Panel.ZIndex="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="29*"/>
+                            <ColumnDefinition Width="11*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="1" Width="170" HorizontalAlignment="Right" VerticalAlignment="Stretch">
+                            <StackPanel x:Name="ConceptMetadataContextAudiobook" VerticalAlignment="Top">
+                                <ContentControl Content="{Binding CoverPreviewSource}" ContentTemplate="{StaticResource ConceptMetadataFamilyCoverTemplate}"/>
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Text="{Binding ContextBookTitle}" Style="{StaticResource ConceptMetadataContextTitleStyle}"/>
+                                    <StackPanel Tag="{Binding ContextAuthor}" Style="{StaticResource ConceptMetadataContextRoleGroupStyle}">
+                                        <TextBlock Text="{Binding ContextAuthorLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                        <TextBlock Text="{Binding ContextAuthor}" Style="{StaticResource ConceptMetadataContextValueStyle}"/>
+                                    </StackPanel>
+                                    <StackPanel Tag="{Binding ContextNarrator}" Style="{StaticResource ConceptMetadataContextRoleGroupStyle}">
+                                        <TextBlock Text="{Binding ContextNarratorLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                        <TextBlock Text="{Binding ContextNarrator}" Style="{StaticResource ConceptMetadataContextValueStyle}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                            <Grid x:Name="ConceptMetadataContextCover" Visibility="Collapsed">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{DynamicResource CoverDetailsTitle}" Style="{StaticResource ConceptMetadataContextTitleStyle}"/>
+                                        <controls:InfoPoint Margin="5,0,0,0" Title="{DynamicResource InfoCoverDetailsTitle}" Body="{DynamicResource InfoCoverDetailsBody}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{DynamicResource CoverDetailsFileNameLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                    <TextBlock Text="{Binding CoverDetailsFileName}" Style="{StaticResource ConceptMetadataContextValueStyle}" MinHeight="18" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{DynamicResource CoverDetailsFormatLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                    <TextBlock Text="{Binding CoverDetailsFormat}" Style="{StaticResource ConceptMetadataContextValueStyle}" MinHeight="18"/>
+                                    <TextBlock Text="{DynamicResource CoverDetailsDimensionsLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                    <TextBlock Text="{Binding CoverDetailsDimensions}" Style="{StaticResource ConceptMetadataContextValueStyle}" MinHeight="18"/>
+                                    <TextBlock Text="{DynamicResource CoverDetailsFileSizeLabel}" Style="{StaticResource ConceptMetadataContextRoleStyle}"/>
+                                    <TextBlock Text="{Binding CoverDetailsFileSize}" Style="{StaticResource ConceptMetadataContextValueStyle}" MinHeight="18"/>
+                                    <CheckBox Content="{services:LocalizedText Key=UiCoverOrdnerMerken}"
+                                              Margin="0,12,0,0"
+                                              Style="{StaticResource SettingsToggleStyle}"
+                                              IsChecked="{Binding RememberLastCoverPickerFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RememberCoverFolder}"/>
+                                    <TextBlock Text="{DynamicResource CoverWarningThresholdHeading}"
+                                               Style="{StaticResource ConceptMetadataContextRoleStyle}"
+                                               Margin="0,12,0,4"
+                                               TextWrapping="Wrap"/>
+                                    <ComboBox x:Name="ConceptCoverWarningThresholdComboBox"
+                                              Style="{StaticResource ConceptMetadataContextInlineComboBoxStyle}"
+                                              SelectionChanged="ConceptCoverWarningThresholdComboBox_Changed"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <Grid x:Name="ConceptChapterPanel"
+                          Visibility="Collapsed"
+                          Margin="20,0,4,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="29*"/>
+                            <ColumnDefinition Width="11*"/>
+                            <ColumnDefinition Width="{x:Static presentation:ChapterGridLayoutMetrics.ProposalDisclosureGridLength}"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0" Margin="0,20,8,0">
+                            <DataGrid x:Name="ConceptChapterGrid"
+                                      ItemsSource="{Binding ChapterTracksView}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      CanUserSortColumns="False"
+                                      CanUserReorderColumns="False"
+                                      CanUserResizeColumns="True"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      SelectionMode="Single"
+                                      SelectionUnit="FullRow"
+                                      EnableRowVirtualization="True"
+                                      EnableColumnVirtualization="True"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling"
+                                      ScrollViewer.CanContentScroll="True"
+                                      ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                                      Loaded="ConceptChapterGrid_Loaded"
+                                      Unloaded="ConceptChapterGrid_Unloaded"
+                                      SizeChanged="ConceptChapterGrid_SizeChanged"
+                                      Background="{DynamicResource AppBackgroundBrush}"
+                                      Foreground="{DynamicResource MainTextBrush}"
+                                      BorderThickness="0"
+                                      HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal">
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsEmbeddedChapter}" Value="True">
+                                                <Setter Property="Foreground" Value="{DynamicResource TertiaryTextBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsExcluded}" Value="True">
+                                                <Setter Property="Opacity" Value="0.45"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource DisabledButtonTextBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.RowStyle>
+
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn x:Name="ConceptChapterProposalColumn" Header="{services:LocalizedText Key=UiKapitelvorschlag}" Width="180" MinWidth="120">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="{x:Static presentation:ChapterGridLayoutMetrics.ProposalDisclosureGridLength}"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ToggleButton Grid.Column="0"
+                                                                  IsChecked="{Binding IsChapterDetailsExpanded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Visibility="{Binding HasEmbeddedChapterDetails, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                                                                  AutomationProperties.Name="{Binding ChapterDetailsAutomationName}"
+                                                                  Click="ConceptChapterDetailsToggle_Click"
+                                                                  Style="{StaticResource ChapterDisclosureToggleStyle}"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding ChapterProposal}"
+                                                               TextTrimming="None"
+                                                               TextWrapping="NoWrap"
+                                                               VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource DataGridCellInheritedTextStyle}">
+                                                                <Setter Property="Margin" Value="{x:Static presentation:ChapterGridLayoutMetrics.ProposalTextMargin}"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsEmbeddedChapter}" Value="True">
+                                                                        <Setter Property="Margin" Value="{x:Static presentation:ChapterGridLayoutMetrics.EmbeddedProposalTextMargin}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn x:Name="ConceptChapterDurationColumn" Header="{services:LocalizedText Key=UiDauer}"
+                                                        Binding="{Binding Duration}"
+                                                        Width="110"/>
+                                    <DataGridTextColumn x:Name="ConceptChapterWarningColumn" Header="{services:LocalizedText Key=UiKapitelwarnung}"
+                                                        Binding="{Binding ChapterWarning}"
+                                                        Width="260"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <Border x:Name="ConceptChapterBottomFade"
+                                    Height="50"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Bottom"
+                                    Panel.ZIndex="3"
+                                    IsHitTestVisible="False"
+                                    Background="{DynamicResource AppBackgroundBrush}">
+                                <Border.OpacityMask>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="Transparent" Offset="0"/>
+                                        <GradientStop Color="#66000000" Offset="0.42"/>
+                                        <GradientStop Color="#99000000" Offset="0.72"/>
+                                        <GradientStop Color="Black" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.OpacityMask>
+                            </Border>
+                            <ScrollBar x:Name="ConceptChapterHorizontalScrollBar"
+                                       Orientation="Horizontal"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Bottom"
+                                       Height="14"
+                                       Panel.ZIndex="4"
+                                       Visibility="Collapsed"
+                                       ValueChanged="ConceptChapterHorizontalScrollBar_ValueChanged"/>
+                            <Border x:Name="ConceptChapterRightFade"
+                                    Width="30"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Stretch"
+                                    Panel.ZIndex="5"
+                                    IsHitTestVisible="False"
+                                    Background="{DynamicResource AppBackgroundBrush}">
+                                <Border.OpacityMask>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="Transparent" Offset="0"/>
+                                        <GradientStop Color="#66000000" Offset="0.55"/>
+                                        <GradientStop Color="Black" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.OpacityMask>
+                            </Border>
+                        </Grid>
+                        <Grid Grid.Column="1" Margin="0,20,14,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <ContentControl Grid.Row="0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top"
+                                            Content="{Binding CoverPreviewSource}"
+                                            ContentTemplate="{StaticResource ConceptMetadataFamilyCoverTemplate}"/>
+                            <ScrollViewer x:Name="ConceptChapterSettingsScrollViewer"
+                                          Grid.Row="1"
+                                          Margin="0,16,0,0"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="ConceptChapterSettingsEditorPanel">
+                                    <TextBlock x:Name="ConceptChapterSettingsHeadingTextBlock"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,10"/>
+                                    <TextBlock x:Name="ConceptChapterModeLabelTextBlock"
+                                               Style="{StaticResource ConceptMetadataContextRoleStyle}"
+                                               Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="ConceptChapterModeComboBox" ItemContainerStyle="{StaticResource ChapterModeComboBoxItemStyle}"
+                                              Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                              SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                    <StackPanel x:Name="ConceptChapterNumberingStylePanel" Margin="0,10,0,0">
+                                        <TextBlock x:Name="ConceptChapterNumberingStyleLabelTextBlock"
+                                                   Style="{StaticResource ConceptMetadataContextRoleStyle}"
+                                                   Margin="0,0,0,4"/>
+                                        <ComboBox x:Name="ConceptChapterNumberingStyleComboBox"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="ConceptChapterCustomRulePanel" Margin="0,16,0,0">
+                                        <TextBlock x:Name="ConceptChapterCustomHeadingTextBlock"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,8"/>
+                                        <ComboBox x:Name="ConceptChapterSlot1ComboBox"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                        <ComboBox x:Name="ConceptChapterSeparator1ComboBox"
+                                                  Margin="0,6,0,0"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                        <ComboBox x:Name="ConceptChapterSlot2ComboBox"
+                                                  Margin="0,6,0,0"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                        <ComboBox x:Name="ConceptChapterSeparator2ComboBox"
+                                                  Margin="0,6,0,0"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                        <ComboBox x:Name="ConceptChapterSlot3ComboBox"
+                                                  Margin="0,6,0,0"
+                                                  Style="{StaticResource ConceptCompactSettingsComboBoxStyle}"
+                                                  SelectionChanged="ConceptChapterSettingsComboBox_Changed"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                        <ScrollBar x:Name="ConceptChapterVerticalScrollBar"
+                                   Grid.Column="2"
+                                   Orientation="Vertical"
+                                   Margin="3,0,5,0"
+                                   VerticalAlignment="Stretch"
+                                   Visibility="Collapsed"
+                                   ValueChanged="ConceptChapterVerticalScrollBar_ValueChanged"/>
+                    </Grid>
+
+                    <Border x:Name="ConceptScrollCorner"
+                            Width="17"
+                            Height="17"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Panel.ZIndex="10"
+                            IsHitTestVisible="False">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{DynamicResource ScrollBarTrackBrush}"/>
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding ComputedHorizontalScrollBarVisibility, ElementName=ConceptScrollViewer}" Value="Visible"/>
+                                            <Condition Binding="{Binding ComputedVerticalScrollBarVisibility, ElementName=ConceptScrollViewer}" Value="Visible"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <Border Grid.Row="2"
+                    Background="{DynamicResource AppBackgroundBrush}"
+                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    CornerRadius="0,0,8,8"
+                    Padding="14">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="{services:LocalizedText Key=UiSchliessen}"
+                            Width="110"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Click="Close_Click"
+                            AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.CloseDialog}"/>
+                </StackPanel>
+            </Border>
+    </Grid>
+</Window>

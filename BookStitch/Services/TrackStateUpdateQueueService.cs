@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -9,11 +9,16 @@ namespace BookStitch.Services;
 public sealed class TrackStateUpdateQueueService : IDisposable
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan ActiveRefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly DispatcherTimer _timer;
     private readonly Func<TrackStateUpdateContext> _contextProvider;
     private readonly Action _onTracksChanged;
     private readonly bool _isEnabled;
+    private readonly PerformanceTraceService? _trace;
+    private readonly TimeProvider _timeProvider;
+    private long? _lastActiveRefresh;
+    private bool _finalRefreshRequested;
     private int _refreshRequested;
     private bool _isTickRunning;
     private bool _wasWorkflowActive;
@@ -22,11 +27,18 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         Func<TrackStateUpdateContext> contextProvider,
         Action onTracksChanged,
         TimeSpan? interval = null,
-        bool isEnabled = true)
+        bool isEnabled = true,
+        PerformanceTraceService? trace = null,
+        TimeProvider? timeProvider = null)
     {
+        ArgumentNullException.ThrowIfNull(contextProvider);
+        ArgumentNullException.ThrowIfNull(onTracksChanged);
+
         _contextProvider = contextProvider;
         _onTracksChanged = onTracksChanged;
         _isEnabled = isEnabled;
+        _trace = trace;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = interval ?? DefaultInterval
@@ -62,22 +74,32 @@ public sealed class TrackStateUpdateQueueService : IDisposable
             return;
 
         var context = _contextProvider();
-        if (context.IsRefreshSuspended)
+        if (_wasWorkflowActive && !context.IsWorkflowActive)
+            _finalRefreshRequested = true;
+        if (!_wasWorkflowActive && context.IsWorkflowActive)
+            _lastActiveRefresh = null;
+        _wasWorkflowActive = context.IsWorkflowActive;
+        if (context.IsRefreshSuspended || context.PipelineState == ProjectPipelineState.Merging)
         {
-            _wasWorkflowActive = context.IsWorkflowActive;
             return;
         }
 
-        var shouldApplyUpdates = Volatile.Read(ref _refreshRequested) == 1 || context.IsWorkflowActive || _wasWorkflowActive;
-        _wasWorkflowActive = context.IsWorkflowActive;
+        var now = _timeProvider.GetTimestamp();
+        // Active requests share the safety interval; progress bursts cannot cause full scans every tick.
+        var shouldApplyUpdates = _finalRefreshRequested || (context.IsWorkflowActive
+            ? _lastActiveRefresh is null || _timeProvider.GetElapsedTime(_lastActiveRefresh.Value, now) >= ActiveRefreshInterval
+            : Volatile.Read(ref _refreshRequested) == 1);
         if (!shouldApplyUpdates)
             return;
 
         Interlocked.Exchange(ref _refreshRequested, 0);
+        _finalRefreshRequested = false;
+        if (context.IsWorkflowActive)
+            _lastActiveRefresh = now;
         _isTickRunning = true;
         try
         {
-            if (ApplyUpdates(context))
+            if (ApplyUpdates(context, _trace))
                 _onTracksChanged();
         }
         finally
@@ -86,19 +108,32 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         }
     }
 
-    public static bool ApplyUpdates(TrackStateUpdateContext context)
+    public static bool ApplyUpdates(TrackStateUpdateContext context, PerformanceTraceService? trace = null)
     {
+        using var measurement = PerformanceMeasurement.Start(
+            context.IsWorkflowActive ? "track-state.refresh.active" : "track-state.refresh.requested-or-final", trace);
+        measurement?.Add("TracksChecked", 0);
+        if (measurement is not null)
+        {
+            measurement.Add("SourceFileChecks", 0);
+            measurement.Add("ConvertedFileChecks", 0);
+            measurement.Add("PreparedFileChecks", 0);
+            measurement.Add("ManifestReads", 0);
+            measurement.Add("PreparedStateReads", 0);
+            measurement.Add("ChangedCycles", 0);
+        }
         if (context.Tracks.Count == 0)
             return false;
 
-        var convertedBySourcePath = LoadConvertedEntries(context.ProjectWorkFolder, context.SelectedPreset);
+        var convertedBySourcePath = LoadConvertedEntries(context.ProjectWorkFolder, context.SelectedPreset, measurement, trace);
         var preset = ExportPreset.Parse(context.SelectedPreset);
         var changed = false;
 
         foreach (var track in context.Tracks)
         {
+            measurement?.Add("TracksChecked");
             var sourcePath = NormalizePath(track.FilePath);
-            var sourceFile = GetExistingFile(sourcePath, context.IsWorkflowActive);
+            var sourceFile = GetExistingFile(sourcePath, context.IsWorkflowActive, measurement);
             var sourceSizeAvailable = sourceFile is not null;
             var sourceSizeMb = sourceFile is null ? 0d : ToMegabytes(sourceFile.File.Length);
             if (track.SourceSizeAvailable != sourceSizeAvailable)
@@ -115,7 +150,8 @@ public sealed class TrackStateUpdateQueueService : IDisposable
 
             if (SetWarningMarker(
                     track,
-                    "Quelldatei ist leer",
+                    TrackWarningCodes.EmptySource,
+                    LocalizationText.Get("WarningEmptySourceSentence"),
                     sourceFile is { IsPartFile: false } && sourceFile.File.Length == 0))
             {
                 changed = true;
@@ -140,80 +176,44 @@ public sealed class TrackStateUpdateQueueService : IDisposable
                 track,
                 sourcePath,
                 convertedState);
-            var convertedFile = GetConvertedFile(resolvedConvertedPath, context.IsWorkflowActive);
+            var convertedFile = GetConvertedFile(resolvedConvertedPath, context.IsWorkflowActive, measurement);
             var convertedSizeAvailable = convertedFile is not null;
-            var convertedSizeMb = convertedFile is null ? 0d : ToMegabytes(convertedFile.File.Length);
             if (track.ConvertedSizeAvailable != convertedSizeAvailable)
             {
                 track.ConvertedSizeAvailable = convertedSizeAvailable;
                 changed = true;
             }
 
-            if (!NearlyEqual(track.ConvertedSizeMb, convertedSizeMb))
-            {
-                track.ConvertedSizeMb = convertedSizeMb;
-                changed = true;
-            }
-
             if (SetWarningMarker(
                     track,
-                    "AAC-Datei ist leer",
+                    TrackWarningCodes.EmptyAac,
+                    LocalizationText.Get("WarningEmptyAacSentence"),
                     convertedFile is { IsPartFile: false } && convertedFile.File.Length == 0))
             {
                 changed = true;
             }
 
-            // Fertige Dateien werden atomar aus .part umbenannt. Eine vorhandene,
-            // nicht leere Zieldatei ist deshalb auch dann wiederverwendbar, wenn der
-            // Live-Import den Manifeststatus vor einem Abbruch noch nicht aktualisiert hat.
-            var hasCompletedConvertedFile = !string.IsNullOrWhiteSpace(resolvedConvertedPath) &&
-                File.Exists(resolvedConvertedPath) &&
-                new FileInfo(resolvedConvertedPath).Length > 0;
-
-            if (hasCompletedConvertedFile)
-            {
-                if (!string.Equals(track.PreparedConvertedPath, resolvedConvertedPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    track.PreparedConvertedPath = resolvedConvertedPath;
-                    changed = true;
-                }
-
-                if (!string.Equals(track.PreparedConvertedPreset, context.SelectedPreset, StringComparison.Ordinal))
-                {
-                    track.PreparedConvertedPreset = context.SelectedPreset;
-                    changed = true;
-                }
-            }
-            else
-            {
-                if (!string.IsNullOrEmpty(track.PreparedConvertedPath))
-                {
-                    track.PreparedConvertedPath = string.Empty;
-                    changed = true;
-                }
-
-                if (!string.IsNullOrEmpty(track.PreparedConvertedPreset))
-                {
-                    track.PreparedConvertedPreset = string.Empty;
-                    changed = true;
-                }
-            }
-
-            if (track.HasReusableConvertedFile != hasCompletedConvertedFile)
-            {
-                track.HasReusableConvertedFile = hasCompletedConvertedFile;
-                changed = true;
-            }
-
             if (sourceFile is not null &&
                 sourceFile.File.Length > 0 &&
-                string.Equals(track.ProcessingAction, "FLAC rippen", StringComparison.OrdinalIgnoreCase))
+                ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.RipFlac)
             {
                 track.ProcessingAction = AudioProcessingService.DetermineProcessingAction(track, preset);
                 changed = true;
             }
         }
 
+        var previousPrepared = context.Tracks.Select(track =>
+            (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable)).ToArray();
+        new TrackPreparedStateRefreshService().RefreshForCurrentPreset(context.Tracks, context.ProjectWorkFolder, context.SelectedPreset, measurement, trace);
+        for (var index = 0; index < context.Tracks.Count; index++)
+        {
+            var track = context.Tracks[index];
+            if (context.IsWorkflowActive && previousPrepared[index].ConvertedSizeAvailable)
+                track.ConvertedSizeAvailable = true; // Partial-size observation is separate from preparation evidence.
+            changed |= previousPrepared[index] !=
+                (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable);
+        }
+        if (changed) measurement?.Add("ChangedCycles");
         return changed;
     }
 
@@ -229,16 +229,17 @@ public sealed class TrackStateUpdateQueueService : IDisposable
             changed = true;
         }
 
-        var codec = extension switch
-        {
-            ".flac" => "FLAC",
-            ".mp3" => "MP3",
-            ".m4a" or ".m4b" or ".aac" => "AAC",
-            ".wav" => "PCM",
-            ".ogg" or ".oga" => "Vorbis",
-            ".opus" => "Opus",
-            _ => track.Codec
-        };
+        var codec = string.IsNullOrWhiteSpace(track.Codec)
+            ? extension switch
+            {
+                ".flac" => "FLAC",
+                ".mp3" => "MP3",
+                ".m4a" or ".m4b" or ".aac" => "AAC",
+                ".wav" => "PCM",
+                ".opus" => "Opus",
+                _ => track.Codec
+            }
+            : track.Codec;
 
         if (!string.IsNullOrWhiteSpace(codec) &&
             !string.Equals(track.Codec, codec, StringComparison.OrdinalIgnoreCase))
@@ -249,7 +250,7 @@ public sealed class TrackStateUpdateQueueService : IDisposable
 
         // Audio-CD-Arbeitsdateien sind immer zweikanalige FLAC-Dateien.
         if (extension == ".flac" &&
-            (string.Equals(track.ProcessingAction, "FLAC rippen", StringComparison.OrdinalIgnoreCase) ||
+            (ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.RipFlac ||
              track.DiscNumber.HasValue))
         {
             if (track.Channels != 2)
@@ -274,8 +275,10 @@ public sealed class TrackStateUpdateQueueService : IDisposable
             }
         }
 
+        // Preserve measured source bitrate (including the initial tag read).
+        // Container size includes tags/covers and is only a fallback for missing metadata.
         var durationSeconds = GetDurationSeconds(track);
-        if (durationSeconds > 0)
+        if (durationSeconds > 0 && track.BitrateKbps is not > 0)
         {
             var bitrateKbps = (int)Math.Round(sourceFile.Length * 8d / durationSeconds / 1000d);
             if (track.BitrateKbps != bitrateKbps)
@@ -303,9 +306,15 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         // Projekteigenschaften. Bei lokalen, fehlenden Quellen sind Kanalwerte
         // dagegen gemessene Dateieigenschaften und dürfen nicht stehen bleiben.
         var isPendingAudioDiscTrack = track.DiscNumber.HasValue ||
-            string.Equals(track.ProcessingAction, "FLAC rippen", StringComparison.OrdinalIgnoreCase);
+            ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.RipFlac;
         if (!isPendingAudioDiscTrack)
         {
+            if (track.SampleRateHz.HasValue)
+            {
+                track.SampleRateHz = null;
+                changed = true;
+            }
+
             if (track.Channels.HasValue)
             {
                 track.Channels = null;
@@ -391,7 +400,8 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         }
     }
 
-    private static Dictionary<string, ConvertedTrackState> LoadConvertedEntries(string projectWorkFolder, string selectedPreset)
+    private static Dictionary<string, ConvertedTrackState> LoadConvertedEntries(string projectWorkFolder, string selectedPreset,
+        PerformanceMeasurement? refresh, PerformanceTraceService? trace)
     {
         if (string.IsNullOrWhiteSpace(projectWorkFolder))
             return new Dictionary<string, ConvertedTrackState>(StringComparer.OrdinalIgnoreCase);
@@ -409,7 +419,10 @@ public sealed class TrackStateUpdateQueueService : IDisposable
 
             try
             {
+                using var read = PerformanceMeasurement.Start("manifest.read.live-refresh", trace);
+                refresh?.Add("ManifestReads");
                 var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+                read?.FileBytes(manifestPath);
                 var manifest = JsonSerializer.Deserialize<ExportWorkManifest>(json);
                 if (manifest?.Tracks is not { Count: > 0 })
                     continue;
@@ -440,11 +453,12 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         return new Dictionary<string, ConvertedTrackState>(StringComparer.OrdinalIgnoreCase);
     }
 
-    private static ObservedFile? GetExistingFile(string path, bool includePartFiles)
+    private static ObservedFile? GetExistingFile(string path, bool includePartFiles, PerformanceMeasurement? measurement)
     {
         if (string.IsNullOrWhiteSpace(path))
             return null;
 
+        measurement?.Add("SourceFileChecks");
         if (File.Exists(path))
             return new ObservedFile(new FileInfo(path), IsPartFile: false);
 
@@ -452,16 +466,18 @@ public sealed class TrackStateUpdateQueueService : IDisposable
             return null;
 
         var partPath = path + ".part";
+        measurement?.Add("SourceFileChecks");
         return File.Exists(partPath)
             ? new ObservedFile(new FileInfo(partPath), IsPartFile: true)
             : null;
     }
 
-    private static ObservedFile? GetConvertedFile(string? path, bool includePartFiles)
+    private static ObservedFile? GetConvertedFile(string? path, bool includePartFiles, PerformanceMeasurement? measurement)
     {
         if (string.IsNullOrWhiteSpace(path))
             return null;
 
+        measurement?.Add("ConvertedFileChecks");
         if (File.Exists(path))
             return new ObservedFile(new FileInfo(path), IsPartFile: false);
 
@@ -469,26 +485,30 @@ public sealed class TrackStateUpdateQueueService : IDisposable
             return null;
 
         var partPath = path + ".part";
+        measurement?.Add("ConvertedFileChecks");
         return File.Exists(partPath)
             ? new ObservedFile(new FileInfo(partPath), IsPartFile: true)
             : null;
     }
 
-    private static bool SetWarningMarker(TrackInfo track, string marker, bool shouldBePresent)
+    private static bool SetWarningMarker(TrackInfo track, TrackWarningCodes code, string marker, bool shouldBePresent)
     {
+        var existingCodes = track.WarningCodes;
         var warnings = (track.Warning ?? string.Empty)
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(item => !string.Equals(item, marker, StringComparison.OrdinalIgnoreCase))
+            .Where(item => !LegacyTrackWarningReader.Read(item).HasFlag(code) &&
+                           !string.Equals(item, marker, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (shouldBePresent)
             warnings.Add(marker);
 
         var updated = string.Join("; ", warnings);
-        if (string.Equals(track.Warning, updated, StringComparison.Ordinal))
+        var updatedCodes = shouldBePresent ? existingCodes | code : existingCodes & ~code;
+        if (string.Equals(track.Warning, updated, StringComparison.Ordinal) && track.WarningCodes == updatedCodes)
             return false;
 
-        track.Warning = updated;
+        track.SetWarning(updated, updatedCodes);
         return true;
     }
 
@@ -514,10 +534,3 @@ public sealed class TrackStateUpdateQueueService : IDisposable
     private sealed record ConvertedTrackState(string ConvertedPath, string Status);
     private sealed record ObservedFile(FileInfo File, bool IsPartFile);
 }
-
-public sealed record TrackStateUpdateContext(
-    IReadOnlyList<TrackInfo> Tracks,
-    string ProjectWorkFolder,
-    string SelectedPreset,
-    bool IsWorkflowActive,
-    bool IsRefreshSuspended = false);

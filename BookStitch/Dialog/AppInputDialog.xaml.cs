@@ -1,3 +1,4 @@
+using BookStitch.Services;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -41,7 +42,7 @@ public partial class AppInputDialog : Window
             value < _minimum ||
             value > _maximum)
         {
-            ErrorText.Text = $"Bitte eine Zahl von {_minimum} bis {_maximum} eingeben.";
+            ErrorText.Text = LocalizationText.Format("AppInput.NumberRange", _minimum, _maximum);
             ErrorText.Visibility = Visibility.Visible;
             InputTextBox.Focus();
             InputTextBox.SelectAll();

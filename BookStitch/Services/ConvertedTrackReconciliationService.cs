@@ -22,11 +22,18 @@ public sealed class ConvertedTrackReconciliationService
         TrackInfo track,
         string sourcePath,
         string convertedPath,
-        ExportPreset preset)
+        ExportPreset preset,
+        CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(preset);
+
+        if (track.SourceId == Guid.Empty)
+            track.SourceId = manifest.Tracks.FirstOrDefault(entry =>
+                TrackPathService.PathEquals(entry.SourcePath, sourcePath) && entry.SourceId != Guid.Empty)?.SourceId ?? Guid.NewGuid();
+        foreach (var entry in manifest.Tracks.Where(entry => TrackPathService.PathEquals(entry.SourcePath, sourcePath)))
+            WorkManifestService.MigratePreparedEntry(entry);
 
         var canReuse = _workManifestService.CanReuseConvertedTrack(
                            manifest,
@@ -34,24 +41,19 @@ public sealed class ConvertedTrackReconciliationService
                            track,
                            sourcePath,
                            convertedPath,
-                           preset) ||
-                       PreparedConvertedTrackReuseService.CanReuseForDiscProject(
-                           projectType,
-                           sourcePath,
-                           convertedPath);
+                           preset, token);
+        // An untracked file's timestamp cannot establish the preset or processing action.
 
         if (canReuse)
         {
-            // A reusable file is authoritative evidence for the current cache entry.
-            // Rebuild the entry so stale disc-project manifests and reordered track
-            // indices are normalized before conversion resume continues.
+            // Normalize the verified cache entry after track reordering.
             _workManifestService.UpdateTrack(
                 manifest,
                 index,
                 track,
                 sourcePath,
                 convertedPath,
-                preset);
+                preset, existingContentVerified: true);
 
             return new ConvertedTrackReconciliationResult(
                 CanReuse: true,

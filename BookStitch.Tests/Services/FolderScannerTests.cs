@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using Xunit;
+using BookStitch.Models;
 using BookStitch.Services;
 using BookStitch.Tests.TestHelpers;
 
@@ -7,6 +8,92 @@ namespace BookStitch.Tests.Services;
 
 public sealed class FolderScannerTests
 {
+    [Fact]
+    public void Scan_reads_source_sample_rate_and_bitrate_from_the_existing_tag_read()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("source.mp3");
+        var reader = new TechnicalTagMetadataReader();
+        var track = Assert.Single(new FolderScanner(reader, new FileSystemMetadataReader()).Scan(folder.Path));
+        Assert.Equal(1, reader.ReadCalls);
+        Assert.Equal(256, track.BitrateKbps);
+        Assert.Equal(44100, track.SampleRateHz);
+    }
+
+    private sealed class TechnicalTagMetadataReader : TagMetadataReader
+    {
+        public int ReadCalls { get; private set; }
+        public override TagMetadataReadResult Read(string filePath)
+        {
+            ReadCalls++;
+            return new(new OriginalTagMetadata(), TimeSpan.FromMinutes(1), 256, 2, false, false)
+            { TechnicalSampleRateHzFallback = 44100 };
+        }
+    }
+
+    [Fact]
+    public void Scan_RetainsReadableSiblingsWhenAnotherDirectoryDeniesEnumeration()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile(Path.Combine("readable", "001.mp3"));
+        folder.CreateFile(Path.Combine("blocked", "002.mp3"));
+        var blocked = new DirectoryInfo(Path.Combine(folder.Path, "blocked"));
+        var original = System.IO.FileSystemAclExtensions.GetAccessControl(blocked);
+        var restricted = System.IO.FileSystemAclExtensions.GetAccessControl(blocked);
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        restricted.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
+            identity.User!, System.Security.AccessControl.FileSystemRights.ListDirectory,
+            System.Security.AccessControl.AccessControlType.Deny));
+        try
+        {
+            System.IO.FileSystemAclExtensions.SetAccessControl(blocked, restricted);
+            Assert.Equal("001.mp3", Assert.Single(new FolderScanner().Scan(folder.Path)).FileName);
+            Assert.Single(new Mp3DiscImportService().AnalyzeSource(folder.Path).SupportedAudioFiles);
+        }
+        finally { System.IO.FileSystemAclExtensions.SetAccessControl(blocked, original); }
+    }
+
+    [Fact]
+    public async Task ScanAsync_CanBeCanceledDuringEnumerationWithoutPublishingPartialTracks()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001.mp3");
+        folder.CreateFile("002.mp3");
+        using var cancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new FolderScanner().ScanAsync(
+            folder.Path, includeFile: _ => { cancellation.Cancel(); return true; },
+            cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void Scan_SkipsAJunctionBackToItsParentAndRetainsReadableTracks()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001.mp3");
+        var junction = Path.Combine(folder.Path, "loop");
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "/c", "mklink", "/J", junction, folder.Path })
+            process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        Assert.True(process.WaitForExit(5000));
+        Assert.Equal(0, process.ExitCode);
+        try
+        {
+            Assert.True((File.GetAttributes(junction) & FileAttributes.ReparsePoint) != 0);
+            var tracks = new FolderScanner().Scan(folder.Path);
+            Assert.Equal("001.mp3", Assert.Single(tracks).FileName);
+            Assert.Single(new Mp3DiscImportService().AnalyzeSource(folder.Path).SupportedAudioFiles);
+        }
+        finally { Directory.Delete(junction); }
+    }
+
     [Fact]
     public void Scan_Orders_Files_By_Disc_Track_And_Natural_File_Name()
     {
@@ -31,13 +118,15 @@ public sealed class FolderScannerTests
     }
 
     [Theory]
-    [InlineData("Track 001 Intro.mp3", 1, "Intro")]
-    [InlineData("Track01 Intro.mp3", 1, "Intro")]
-    [InlineData("Kapitel 002 Anfang.mp3", 2, "Anfang")]
-    [InlineData("Chapter 003 Middle.mp3", 3, "Middle")]
-    [InlineData("Titel 004 Ende.mp3", 4, "Ende")]
-    [InlineData("005 Outro.mp3", 5, "Outro")]
-    public void Scan_Recognizes_Common_Track_Number_Patterns(string fileName, int expectedTrackNumber, string expectedChapterTitle)
+    [InlineData("Track 001 Intro.mp3", 1)]
+    [InlineData("Track01 Intro.mp3", 1)]
+    [InlineData("Kapitel 002 Anfang.mp3", 2)]
+    [InlineData("Chapter 003 Middle.mp3", 3)]
+    [InlineData("Titel 004 Ende.mp3", 4)]
+    [InlineData("005 Outro.mp3", 5)]
+    public void Scan_Recognizes_Common_Track_Number_PatternsWithoutPrecomputingAutoChapter(
+        string fileName,
+        int expectedTrackNumber)
     {
         using var folder = new TemporaryFolder();
         folder.CreateFile(fileName);
@@ -45,7 +134,40 @@ public sealed class FolderScannerTests
         var track = Assert.Single(new FolderScanner().Scan(folder.Path));
 
         Assert.Equal(expectedTrackNumber, track.TrackNumber);
-        Assert.Equal(expectedChapterTitle, track.ChapterTitle);
+        Assert.Empty(track.ChapterTitle);
+    }
+
+    [Theory]
+    [InlineData("Kapitola 3 Úvod.mp3", 3)]
+    [InlineData("Rozdział 4 Początek.mp3", 4)]
+    [InlineData("Глава 5 Начало.mp3", 5)]
+    [InlineData("Κεφάλαιο 6 Αρχή.mp3", 6)]
+    [InlineData("第7章标题.mp3", 7)]
+    [InlineData("第8話タイトル.mp3", 8)]
+    public void Scan_RecognizesInternationalNamedTrackNumbers(string fileName, int expectedTrackNumber)
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile(fileName);
+
+        var track = Assert.Single(new FolderScanner().Scan(folder.Path));
+
+        Assert.Equal(expectedTrackNumber, track.TrackNumber);
+    }
+
+    [Theory]
+    [InlineData("Część 2", 2)]
+    [InlineData("Часть 3", 3)]
+    [InlineData("Μέρος 4", 4)]
+    [InlineData("Deel 5", 5)]
+    public void Scan_RecognizesInternationalDiscFolders(string discFolder, int expectedDiscNumber)
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile(Path.Combine(discFolder, "001 Intro.mp3"));
+
+        var track = Assert.Single(new FolderScanner().Scan(folder.Path));
+
+        Assert.Equal(expectedDiscNumber, track.DiscNumber);
+        Assert.Equal(1, track.TrackNumber);
     }
 
     [Fact]
@@ -58,6 +180,61 @@ public sealed class FolderScannerTests
         var tracks = new FolderScanner().Scan(folder.Path);
 
         Assert.All(tracks, track => Assert.DoesNotContain("Doppelte Tracknummer", track.Warning, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Scan_DoesNotPrecomputeChapterTitleFromRepeatedTechnicalNumbers()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001_01_-_Die_Flüsse_von_London.flac");
+
+        var track = Assert.Single(new FolderScanner().Scan(folder.Path));
+
+        Assert.Empty(track.ChapterTitle);
+    }
+
+    [Fact]
+    public void Scan_LargeRepetitiveFolder_DoesNotThrowOrDropTracks()
+    {
+        using var folder = new TemporaryFolder();
+        for (var index = 0; index < 1300; index++)
+        {
+            var group = (index % 2) + 1;
+            var copy = (index % 2) + 1;
+            folder.CreateFile(Path.Combine(
+                $"Copy {index:0000}",
+                $"{group:000}_{copy:000}_Stephen_King_1000.mp3"));
+        }
+
+        var tagReader = new EmptyTagMetadataReader();
+        var tracks = new FolderScanner(tagReader, new FileSystemMetadataReader()).Scan(folder.Path);
+
+        Assert.Equal(1300, tracks.Count);
+        Assert.Equal(1300, tagReader.ReadCalls);
+        Assert.Equal(1300, tracks.Select(track => track.RelativeFolder).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(Enumerable.Range(1, 1300), tracks.Select(track => track.Index));
+        Assert.All(tracks, track => Assert.True(track.TrackNumber is 1 or 2));
+        Assert.All(tracks, track => Assert.True(track.AutomaticOrderPosition is >= 1 and <= 1300));
+    }
+
+    [Fact]
+    public void Scan_FillsProjectRelativeFolderForRootAndNestedFiles()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001 Root.mp3");
+        folder.CreateFile(@"CD 01\002 One.mp3");
+        folder.CreateFile(@"Teil 1\CD 01\003 Nested.mp3");
+        var rootName = Path.GetFileName(folder.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+        var tracks = new FolderScanner().Scan(folder.Path)
+            .OrderBy(track => track.FileName)
+            .ToList();
+
+        Assert.Equal(rootName, tracks[0].ProjectRelativeFolder);
+        Assert.Equal(Path.Combine(rootName, "CD 01"), tracks[1].ProjectRelativeFolder);
+        Assert.Equal(Path.Combine(rootName, "Teil 1", "CD 01"), tracks[2].ProjectRelativeFolder);
+        Assert.All(tracks, track => Assert.DoesNotContain(Path.GetPathRoot(folder.Path)!, track.ProjectRelativeFolder));
+        Assert.Equal(tracks.Select(track => track.ProjectRelativeFolder), tracks.Select(track => track.DisplayFolder));
     }
 
     [Fact]
@@ -86,15 +263,28 @@ public sealed class FolderScannerTests
     }
 
     [Fact]
-    public void Scan_Warns_For_Duplicate_Chapter_Titles()
+    public void Scan_Does_Not_Warn_For_Numbered_Duplicate_Chapter_Title_Content()
     {
         using var folder = new TemporaryFolder();
         folder.CreateFile("001 Gleicher Titel.mp3");
         folder.CreateFile("002 Gleicher Titel.mp3");
+        folder.CreateFile("003 Gleicher Titel.mp3");
 
         var tracks = new FolderScanner().Scan(folder.Path);
 
-        Assert.All(tracks, track => Assert.Contains("Doppelter Kapitelname", track.Warning, StringComparison.OrdinalIgnoreCase));
+        Assert.All(tracks, track => Assert.DoesNotContain("Doppelter Kapitelname", track.Warning, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Scan_DefersDuplicateAutoChapterWarningsUntilV4Resolve()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile(Path.Combine("A", "Gleicher Titel.mp3"));
+        folder.CreateFile(Path.Combine("B", "Gleicher Titel.mp3"));
+
+        var tracks = new FolderScanner().Scan(folder.Path);
+
+        Assert.All(tracks, track => Assert.DoesNotContain("Doppelter Kapitelname", track.Warning, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -107,11 +297,15 @@ public sealed class FolderScannerTests
         folder.CreateFile("004 Vier.aac");
         folder.CreateFile("005 Fuenf.wav");
         folder.CreateFile("006 Sechs.flac");
+        folder.CreateFile("007 Sieben.wma");
+        folder.CreateFile("008 Acht.ogg");
+        folder.CreateFile("009 Neun.oga");
+        folder.CreateFile("010 Zehn.opus");
 
         var tracks = new FolderScanner().Scan(folder.Path);
 
-        Assert.Equal(6, tracks.Count);
-        Assert.Equal(["MP3", "M4A", "M4B", "AAC", "WAV", "FLAC"], tracks.Select(track => track.Extension).ToArray());
+        Assert.Equal(10, tracks.Count);
+        Assert.Equal(["MP3", "M4A", "M4B", "AAC", "WAV", "FLAC", "WMA", "OGG", "OGA", "OPUS"], tracks.Select(track => track.Extension).ToArray());
     }
     [Fact]
     public void Scan_Can_Prefer_File_Name_Track_Numbers_For_Imported_Disc_Projects()
@@ -161,6 +355,90 @@ public sealed class FolderScannerTests
         Assert.Equal([3, 20, 111], tracks.Select(track => track.TrackNumber).ToArray());
     }
 
+
+    [Fact]
+    public void Scan_RetainsCanonicalSourceMetadataListsFromTheSingleTagRead()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001 One.mp3");
+        folder.CreateFile("002 Two.mp3");
+        var reader = new PerFileTagMetadataReader(new Dictionary<string, OriginalTagMetadata>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["001 One.mp3"] = new OriginalTagMetadata
+            {
+                Authors = ["A1", "A2"],
+                Narrators = ["N1"],
+                Genres = ["G1", "G2"],
+                Keywords = ["K1", "K2"]
+            },
+            ["002 Two.mp3"] = new OriginalTagMetadata
+            {
+                Authors = ["A3"],
+                Narrators = ["N2", "N3"],
+                Genres = ["G3"],
+                Keywords = ["K3"]
+            }
+        });
+
+        var tracks = new FolderScanner(reader, new FileSystemMetadataReader()).Scan(folder.Path);
+
+        Assert.Equal(["G1", "G2"], tracks[0].SourceMetadataFields!.Genres);
+        Assert.Equal(["G3"], tracks[1].SourceMetadataFields!.Genres);
+        Assert.Equal(["A1", "A2"], tracks[0].SourceMetadataFields!.Authors);
+        Assert.Equal(["N2", "N3"], tracks[1].SourceMetadataFields!.Narrators);
+        Assert.Equal(["K1", "K2"], tracks[0].SourceMetadataFields!.Keywords);
+        Assert.Equal(2, reader.ReadPaths.Count);
+    }
+
+    [Fact]
+    public void Scan_DoesNotWarnWhenWholeAnalysisGroupHasNoTagTitles()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001 One.mp3");
+        folder.CreateFile("002 Two.mp3");
+
+        var tracks = new FolderScanner(new EmptyTagMetadataReader(), new FileSystemMetadataReader()).Scan(folder.Path);
+
+        Assert.All(tracks, track => Assert.False(track.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle)));
+    }
+
+    [Fact]
+    public void Scan_WarnsOnlyMissingTitlesInMixedAnalysisGroup()
+    {
+        using var folder = new TemporaryFolder();
+        folder.CreateFile("001 One.mp3");
+        folder.CreateFile("002 Two.mp3");
+        var reader = new PerFileTagMetadataReader(new Dictionary<string, OriginalTagMetadata>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["001 One.mp3"] = new OriginalTagMetadata { Title = "Tagged" },
+            ["002 Two.mp3"] = new OriginalTagMetadata()
+        });
+
+        var tracks = new FolderScanner(reader, new FileSystemMetadataReader()).Scan(folder.Path);
+
+        Assert.False(tracks[0].WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+        Assert.True(tracks[1].WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+    }
+
+    [Fact]
+    public void MissingTitleReevaluation_RemovesStaleCodeAndPreservesOtherWarnings()
+    {
+        var titled = new TrackInfo { TagTitle = "Tagged", DiscNumber = 1 };
+        var missing = new TrackInfo { DiscNumber = 1 };
+        missing.SetWarning(
+            $"{TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags)}; {TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle)}",
+            TrackWarningCodes.UnreadableTags | TrackWarningCodes.MissingTagTitle);
+
+        FolderScanner.ApplyMissingTagTitleWarnings([titled, missing]);
+        Assert.True(missing.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+
+        titled.TagTitle = string.Empty;
+        FolderScanner.ApplyMissingTagTitleWarnings([titled, missing]);
+
+        Assert.False(missing.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+        Assert.True(missing.WarningCodes.HasFlag(TrackWarningCodes.UnreadableTags));
+    }
+
     private static void CreateMp3WithId3v1Track(TemporaryFolder folder, string fileName, byte trackNumber)
     {
         var path = folder.CreateFile(fileName);
@@ -171,6 +449,48 @@ public sealed class FolderScannerTests
         tag[125] = 0;
         tag[126] = trackNumber;
         File.WriteAllBytes(path, tag);
+    }
+
+    private sealed class PerFileTagMetadataReader : TagMetadataReader
+    {
+        private readonly IReadOnlyDictionary<string, OriginalTagMetadata> _metadataByFileName;
+
+        public PerFileTagMetadataReader(IReadOnlyDictionary<string, OriginalTagMetadata> metadataByFileName)
+        {
+            _metadataByFileName = metadataByFileName;
+        }
+
+        public List<string> ReadPaths { get; } = [];
+
+        public override TagMetadataReadResult Read(string filePath)
+        {
+            ReadPaths.Add(filePath);
+            _metadataByFileName.TryGetValue(Path.GetFileName(filePath), out var metadata);
+            return new TagMetadataReadResult(
+                metadata ?? new OriginalTagMetadata(),
+                TechnicalDurationFallback: null,
+                TechnicalBitrateKbpsFallback: null,
+                TechnicalChannelsFallback: null,
+                HasEmbeddedCover: false,
+                Failed: false);
+        }
+    }
+
+    private sealed class EmptyTagMetadataReader : TagMetadataReader
+    {
+        public int ReadCalls { get; private set; }
+
+        public override TagMetadataReadResult Read(string filePath)
+        {
+            ReadCalls++;
+            return new TagMetadataReadResult(
+                new OriginalTagMetadata(),
+                TechnicalDurationFallback: null,
+                TechnicalBitrateKbpsFallback: null,
+                TechnicalChannelsFallback: null,
+                HasEmbeddedCover: false,
+                Failed: false);
+        }
     }
 
 }

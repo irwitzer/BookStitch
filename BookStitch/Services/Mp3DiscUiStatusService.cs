@@ -10,21 +10,21 @@ public sealed class Mp3DiscUiStatusService
     public Mp3DiscUiStatus CreateAnalysisFailed(int discNumber)
     {
         return new Mp3DiscUiStatus(
-            StatusText: $"MP3-CD-Analyse für CD {discNumber} fehlgeschlagen.",
-            ExportProgressText: $"CD {discNumber} wurde nicht gelesen.");
+            StatusText: string.Format(LocalizationText.Get("MainWindow.Status.Mp3AnalysisFailed"), discNumber),
+            ExportProgressText: string.Format(LocalizationText.Get("MainWindow.Status.Mp3DiscUnreadable"), discNumber));
     }
 
     public Mp3DiscUiStatus CreateAlreadyImported(int discNumber, int totalDiscs)
     {
         return new Mp3DiscUiStatus(
-            StatusText: $"CD {discNumber} nicht importiert: bereits importierte CD erkannt.",
-            ExportProgressText: $"Bitte CD {discNumber} von {totalDiscs} einlegen.");
+            StatusText: string.Format(LocalizationText.Get("MainWindow.Status.Mp3AlreadyImported"), discNumber),
+            ExportProgressText: string.Format(LocalizationText.Get("MainWindow.Status.InsertMp3Disc"), discNumber, totalDiscs));
     }
 
     public Mp3DiscUiStatus CreateImportFailed()
     {
         return new Mp3DiscUiStatus(
-            StatusText: "MP3-CD-Import fehlgeschlagen.",
-            ExportProgressText: "MP3-CD-Import fehlgeschlagen.");
+            StatusText: LocalizationText.Get("MainWindow.Status.Mp3ImportFailed"),
+            ExportProgressText: LocalizationText.Get("MainWindow.Status.Mp3ImportFailed"));
     }
 }

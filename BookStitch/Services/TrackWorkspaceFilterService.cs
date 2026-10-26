@@ -18,8 +18,10 @@ public sealed class TrackWorkspaceFilterService
         string expectedOutputInSourceFolder,
         string? workRoot)
     {
-        return tracks
-            .Where(track => ShouldIgnoreScannedTrack(sourceFolder, track, expectedOutputInSourceFolder, workRoot))
+        var scannedTracks = tracks.ToArray();
+        return scannedTracks
+            .Where(track => ShouldIgnoreScannedTrack(sourceFolder, track, expectedOutputInSourceFolder, workRoot,
+                allowExpectedOutputNameMatch: scannedTracks.Length > 1))
             .ToList();
     }
 
@@ -60,15 +62,15 @@ public sealed class TrackWorkspaceFilterService
                firstSegment.Equals(ProjectFolderLayout.SettingsFolderName, StringComparison.OrdinalIgnoreCase);
     }
 
-    public bool ShouldIgnoreScannedTrack(string sourceFolder, TrackInfo track, string expectedOutputInSourceFolder, string? workRoot)
+    public bool ShouldIgnoreScannedTrack(string sourceFolder, TrackInfo track, string expectedOutputInSourceFolder, string? workRoot,
+        bool allowExpectedOutputNameMatch = true)
     {
         var path = TrackPathService.GetTrackPath(sourceFolder, track);
         var extension = Path.GetExtension(path);
 
-        if (ConvertedFileCleanupService.IsPartFilePath(path))
-            return true;
-
-        if (TrackPathService.PathEquals(path, expectedOutputInSourceFolder))
+        // A sole container is a valid audiobook source, even if its name matches the
+        // proposed output. Keep the existing output-name heuristic for multi-file folders.
+        if (allowExpectedOutputNameMatch && TrackPathService.PathEquals(path, expectedOutputInSourceFolder))
             return true;
 
         if (!string.IsNullOrWhiteSpace(workRoot) && TrackPathService.IsPathInsideFolder(path, workRoot))

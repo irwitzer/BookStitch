@@ -21,6 +21,9 @@ public sealed record AudioDiscToc(
     IReadOnlyList<int> TrackSectorOffsets,
     string MusicBrainzDiscId)
 {
+    public IReadOnlyList<byte> TrackControlFlags { get; init; } = [];
+    public bool ContainsDataTracks => TrackControlFlags.Any(control => (control & 0x04) != 0);
+
     public string QueryString => string.Join("+",
     [
         FirstTrackNumber.ToString(CultureInfo.InvariantCulture),
@@ -50,6 +53,11 @@ public sealed record AudioDiscReadResult(
     AudioDiscInfo? Disc,
     string ErrorMessage)
 {
+    public bool IsMixedModeUnsupported { get; init; }
+
+    public static AudioDiscReadResult MixedModeUnsupported(string message) =>
+        new(false, null, message) { IsMixedModeUnsupported = true };
+
     public static AudioDiscReadResult Success(AudioDiscInfo disc) => new(true, disc, string.Empty);
 
     public static AudioDiscReadResult NotAudioDisc(string message = "Keine lesbare Audio-CD erkannt.") => new(false, null, message);

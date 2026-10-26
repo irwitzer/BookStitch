@@ -1,3 +1,4 @@
+using System.Globalization;
 using BookStitch.Models;
 using BookStitch.Services;
 using Xunit;
@@ -6,6 +7,34 @@ namespace BookStitch.Tests.Services;
 
 public sealed class AudioDiscPollingServiceTests
 {
+    [Fact]
+    public void Mixed_mode_disc_is_rejected_with_its_specific_message()
+    {
+        var result = AudioDiscPollingService.EvaluateReadResult(
+            AudioDiscReadResult.MixedModeUnsupported("unsupported mixed mode"), 1, 1, new HashSet<string>(), false);
+        Assert.False(result.PollingResult.CanImport);
+        Assert.Equal(DiscPollingDisplayState.Unsupported, result.PollingResult.DisplayState);
+        Assert.Equal("unsupported mixed mode", result.PollingResult.DialogText);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Required_disc_search_respects_the_selected_drive_and_allowed_circle_order(bool circle)
+    {
+        var drives = new[]
+        {
+            new DiscDriveInfo(@"U:\", "U:", true, "First"),
+            new DiscDriveInfo(@"V:\", "V:", true, "Second"),
+            new DiscDriveInfo(@"Y:\", "Y:", true, "Third")
+        };
+        var roots = circle ? new[] { @"v:\", @"Y:\", @"U:\" } : new[] { @"V:\" };
+        var ordered = AudioDiscPollingService.OrderRequiredDiscDrives(drives, roots);
+        Assert.Equal(circle ? new[] { "V:", "Y:", "U:" } : new[] { "V:" }, ordered.Select(d => d.DriveLetter));
+        Assert.Empty(AudioDiscPollingService.OrderRequiredDiscDrives(drives, []));
+        Assert.Equal(drives, AudioDiscPollingService.OrderRequiredDiscDrives(drives, null));
+    }
+
     [Fact]
     public void EvaluateReadResult_WhenNoAudioDiscWasRead_ReturnsWaitingResult()
     {
@@ -17,101 +46,118 @@ public sealed class AudioDiscPollingServiceTests
             duplicateDiscWasEjected: false);
 
         Assert.False(result.PollingResult.CanImport);
+        Assert.Equal(DiscPollingDisplayState.Waiting, result.PollingResult.DisplayState);
         Assert.Null(result.Disc);
-        Assert.Contains("Audio-CD 2", result.PollingResult.DialogText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.NoReadableDisc.Dialog", 2, 4), result.PollingResult.DialogText);
     }
 
     [Fact]
     public void EvaluateReadResult_WhenDiscIsAlreadyKnown_ReturnsDuplicateAndEjectMessage()
     {
         var disc = CreateDisc("known-disc");
-
         var result = AudioDiscPollingService.EvaluateReadResult(
-            AudioDiscReadResult.Success(disc),
-            discNumber: 2,
-            totalDiscs: 3,
+            AudioDiscReadResult.Success(disc), 2, 3,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "known-disc" },
             duplicateDiscWasEjected: true);
 
         Assert.False(result.PollingResult.CanImport);
         Assert.Same(disc, result.Disc);
-        Assert.Contains("bereits aufgenommen", result.PollingResult.DialogText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Bereits verwendete Audio-CD erkannt", result.PollingResult.DialogText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ausgeworfen", result.PollingResult.DialogText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ausgeworfen", result.PollingResult.ProgressText, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(DiscPollingDisplayState.Duplicate, result.PollingResult.DisplayState);
+        Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.Duplicate.Ejected.Dialog", 2, 3), result.PollingResult.DialogText);
+        Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.Duplicate.Ejected.Progress", 2), result.PollingResult.ProgressText);
     }
 
     [Fact]
-    public void EvaluateReadResult_WhenDiscIsNew_ReturnsAcceptedDiscAndDiagnostics()
+    public void EvaluateReadResult_DuplicateOverrideDoesNotChangeIdentityHistoryAndMustBeRequestedAgain()
     {
-        var disc = CreateDisc("new-disc");
-        var driveInfo = new DiscDriveInfo("G:\\", "G:", true, "Audio CD");
+        var disc = CreateDisc("known-disc");
+        var imported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "known-disc" };
 
-        var result = AudioDiscPollingService.EvaluateReadResult(
-            AudioDiscReadResult.Success(disc),
-            discNumber: 2,
-            totalDiscs: 3,
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "first-disc" },
+        var accepted = AudioDiscPollingService.EvaluateReadResult(
+            AudioDiscReadResult.Success(disc), 2, 3, imported,
             duplicateDiscWasEjected: false,
-            driveInfo);
+            acceptDuplicate: true);
+        var rejectedAgain = AudioDiscPollingService.EvaluateReadResult(
+            AudioDiscReadResult.Success(disc), 2, 3, imported,
+            duplicateDiscWasEjected: false);
 
-        Assert.True(result.PollingResult.CanImport);
-        Assert.Same(disc, result.Disc);
-        Assert.Same(driveInfo, result.DriveInfo);
-        Assert.Contains("Ripping startet", result.PollingResult.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(accepted.PollingResult.CanImport);
+        Assert.False(rejectedAgain.PollingResult.CanImport);
+        Assert.Equal(DiscPollingDisplayState.Duplicate, rejectedAgain.PollingResult.DisplayState);
+        Assert.Equal(["known-disc"], imported);
     }
 
     [Fact]
-    public void FormatUnsupportedDiscMessage_UsesUnifiedWording()
+    public void EvaluateReadResult_WhenDiscIsNew_LocalizesDialogStatusAndProgressFromCatalog()
     {
-        var message = AudioDiscPollingService.FormatUnsupportedDiscMessage(ejectedWrongType: true, discNumber: 2, totalDiscs: 3);
+        WithUiCulture("en-US", () =>
+        {
+            var disc = CreateDisc("new-disc");
+            var driveInfo = new DiscDriveInfo("G:\\", "G:", true, "Audio CD");
+            var result = AudioDiscPollingService.EvaluateReadResult(
+                AudioDiscReadResult.Success(disc), 2, 3,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "first-disc" },
+                duplicateDiscWasEjected: false,
+                driveInfo);
 
-        Assert.StartsWith("Keine Audio-CD erkannt. / Die CD wurde wieder ausgeworfen.", message, StringComparison.Ordinal);
-        Assert.Contains("Bitte Audio-CD 2 von 3 einlegen.", message, StringComparison.Ordinal);
+            Assert.True(result.PollingResult.CanImport);
+            Assert.Equal(DiscPollingDisplayState.Ready, result.PollingResult.DisplayState);
+            Assert.Same(disc, result.Disc);
+            Assert.Same(driveInfo, result.DriveInfo);
+            Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.Next.Ready.Dialog", 2, 3), result.PollingResult.DialogText);
+            Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.Ready.Status", 2, 3), result.PollingResult.StatusText);
+            Assert.Equal(LocalizationText.Format("Disc.Polling.Audio.Next.Ready.Progress", 2), result.PollingResult.ProgressText);
+        });
     }
 
-    [Fact]
-    public void FormatWrongRequiredDiscMessage_UsesExplicitRequiredDiscWording()
+    [Theory]
+    [InlineData(true, "Disc.Polling.Audio.Unsupported.Ejected.Dialog")]
+    [InlineData(false, "Disc.Polling.Audio.Unsupported.ManualEject.Dialog")]
+    public void FormatUnsupportedDiscMessage_UsesLocalizedCompleteTemplate(bool ejected, string resourceKey)
     {
-        var message = AudioDiscPollingService.FormatWrongRequiredDiscMessage(ejectedWrongDisc: true, discNumber: 2, totalDiscs: 3);
+        WithUiCulture("en-US", () =>
+        {
+            var message = AudioDiscPollingService.FormatUnsupportedDiscMessage(ejected, 2, 3);
+            Assert.Equal(LocalizationText.Format(resourceKey, 2, 3), message);
+        });
+    }
 
-        Assert.StartsWith("Das ist nicht die benötigte Audio-CD. Die falsche Audio-CD wurde wieder ausgeworfen.", message, StringComparison.Ordinal);
-        Assert.Contains("Bitte Audio-CD 2 von 3 einlegen.", message, StringComparison.Ordinal);
+    [Theory]
+    [InlineData(true, "Disc.Polling.Audio.WrongRequired.Ejected.Dialog")]
+    [InlineData(false, "Disc.Polling.Audio.WrongRequired.ManualEject.Dialog")]
+    public void FormatWrongRequiredDiscMessage_UsesLocalizedCompleteTemplate(bool ejected, string resourceKey)
+    {
+        WithUiCulture("en-US", () =>
+        {
+            var message = AudioDiscPollingService.FormatWrongRequiredDiscMessage(ejected, 2, 3);
+            Assert.Equal(LocalizationText.Format(resourceKey, 2, 3), message);
+        });
     }
 
     [Theory]
     [InlineData(DiscMediaKind.Mp3Disc)]
     [InlineData(DiscMediaKind.DataDisc)]
-    public void IsClearlyNotAudioDisc_WhenDataMediaWasDetected_ReturnsTrue(DiscMediaKind mediaKind)
-    {
+    public void IsClearlyNotAudioDisc_WhenDataMediaWasDetected_ReturnsTrue(DiscMediaKind mediaKind) =>
         Assert.True(AudioDiscPollingService.IsClearlyNotAudioDisc(mediaKind));
-    }
 
     [Theory]
     [InlineData(DiscMediaKind.AudioCd)]
     [InlineData(DiscMediaKind.Empty)]
     [InlineData(DiscMediaKind.Unknown)]
-    public void IsClearlyNotAudioDisc_WhenMediaIsNotClearlyData_ReturnsFalse(DiscMediaKind mediaKind)
-    {
+    public void IsClearlyNotAudioDisc_WhenMediaIsNotClearlyData_ReturnsFalse(DiscMediaKind mediaKind) =>
         Assert.False(AudioDiscPollingService.IsClearlyNotAudioDisc(mediaKind));
+
+    private static void WithUiCulture(string cultureName, Action action)
+    {
+        var original = CultureInfo.CurrentUICulture;
+        try { CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName); action(); }
+        finally { CultureInfo.CurrentUICulture = original; }
     }
 
     private static AudioDiscInfo CreateDisc(string identity)
     {
-        var track = new AudioDiscTrackInfo(
-            1,
-            TimeSpan.FromSeconds(2),
-            TimeSpan.FromMinutes(3),
-            "track-1",
-            150);
-
-        return new AudioDiscInfo(
-            "G:\\",
-            "G:",
-            [track],
-            track.Duration,
-            identity,
+        var track = new AudioDiscTrackInfo(1, TimeSpan.FromSeconds(2), TimeSpan.FromMinutes(3), "track-1", 150);
+        return new AudioDiscInfo("G:\\", "G:", [track], track.Duration, identity,
             new AudioDiscToc(1, 1, 13650, [150], "mb-id"));
     }
 }

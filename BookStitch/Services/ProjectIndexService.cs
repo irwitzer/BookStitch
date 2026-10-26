@@ -6,16 +6,38 @@ namespace BookStitch.Services;
 
 public sealed class ProjectIndexService
 {
-    public const int DefaultRetentionDays = 180;
-    public const int MaximumRetentionDays = 180;
-    public const int DefaultDeleteOlderThanDays = 180;
+    public ProjectIndexService() => Catalog = new ProjectCatalog(ScanCatalogIndex,
+        (root, data, token) => ScanCatalogDamage(root, data.ProjectFolders, data.ReadFailures, token));
 
-    public IReadOnlyList<ProjectIndexItem> ScanProjects(string workingRootFolder, int retentionDays = DefaultRetentionDays)
+    public ProjectCatalog Catalog { get; }
+
+    public Action? BeforeManualDeletion { get; set; }
+
+    private Func<string?> _activeProjectFolderProvider = () => null;
+
+    public void SetActiveProjectFolderProvider(Func<string?> provider) =>
+        _activeProjectFolderProvider = provider ?? throw new ArgumentNullException(nameof(provider));
+
+    private bool ContainsActiveProject(string folder)
     {
-        return ScanProjects(workingRootFolder, DateTime.UtcNow, retentionDays);
+        var activeFolder = _activeProjectFolderProvider();
+        if (string.IsNullOrWhiteSpace(activeFolder)) return false;
+        var target = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var active = Path.GetFullPath(activeFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(target, active, StringComparison.OrdinalIgnoreCase) ||
+            active.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
-    public IReadOnlyList<ProjectIndexItem> ScanProjects(string workingRootFolder, DateTime nowUtc, int retentionDays = DefaultRetentionDays)
+    public const int DefaultRetentionDays = 180;
+    public const int MaximumRetentionDays = 360;
+    public const int DefaultDeleteOlderThanDays = 180;
+
+    public IReadOnlyList<ProjectIndexItem> ScanProjects(string workingRootFolder, int retentionDays = DefaultRetentionDays, ICollection<DamagedProjectInfo>? readFailures = null)
+    {
+        return ScanProjects(workingRootFolder, DateTime.UtcNow, retentionDays, readFailures);
+    }
+
+    public IReadOnlyList<ProjectIndexItem> ScanProjects(string workingRootFolder, DateTime nowUtc, int retentionDays = DefaultRetentionDays, ICollection<DamagedProjectInfo>? readFailures = null)
     {
         if (string.IsNullOrWhiteSpace(workingRootFolder) || !Directory.Exists(workingRootFolder))
             return [];
@@ -31,9 +53,8 @@ public sealed class ProjectIndexService
 
         foreach (var projectFolder in projectFolders)
         {
-            var item = TryReadProject(projectFolder!, nowUtc, normalizedRetentionDays);
-            if (item is not null)
-                projects.Add(item);
+            var item = TryReadProjectForIndex(projectFolder!, nowUtc, normalizedRetentionDays, readFailures);
+            if (item is not null) { item.WorkingRoot = workingRootFolder; projects.Add(item); }
         }
 
         return projects
@@ -43,49 +64,68 @@ public sealed class ProjectIndexService
             .ToList();
     }
 
-    public IReadOnlyList<ProjectIndexItem> ScanSelectableProjects(string workingRootFolder, int retentionDays = DefaultRetentionDays)
+    public IReadOnlyList<ProjectIndexItem> ScanSelectableProjects(string workingRootFolder, int retentionDays = DefaultRetentionDays, ICollection<DamagedProjectInfo>? readFailures = null)
     {
-        return ScanSelectableProjects(workingRootFolder, DateTime.UtcNow, retentionDays);
+        return ScanSelectableProjects(workingRootFolder, DateTime.UtcNow, retentionDays, readFailures);
     }
 
     public IReadOnlyList<ProjectIndexItem> ScanSelectableProjects(
         string workingRootFolder,
         DateTime nowUtc,
-        int retentionDays = DefaultRetentionDays)
+        int retentionDays = DefaultRetentionDays,
+        ICollection<DamagedProjectInfo>? readFailures = null)
     {
-        return ScanProjects(workingRootFolder, nowUtc, retentionDays)
-            .Where(project => project.IsSelectableProject)
+        return ScanProjects(workingRootFolder, nowUtc, retentionDays, readFailures)
+            .Where(project => project.IsVisibleInProjectBrowser)
             .ToList();
     }
 
 
-    public IReadOnlyList<DamagedProjectInfo> ScanDamagedProjects(string workingRootFolder)
+    public ProjectCatalogIndex ScanCatalogIndex(string workingRootFolder, int retentionDays, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(workingRootFolder) || !Directory.Exists(workingRootFolder))
-            return [];
+        token.ThrowIfCancellationRequested();
+        var folders = EnumerateStructuredProjectFolders(workingRootFolder).ToArray();
+        var candidates = folders.Length > 0 ? folders : EnumerateManifestFiles(workingRootFolder)
+            .Select(ProjectFolderLayout.GetProjectFolderFromManifestPath).Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path!).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var failures = new List<DamagedProjectInfo>();
+        var projects = new List<ProjectIndexItem>();
+        var now = DateTime.UtcNow;
+        foreach (var folder in candidates)
+        {
+            token.ThrowIfCancellationRequested();
+            var item = TryReadProjectForIndex(folder, now, NormalizeRetentionDays(retentionDays), failures);
+            if (item is not null) { item.WorkingRoot = workingRootFolder; projects.Add(item); }
+        }
+        return new ProjectCatalogIndex(projects.OrderByDescending(item => item.UpdatedUtc)
+            .ThenByDescending(item => item.CreatedUtc).ThenBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray(), folders, failures.ToArray());
+    }
 
+    public IReadOnlyList<DamagedProjectInfo> ScanDamagedProjects(string workingRootFolder) =>
+        ScanCatalogDamage(workingRootFolder, EnumerateStructuredProjectFolders(workingRootFolder).ToArray(), [], CancellationToken.None);
+
+    public IReadOnlyList<DamagedProjectInfo> ScanCatalogDamage(string workingRootFolder,
+        IReadOnlyList<string> folders, IReadOnlyList<DamagedProjectInfo> readFailures, CancellationToken token)
+    {
         var structure = WorkFolderStructure.FromRoot(workingRootFolder);
-        var damagedProjects = new List<DamagedProjectInfo>();
-
-        ScanDamagedProjectType(
-            structure.LocalProjectsFolder,
-            ProjectManifestTypes.FolderProject,
-            ProjectFolderLayout.WorkManifestFileName,
-            path => TryReadExportManifest(path) is not null,
-            damagedProjects);
-
-        ScanDamagedProjectType(
-            structure.Mp3DiscProjectsFolder,
-            ProjectManifestTypes.Mp3DiscProject,
-            ProjectFolderLayout.WorkManifestFileName,
-            path => TryReadMp3DiscManifest(path) is not null,
-            damagedProjects);
-
-        ScanDamagedAudioProjects(structure.AudioDiscProjectsFolder, damagedProjects);
-
-        return damagedProjects
-            .OrderBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        var damaged = new List<DamagedProjectInfo>(readFailures);
+        // Reuse index discovery; no second working-root enumeration.
+        foreach (var folder in folders)
+        {
+            token.ThrowIfCancellationRequested();
+            var parent = Path.GetDirectoryName(folder);
+            if (string.Equals(parent, structure.LocalProjectsFolder, StringComparison.OrdinalIgnoreCase))
+                ScanDamagedProjectType(structure.LocalProjectsFolder, ProjectManifestTypes.FolderProject,
+                    ProjectFolderLayout.WorkManifestFileName, path => ReadForDamageScan(() => TryReadExportManifest(path)) is not null, damaged, [folder]);
+            else if (string.Equals(parent, structure.Mp3DiscProjectsFolder, StringComparison.OrdinalIgnoreCase))
+                ScanDamagedProjectType(structure.Mp3DiscProjectsFolder, ProjectManifestTypes.Mp3DiscProject,
+                    ProjectFolderLayout.WorkManifestFileName, path => ReadForDamageScan(() => TryReadMp3DiscManifest(path)) is not null, damaged, [folder]);
+            else if (string.Equals(parent, structure.AudioDiscProjectsFolder, StringComparison.OrdinalIgnoreCase))
+                ScanDamagedAudioProjects(structure.AudioDiscProjectsFolder, damaged, [folder]);
+        }
+        return damaged.GroupBy(item => item.ProjectFolder, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First()).OrderBy(item => item.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToArray();
     }
 
     public IReadOnlyList<ProjectIndexItem> FindExpiredProjects(string workingRootFolder, DateTime nowUtc, int retentionDays = DefaultRetentionDays)
@@ -95,10 +135,16 @@ public sealed class ProjectIndexService
             .ToList();
     }
 
-    public ProjectCleanupResult DeleteProjectsOlderThan(string workingRootFolder, DateTime nowUtc, int olderThanDays)
+    public ProjectCleanupResult DeleteProjectsOlderThan(string workingRootFolder, DateTime nowUtc, int olderThanDays, CancellationToken cancellationToken = default,
+        IReadOnlyList<ProjectIndexItem>? knownProjects = null)
     {
+        if (knownProjects is null) BeforeManualDeletion?.Invoke();
+        cancellationToken.ThrowIfCancellationRequested();
         var normalizedOlderThanDays = NormalizeRetentionDays(olderThanDays);
-        var projectsToDelete = normalizedOlderThanDays == 0
+        var projectsToDelete = knownProjects is not null
+            ? knownProjects.Where(project => normalizedOlderThanDays == 0 ||
+                project.IsExpired).ToList()
+            : normalizedOlderThanDays == 0
             ? ScanProjects(workingRootFolder, nowUtc, MaximumRetentionDays)
             : FindExpiredProjects(workingRootFolder, nowUtc, normalizedOlderThanDays);
         var deleted = 0;
@@ -106,14 +152,27 @@ public sealed class ProjectIndexService
 
         foreach (var project in projectsToDelete)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 if (string.IsNullOrWhiteSpace(project.ProjectFolder) || !Directory.Exists(project.ProjectFolder))
                     continue;
 
-                DeleteDirectory(project.ProjectFolder);
+                if (ContainsActiveProject(project.ProjectFolder)) continue;
+                // The catalog is only a candidate inventory, never deletion authority.
+                // Re-read eligibility so a stale browser projection cannot delete a changed project.
+                if (knownProjects is not null && normalizedOlderThanDays > 0)
+                {
+                    var current = TryReadProjectForIndex(project.ProjectFolder, nowUtc, normalizedOlderThanDays, null);
+                    if (current is null || !current.IsExpired) continue;
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (ContainsActiveProject(project.ProjectFolder)) continue;
+                DeleteDirectory(project.ProjectFolder, cancellationToken);
                 deleted++;
+                Catalog.MarkDirty();
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 failures.Add($"{project.DisplayName}: {ex.Message}");
@@ -126,7 +185,7 @@ public sealed class ProjectIndexService
     public ProjectDeletionResult DeleteProject(string workingRootFolder, string projectFolder)
     {
         if (string.IsNullOrWhiteSpace(workingRootFolder) || string.IsNullOrWhiteSpace(projectFolder))
-            return new ProjectDeletionResult(false, "Projekt- oder Arbeitsordner fehlt.");
+            return new ProjectDeletionResult(false, LocalizationText.Get("Settings.Projects.DeleteOne.MissingFolder"));
 
         try
         {
@@ -139,13 +198,18 @@ public sealed class ProjectIndexService
             if (string.Equals(projectPath, rootPath, StringComparison.OrdinalIgnoreCase) ||
                 !projectPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                return new ProjectDeletionResult(false, "Der ausgewählte Ordner liegt nicht innerhalb des BookStitch-Projektbereichs.");
+                return new ProjectDeletionResult(false, LocalizationText.Get("Settings.Projects.DeleteOne.OutsideProjectArea"));
             }
 
             if (!Directory.Exists(projectPath))
-                return new ProjectDeletionResult(false, "Der Projektordner ist nicht mehr vorhanden.");
+                return new ProjectDeletionResult(false, LocalizationText.Get("Settings.Projects.DeleteOne.AlreadyMissing"));
 
+            if (ContainsActiveProject(projectPath))
+                return new ProjectDeletionResult(false, LocalizationText.Get("Settings.Projects.DeleteOne.ActiveProject"));
+
+            BeforeManualDeletion?.Invoke();
             DeleteDirectory(projectPath);
+            Catalog.MarkDirty();
             return new ProjectDeletionResult(true, null);
         }
         catch (Exception ex)
@@ -164,10 +228,13 @@ public sealed class ProjectIndexService
         return NormalizeRetentionDays(olderThanDays);
     }
 
-    private static void DeleteDirectory(string folderPath)
+    private static void DeleteDirectory(string folderPath, CancellationToken cancellationToken = default)
     {
+        SafeFileSystemEnumeration.EnsureSafeTree(folderPath, cancellationToken);
         foreach (var file in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            SafeFileSystemEnumeration.EnsureNoReparseAncestors(file);
             try
             {
                 File.SetAttributes(file, FileAttributes.Normal);
@@ -178,6 +245,8 @@ public sealed class ProjectIndexService
             }
         }
 
+        SafeFileSystemEnumeration.EnsureSafeTree(folderPath, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         Directory.Delete(folderPath, recursive: true);
     }
 
@@ -187,7 +256,7 @@ public sealed class ProjectIndexService
         string projectType,
         string requiredManifestFileName,
         Func<string, bool> canReadManifest,
-        ICollection<DamagedProjectInfo> damagedProjects)
+        ICollection<DamagedProjectInfo> damagedProjects, IReadOnlyList<string>? discoveredFolders = null)
     {
         if (!Directory.Exists(projectTypeFolder))
             return;
@@ -195,7 +264,7 @@ public sealed class ProjectIndexService
         IEnumerable<string> projectFolders;
         try
         {
-            projectFolders = Directory.EnumerateDirectories(projectTypeFolder, "*", SearchOption.TopDirectoryOnly).ToList();
+            projectFolders = discoveredFolders ?? Directory.EnumerateDirectories(projectTypeFolder, "*", SearchOption.TopDirectoryOnly).ToList();
         }
         catch
         {
@@ -209,7 +278,11 @@ public sealed class ProjectIndexService
 
             var requiredManifestPath = requiredManifestFileName == ProjectFolderLayout.AudioDiscManifestFileName
                 ? ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder)
-                : ProjectFolderLayout.ResolveWorkManifestPath(projectFolder);
+                : (projectType == ProjectManifestTypes.Mp3DiscProject
+                    ? ProjectFolderLayout.ResolveMp3DiscManifestPath(projectFolder)
+                    : File.Exists(ProjectFolderLayout.GetExportManifestPath(projectFolder))
+                        ? ProjectFolderLayout.GetExportManifestPath(projectFolder)
+                        : ProjectFolderLayout.ResolveWorkManifestPath(projectFolder));
 
             if (!File.Exists(requiredManifestPath))
             {
@@ -218,7 +291,7 @@ public sealed class ProjectIndexService
                     projectType,
                     Path.GetFileName(projectFolder),
                     requiredManifestFileName,
-                    $"Die erforderliche Projektdatei „{requiredManifestFileName}“ fehlt."));
+                    LocalizationText.Format("Project.Damage.RequiredFileMissing", requiredManifestFileName)));
                 continue;
             }
 
@@ -232,28 +305,37 @@ public sealed class ProjectIndexService
                     projectType,
                     Path.GetFileName(projectFolder),
                     requiredManifestFileName,
-                    $"Die erforderliche Projektdatei „{requiredManifestFileName}“ ist nicht lesbar oder enthält kein gültiges {FormatProjectTypeForDamageMessage(projectType)}-Manifest."));
+                    LocalizationText.Format("Project.Damage.RequiredManifestUnreadable", requiredManifestFileName, FormatProjectTypeForDamageMessage(projectType))));
+                continue;
             }
+
+            AddDamagedProjectMetadataIfNeeded(projectFolder, projectType, damagedProjects);
         }
     }
 
 
+    private static T? ReadForDamageScan<T>(Func<T?> read) where T : class
+    {
+        try { return read(); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return null; }
+    }
+
     private static bool CanReadAsDifferentProjectManifest(string manifestPath, string expectedProjectType)
     {
         if (!string.Equals(expectedProjectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase) &&
-            TryReadExportManifest(manifestPath) is not null)
+            ReadForDamageScan(() => TryReadExportManifest(manifestPath)) is not null)
         {
             return true;
         }
 
         if (!string.Equals(expectedProjectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) &&
-            TryReadMp3DiscManifest(manifestPath) is not null)
+            ReadForDamageScan(() => TryReadMp3DiscManifest(manifestPath)) is not null)
         {
             return true;
         }
 
         if (!string.Equals(expectedProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase) &&
-            TryReadAudioDiscManifest(manifestPath) is not null)
+            ReadForDamageScan(() => TryReadAudioDiscManifest(manifestPath)) is not null)
         {
             return true;
         }
@@ -263,7 +345,7 @@ public sealed class ProjectIndexService
 
     private static void ScanDamagedAudioProjects(
         string projectTypeFolder,
-        ICollection<DamagedProjectInfo> damagedProjects)
+        ICollection<DamagedProjectInfo> damagedProjects, IReadOnlyList<string>? discoveredFolders = null)
     {
         if (!Directory.Exists(projectTypeFolder))
             return;
@@ -271,7 +353,7 @@ public sealed class ProjectIndexService
         IEnumerable<string> projectFolders;
         try
         {
-            projectFolders = Directory.EnumerateDirectories(projectTypeFolder, "*", SearchOption.TopDirectoryOnly).ToList();
+            projectFolders = discoveredFolders ?? Directory.EnumerateDirectories(projectTypeFolder, "*", SearchOption.TopDirectoryOnly).ToList();
         }
         catch
         {
@@ -287,25 +369,32 @@ public sealed class ProjectIndexService
             var missingFiles = new List<string>();
 
             var audioManifestPath = ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder);
-            var audioManifest = TryReadAudioDiscManifest(audioManifestPath);
+            var audioManifest = ReadForDamageScan(() => TryReadAudioDiscManifest(audioManifestPath));
             if (!File.Exists(audioManifestPath))
             {
                 missingFiles.Add(ProjectFolderLayout.AudioDiscManifestFileName);
-                problems.Add($"Die erforderliche Projektdatei „{ProjectFolderLayout.AudioDiscManifestFileName}“ fehlt.");
+                problems.Add(LocalizationText.Format("Project.Damage.RequiredFileMissing", ProjectFolderLayout.AudioDiscManifestFileName));
             }
             else if (audioManifest is null)
             {
-                problems.Add($"Die erforderliche Projektdatei „{ProjectFolderLayout.AudioDiscManifestFileName}“ ist nicht lesbar oder enthält kein gültiges Audio-CD-Projekt-Manifest.");
+                problems.Add(LocalizationText.Format("Project.Damage.RequiredManifestUnreadable", ProjectFolderLayout.AudioDiscManifestFileName, FormatProjectTypeForDamageMessage(ProjectManifestTypes.AudioCdProject)));
             }
 
             if (audioManifest is not null)
             {
-                var workManifestPath = ProjectFolderLayout.ResolveWorkManifestPath(projectFolder);
+                var workManifestPath = File.Exists(ProjectFolderLayout.GetExportManifestPath(projectFolder))
+                    ? ProjectFolderLayout.GetExportManifestPath(projectFolder)
+                    : ProjectFolderLayout.ResolveWorkManifestPath(projectFolder);
                 if (File.Exists(workManifestPath) &&
-                    TryReadExportManifest(workManifestPath) is null &&
+                    ReadForDamageScan(() => TryReadExportManifest(workManifestPath)) is null &&
                     !CanReadAsDifferentProjectManifest(workManifestPath, ProjectManifestTypes.AudioCdProject))
                 {
-                    problems.Add($"Die optionale Export-Projektdatei „{ProjectFolderLayout.WorkManifestFileName}“ ist nicht lesbar.");
+                    problems.Add(LocalizationText.Format("Project.Damage.OptionalExportUnreadable", Path.GetFileName(workManifestPath)));
+                }
+
+                if (HasUnreadableProjectMetadata(projectFolder))
+                {
+                    problems.Add(LocalizationText.Format("Project.Damage.MetadataUnreadable", ProjectFolderLayout.ProjectMetadataFileName));
                 }
             }
 
@@ -318,8 +407,41 @@ public sealed class ProjectIndexService
                 Path.GetFileName(projectFolder),
                 missingFiles.Count > 0
                     ? string.Join(", ", missingFiles)
-                    : $"{ProjectFolderLayout.AudioDiscManifestFileName}, {ProjectFolderLayout.WorkManifestFileName}",
+                    : $"{ProjectFolderLayout.AudioDiscManifestFileName}, {ProjectFolderLayout.WorkManifestFileName}, {ProjectFolderLayout.ProjectMetadataFileName}",
                 string.Join(" ", problems)));
+        }
+    }
+
+    private static void AddDamagedProjectMetadataIfNeeded(
+        string projectFolder,
+        string projectType,
+        ICollection<DamagedProjectInfo> damagedProjects)
+    {
+        if (!HasUnreadableProjectMetadata(projectFolder))
+            return;
+
+        damagedProjects.Add(new DamagedProjectInfo(
+            projectFolder,
+            projectType,
+            Path.GetFileName(projectFolder),
+            ProjectFolderLayout.ProjectMetadataFileName,
+            LocalizationText.Format("Project.Damage.MetadataUnreadable", ProjectFolderLayout.ProjectMetadataFileName)));
+    }
+
+    private static bool HasUnreadableProjectMetadata(string projectFolder)
+    {
+        var path = ProjectFolderLayout.GetProjectMetadataPath(projectFolder);
+        if (!File.Exists(path))
+            return false;
+
+        try
+        {
+            new ProjectMetadataStore().LoadOrCreate(projectFolder);
+            return false;
+        }
+        catch
+        {
+            return true;
         }
     }
 
@@ -337,10 +459,10 @@ public sealed class ProjectIndexService
 
     private static string FormatProjectTypeForDamageMessage(string projectType) => projectType switch
     {
-        ProjectManifestTypes.Mp3DiscProject => "MP3-CD-Projekt",
-        ProjectManifestTypes.AudioCdProject => "Audio-CD-Projekt",
-        ProjectManifestTypes.FolderProject => "Ordnerprojekt",
-        _ => "BookStitch-Projekt"
+        ProjectManifestTypes.Mp3DiscProject => LocalizationText.Get("Project.Damage.Type.Mp3Disc"),
+        ProjectManifestTypes.AudioCdProject => LocalizationText.Get("Project.Damage.Type.AudioCd"),
+        ProjectManifestTypes.FolderProject => LocalizationText.Get("Project.Damage.Type.Folder"),
+        _ => LocalizationText.Get("Project.Damage.Type.Unknown")
     };
 
     private static IEnumerable<string> EnumerateManifestFiles(string workingRootFolder)
@@ -359,7 +481,10 @@ public sealed class ProjectIndexService
 
             var projectJsonFiles = Directory.EnumerateFiles(workingRootFolder, "project.json", SearchOption.AllDirectories).ToList();
             var exportProjectJsonFiles = Directory.EnumerateFiles(workingRootFolder, "export-project.json", SearchOption.AllDirectories).ToList();
-            var audioDiscProjectJsonFiles = Directory.EnumerateFiles(workingRootFolder, "audio-disc-project.json", SearchOption.AllDirectories).ToList();
+            var audioDiscProjectJsonFiles = Directory.EnumerateFiles(workingRootFolder, "audio-disc-project.json", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(workingRootFolder, "audio-cd-project.json", SearchOption.AllDirectories))
+                .Concat(Directory.EnumerateFiles(workingRootFolder, "mp3-cd-project.json", SearchOption.AllDirectories))
+                .Concat(Directory.EnumerateFiles(workingRootFolder, "folder-project.json", SearchOption.AllDirectories)).ToList();
 
             return projectJsonFiles
                 .Concat(exportProjectJsonFiles)
@@ -372,7 +497,23 @@ public sealed class ProjectIndexService
         }
     }
 
-    private static IEnumerable<string> EnumerateStructuredProjectFolders(string workingRootFolder)
+    public static IReadOnlyList<string> DiscoverProjectFolders(string workingRoot)
+    {
+        if (!Directory.Exists(workingRoot)) throw new DirectoryNotFoundException(workingRoot);
+        var structured = EnumerateStructuredProjectFolders(workingRoot, failOnError: true).ToArray();
+        if (structured.Length > 0) return structured;
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { ProjectFolderLayout.WorkManifestFileName, ProjectFolderLayout.ExportManifestFileName,
+            ProjectFolderLayout.FolderManifestFileName, ProjectFolderLayout.Mp3DiscManifestFileName,
+            ProjectFolderLayout.AudioDiscManifestFileName, ProjectFolderLayout.LegacyAudioDiscManifestFileName };
+        // A completed sweep marker must never hide an incomplete discovery caused by I/O errors.
+        return SafeFileSystemEnumeration.EnumerateFiles(workingRoot,
+                onError: (path, error) => throw new IOException($"Project discovery failed: {path}", error))
+            .Where(path => names.Contains(Path.GetFileName(path)))
+            .Select(ProjectFolderLayout.GetProjectFolderFromManifestPath).Distinct(AtomicJsonStore.PathComparer).ToArray();
+    }
+
+    private static IEnumerable<string> EnumerateStructuredProjectFolders(string workingRootFolder, bool failOnError = false)
     {
         var structure = WorkFolderStructure.FromRoot(workingRootFolder);
         foreach (var projectTypeFolder in new[]
@@ -390,7 +531,7 @@ public sealed class ProjectIndexService
             {
                 projectFolders = Directory.EnumerateDirectories(projectTypeFolder, "*", SearchOption.TopDirectoryOnly).ToList();
             }
-            catch
+            catch when (!failOnError)
             {
                 continue;
             }
@@ -403,17 +544,84 @@ public sealed class ProjectIndexService
     private static IEnumerable<string> EnumerateKnownManifestPaths(string projectFolder)
     {
         yield return ProjectFolderLayout.GetWorkManifestPath(projectFolder);
+        yield return ProjectFolderLayout.GetFolderManifestPath(projectFolder);
+        yield return ProjectFolderLayout.GetMp3DiscManifestPath(projectFolder);
         yield return ProjectFolderLayout.GetExportManifestPath(projectFolder);
         yield return ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder);
         yield return Path.Combine(projectFolder, ProjectFolderLayout.WorkManifestFileName);
         yield return Path.Combine(projectFolder, ProjectFolderLayout.ExportManifestFileName);
-        yield return Path.Combine(projectFolder, ProjectFolderLayout.AudioDiscManifestFileName);
+        yield return Path.Combine(projectFolder, ProjectFolderLayout.LegacyAudioDiscManifestFileName);
+        yield return Path.Combine(ProjectFolderLayout.GetSettingsFolder(projectFolder), ProjectFolderLayout.LegacyAudioDiscManifestFileName);
+    }
+
+    private static ProjectIndexItem? TryReadProjectForIndex(string projectFolder, DateTime nowUtc, int retentionDays, ICollection<DamagedProjectInfo>? readFailures)
+    {
+        try
+        {
+            return TryReadProject(projectFolder, nowUtc, retentionDays) ?? ReadRecoveryFallback(projectFolder);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            System.Diagnostics.Trace.TraceWarning("Project index read failed for {0}: {1}", projectFolder, ex);
+            readFailures?.Add(new DamagedProjectInfo(
+                projectFolder, "Unknown", Path.GetFileName(projectFolder), string.Empty,
+                LocalizationText.Get("Project.Browser.ProjectUnreadable")));
+            return ReadRecoveryFallback(projectFolder);
+        }
+    }
+
+    private static ProjectIndexItem? ReadRecoveryFallback(string projectFolder)
+    {
+        var reportPath = Path.Combine(ProjectFolderLayout.GetSettingsFolder(projectFolder), "project-integrity.json");
+        if (!File.Exists(reportPath)) return null;
+        var report = ProjectIntegrityService.ReadPersistedResult(projectFolder);
+        var item = new ProjectIndexItem { ProjectFolder = projectFolder, DisplayName = Path.GetFileName(projectFolder),
+            HealthStatus = report?.Health ?? ProjectHealthStatus.Damaged, IntegrityFindings = report?.Findings ?? [],
+            ProjectType = "Unknown", IsSelectableProject = false };
+        // The established project tree provides type evidence even when a manifest is unreadable.
+        var parent = Directory.GetParent(projectFolder);
+        if (string.Equals(parent?.Parent?.Name, "Projects", StringComparison.OrdinalIgnoreCase))
+            item.ProjectType = parent!.Name switch {
+                "LocalProjects" => ProjectManifestTypes.FolderProject,
+                "MP3DiscProjects" => ProjectManifestTypes.Mp3DiscProject,
+                "AudioDiscProjects" => ProjectManifestTypes.AudioCdProject,
+                _ => "Unknown" };
+        try
+        {
+            var metadata = new ProjectMetadataStore().LoadOrCreate(projectFolder);
+            var projection = ProjectMetadataMigrationService.CreateProjection(metadata);
+            item.Title = projection.Title; item.Author = projection.Author; item.Album = projection.Album;
+            item.Narrator = projection.Narrator; item.Genre = projection.Genre;
+            item.DisplayName = BuildDisplayName(projectFolder, item.Title, item.Author);
+            item.CoverSourcePath = metadata.Cover.SourcePath; item.ProcessedCoverPath = metadata.Cover.ProcessedPath;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException or FormatException)
+        { System.Diagnostics.Trace.TraceWarning("Recovery metadata read failed for {0}: {1}", projectFolder, ex.Message); }
+        foreach (var (path, type) in new[] {
+            (ProjectFolderLayout.GetFolderManifestPath(projectFolder), ProjectManifestTypes.FolderProject),
+            (ProjectFolderLayout.GetMp3DiscManifestPath(projectFolder), ProjectManifestTypes.Mp3DiscProject),
+            (ProjectFolderLayout.GetAudioDiscManifestPath(projectFolder), ProjectManifestTypes.AudioCdProject) })
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var manifest = ProjectIntegrityValidator.Read(path);
+                if (ProjectIntegrityValidator.Text(manifest, "ProjectType") != type) continue;
+                item.ProjectType = type; item.PrimaryManifestPath = path;
+                if (manifest["CreatedUtc"] is System.Text.Json.Nodes.JsonValue created && created.TryGetValue<DateTime>(out var createdUtc)) item.CreatedUtc = createdUtc;
+                if (manifest["UpdatedUtc"] is System.Text.Json.Nodes.JsonValue updated && updated.TryGetValue<DateTime>(out var updatedUtc)) item.UpdatedUtc = updatedUtc;
+                if (manifest["ProjectFormatVersion"] is System.Text.Json.Nodes.JsonValue version && version.TryGetValue<int>(out var format)) item.ProjectFormatVersion = format;
+                break;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or ArgumentException or FormatException)
+            { System.Diagnostics.Trace.TraceWarning("Recovery manifest read failed for {0}: {1}", projectFolder, ex.Message); }
+        }
+        return item;
     }
 
     private static ProjectIndexItem? TryReadProject(string projectFolder, DateTime nowUtc, int retentionDays)
     {
-        new ProjectFolderMigrationService().MigrateIfNeeded(projectFolder);
-        var importManifestPath = ProjectFolderLayout.ResolveWorkManifestPath(projectFolder);
+        var importManifestPath = ProjectFolderLayout.ResolveMp3DiscManifestPath(projectFolder);
         var exportManifestPath = ProjectFolderLayout.ResolveExportManifestPath(projectFolder);
         var audioDiscManifestPath = ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder);
 
@@ -421,23 +629,25 @@ public sealed class ProjectIndexService
         var exportManifest = TryReadExportManifest(exportManifestPath) ?? TryReadExportManifest(importManifestPath);
         var audioDiscManifest = TryReadAudioDiscManifest(audioDiscManifestPath);
 
-        if (importManifest is null && exportManifest is null && audioDiscManifest is null)
+        var folderManifest = new FolderProjectManifestService().Read(projectFolder);
+        if (importManifest is null && exportManifest is null && audioDiscManifest is null && folderManifest is null)
             return null;
+        if (exportManifest is null && folderManifest is not null)
+            exportManifest = new ExportWorkManifest { ProjectId = folderManifest.ProjectId, ProjectWorkFolder = projectFolder,
+                SourceFolder = folderManifest.SourceFolder, CreatedUtc = folderManifest.CreatedUtc, UpdatedUtc = folderManifest.UpdatedUtc,
+                State = new() { Status = folderManifest.PipelineState } };
 
         var createdUtc = MinNonDefault(importManifest?.CreatedUtc, exportManifest?.CreatedUtc, audioDiscManifest?.CreatedUtc) ?? DateTime.UtcNow;
         var updatedUtc = MaxNonDefault(importManifest?.UpdatedUtc, exportManifest?.UpdatedUtc, audioDiscManifest?.UpdatedUtc) ?? createdUtc;
-        var expirationLocalDate = CalculateExpirationLocalDate(createdUtc, retentionDays);
-        var expiresUtc = DateTime.SpecifyKind(expirationLocalDate, DateTimeKind.Local).ToUniversalTime();
-        var remainingDays = (expirationLocalDate - nowUtc.ToLocalTime().Date).Days;
 
-        // Disc project manifests are the authoritative source for the current visible metadata.
-        // An older export manifest may still contain values from a previous export or even an
-        // incorrectly classified legacy run.
-        var title = FirstNonEmpty(audioDiscManifest?.Title, importManifest?.Title, exportManifest?.Metadata.Title);
-        var author = FirstNonEmpty(audioDiscManifest?.Author, importManifest?.Author, exportManifest?.Metadata.Author);
-        var album = FirstNonEmpty(audioDiscManifest?.Album, importManifest?.Album, exportManifest?.Metadata.Album);
-        var narrator = FirstNonEmpty(audioDiscManifest?.Narrator, importManifest?.Narrator, exportManifest?.Metadata.Narrator);
-        var genre = FirstNonEmpty(audioDiscManifest?.Genre, importManifest?.Genre, exportManifest?.Metadata.Genre);
+        var projectMetadata = new ProjectMetadataMigrationService()
+            .LoadAuthoritativeOrLegacy(projectFolder, importManifest, exportManifest, audioDiscManifest);
+        var metadata = ProjectMetadataMigrationService.CreateProjection(projectMetadata);
+        var title = metadata.Title;
+        var author = metadata.Author;
+        var album = metadata.Album;
+        var narrator = metadata.Narrator;
+        var genre = metadata.Genre;
         var displayName = BuildDisplayName(projectFolder, title, author);
 
         var mp3ImportedDiscCount = importManifest?.ImportedDiscs.Count(disc =>
@@ -450,7 +660,18 @@ public sealed class ProjectIndexService
         var importCanResume = importManifest is not null && totalDiscs > 0 && importedDiscCount < totalDiscs;
         var audioCanResume = audioDiscManifest is not null && !AreAudioDiscSourcesComplete(audioDiscManifest);
         var exportCanResume = exportManifest?.Resume.CanResume == true || IsResumeStatus(exportManifest?.State.Status);
-        var isCompletedProject = HasSuccessfulExport(exportManifest, audioDiscManifest);
+        var stoppedDiscProject = audioDiscManifest?.IsStoppedForResume == true || importManifest?.IsStoppedForResume == true ||
+            new DiscProjectStopSaveService().HasPendingCommit(projectFolder);
+        var isCompletedProject = !stoppedDiscProject && HasSuccessfulExport(exportManifest, audioDiscManifest);
+        var expirationLocalDate = isCompletedProject
+            ? CalculateExpirationLocalDate(updatedUtc, retentionDays)
+            : default;
+        var expiresUtc = expirationLocalDate == default
+            ? default
+            : DateTime.SpecifyKind(expirationLocalDate, DateTimeKind.Local).ToUniversalTime();
+        var remainingDays = isCompletedProject
+            ? (expirationLocalDate - nowUtc.ToLocalTime().Date).Days
+            : int.MaxValue;
         var sourcesComplete = isCompletedProject ||
             AreSourcesComplete(projectFolder, exportManifest, importManifest, audioDiscManifest);
         var status = ResolvePipelineStatus(
@@ -470,12 +691,16 @@ public sealed class ProjectIndexService
         return new ProjectIndexItem
         {
             ProjectFolder = projectFolder,
+            HealthStatus = ReadHealth(projectFolder, projectType).Status,
+            IntegrityFindings = ReadHealth(projectFolder, projectType).Findings,
+            ProjectFormatVersion = ReadProjectFormatVersion(projectFolder, projectType),
             ProjectType = projectType,
             DisplayName = displayName,
             Status = status,
-            CanResume = importCanResume || audioCanResume || exportCanResume,
-            IsSelectableProject = sourcesComplete,
+            CanResume = stoppedDiscProject || importCanResume || audioCanResume || exportCanResume,
+            IsSelectableProject = sourcesComplete || stoppedDiscProject,
             IsCompletedProject = isCompletedProject,
+            IsStoppedDiscProject = stoppedDiscProject,
             IsExpired = remainingDays < 0,
             CreatedUtc = createdUtc,
             UpdatedUtc = updatedUtc,
@@ -495,14 +720,55 @@ public sealed class ProjectIndexService
             Genre = genre,
             TotalDiscs = totalDiscs,
             ImportedDiscCount = importedDiscCount,
-            PrimaryManifestPath = File.Exists(exportManifestPath)
-                ? exportManifestPath
+            TrackCount = audioDiscManifest is not null
+                ? audioDiscManifest.Discs.Sum(disc => disc.Tracks.Count)
+                : importManifest is not null
+                    ? importManifest.ImportedDiscs.Where(disc => string.Equals(disc.Status, Mp3DiscImportStatus.Completed, StringComparison.OrdinalIgnoreCase))
+                        .Sum(disc => Math.Max(disc.SourceFiles.Count, Math.Max(disc.FileCount, disc.CopiedFiles)))
+                    : exportManifest?.Tracks.Select(track => track.TrackIndex).Distinct().Count() ?? 0,
+            SelectedPreset = stoppedDiscProject
+                ? FirstNonEmpty(audioDiscManifest?.ExportPreset, importManifest?.ExportPreset)
+                : FirstNonEmpty(exportManifest?.SelectedPreset, exportManifest?.Export.SelectedPreset,
+                    audioDiscManifest?.ExportPreset, importManifest?.ExportPreset),
+            CoverSourcePath = projectMetadata.Cover.SourcePath,
+            ProcessedCoverPath = projectMetadata.Cover.ProcessedPath,
+            SavedConvertedTrackCounts = (exportManifest?.Tracks ?? [])
+                .Where(track => !string.IsNullOrWhiteSpace(track.Preset) &&
+                    track.Status == ProjectManifestTrackStatuses.Converted && !string.IsNullOrWhiteSpace(track.ConvertedPath))
+                .GroupBy(track => track.Preset, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Select(track => track.TrackIndex).Distinct().Count(),
+                    StringComparer.OrdinalIgnoreCase),
+            PrimaryManifestPath = folderManifest is not null ? ProjectFolderLayout.GetFolderManifestPath(projectFolder)
+                : File.Exists(exportManifestPath) ? exportManifestPath
                 : File.Exists(audioDiscManifestPath)
                     ? audioDiscManifestPath
                     : importManifestPath
         };
     }
 
+
+    private static (ProjectHealthStatus Status, IReadOnlyList<IntegrityFinding> Findings) ReadHealth(string folder, string type)
+    {
+        var path = type == ProjectManifestTypes.AudioCdProject ? ProjectFolderLayout.GetAudioDiscManifestPath(folder)
+            : type == ProjectManifestTypes.Mp3DiscProject ? ProjectFolderLayout.GetMp3DiscManifestPath(folder) : ProjectFolderLayout.GetFolderManifestPath(folder);
+        if (!File.Exists(path)) return (ProjectHealthStatus.NotChecked, []);
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        if (!document.RootElement.TryGetProperty("Health", out var health)) return (ProjectHealthStatus.NotChecked, []);
+        var state = health.TryGetProperty("LastIntegrityStatus", out var status) && Enum.TryParse<ProjectHealthStatus>(status.GetString(), out var parsed)
+            ? parsed : ProjectHealthStatus.NotChecked;
+        var findings = health.TryGetProperty("Findings", out var rows) ? rows.Deserialize<List<IntegrityFinding>>() ?? [] : [];
+        return (state, findings);
+    }
+
+    private static int ReadProjectFormatVersion(string folder, string type)
+    {
+        var path = type == ProjectManifestTypes.AudioCdProject ? ProjectFolderLayout.GetAudioDiscManifestPath(folder)
+            : type == ProjectManifestTypes.Mp3DiscProject ? ProjectFolderLayout.GetMp3DiscManifestPath(folder)
+            : ProjectFolderLayout.GetFolderManifestPath(folder);
+        if (!File.Exists(path)) return 0;
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return document.RootElement.TryGetProperty("ProjectFormatVersion", out var version) ? version.GetInt32() : 0;
+    }
 
     private static bool HasSuccessfulExport(
         ExportWorkManifest? exportManifest,
@@ -649,83 +915,14 @@ public sealed class ProjectIndexService
             ProjectManifestStatuses.LegacyExporting;
     }
 
-    private static Mp3DiscProjectManifest? TryReadMp3DiscManifest(string manifestPath)
-    {
-        try
-        {
-            if (!File.Exists(manifestPath))
-                return null;
+    private static Mp3DiscProjectManifest? TryReadMp3DiscManifest(string path) =>
+        ProjectResumePlanService.TryLoadMp3DiscManifest(path);
 
-            var json = File.ReadAllText(manifestPath);
-            using var document = JsonDocument.Parse(json);
+    private static AudioDiscProjectManifest? TryReadAudioDiscManifest(string path) =>
+        ProjectResumePlanService.TryLoadAudioDiscManifest(path);
 
-            if (!document.RootElement.TryGetProperty("ProjectType", out var projectType) ||
-                !string.Equals(projectType.GetString(), "Mp3Disc", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            return JsonSerializer.Deserialize<Mp3DiscProjectManifest>(json);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static AudioDiscProjectManifest? TryReadAudioDiscManifest(string manifestPath)
-    {
-        try
-        {
-            if (!File.Exists(manifestPath))
-                return null;
-
-            var json = File.ReadAllText(manifestPath);
-            using var document = JsonDocument.Parse(json);
-
-            if (!document.RootElement.TryGetProperty("ProjectType", out var projectType) ||
-                !string.Equals(projectType.GetString(), ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            return JsonSerializer.Deserialize<AudioDiscProjectManifest>(json);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static ExportWorkManifest? TryReadExportManifest(string manifestPath)
-    {
-        try
-        {
-            if (!File.Exists(manifestPath))
-                return null;
-
-            var json = File.ReadAllText(manifestPath);
-            using var document = JsonDocument.Parse(json);
-
-            if (document.RootElement.TryGetProperty("ProjectType", out var projectType) &&
-                string.Equals(projectType.GetString(), "Mp3Disc", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            if (!document.RootElement.TryGetProperty("FormatVersion", out _) &&
-                !document.RootElement.TryGetProperty("State", out _))
-            {
-                return null;
-            }
-
-            return JsonSerializer.Deserialize<ExportWorkManifest>(json);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    private static ExportWorkManifest? TryReadExportManifest(string path) =>
+        ProjectResumePlanService.TryLoadExportManifest(path);
 
     private static DateTime CalculateExpirationLocalDate(DateTime createdUtc, int retentionDays)
     {
@@ -779,18 +976,3 @@ public sealed class ProjectIndexService
         return validValues.Count == 0 ? null : validValues.Max();
     }
 }
-
-public sealed record ProjectCleanupResult(int MatchedCount, int DeletedCount, IReadOnlyList<string> Failures)
-{
-    public bool HasFailures => Failures.Count > 0;
-}
-
-public sealed record ProjectDeletionResult(bool Deleted, string? ErrorMessage);
-
-
-public sealed record DamagedProjectInfo(
-    string ProjectFolder,
-    string ProjectType,
-    string DisplayName,
-    string RequiredManifestFileName,
-    string Reason);

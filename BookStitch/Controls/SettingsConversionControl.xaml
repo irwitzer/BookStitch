@@ -1,0 +1,125 @@
+<UserControl x:Class="BookStitch.Controls.SettingsConversionControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+        <StackPanel>
+            <TextBlock Text="{services:LocalizedText Key=Settings.Conversion.Title}" FontSize="18"
+                       FontWeight="SemiBold" Margin="0,0,0,14"/>
+            <Grid x:Name="ExportInputsPanel" Margin="{StaticResource SettingsFormMargin}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MaxWidth="260"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.Resources>
+                    <DataTemplate x:Key="ConversionLabelTemplate">
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                    <Style x:Key="ConversionDescriptionStyle" TargetType="TextBlock">
+                        <Setter Property="TextWrapping" Value="Wrap"/>
+                        <Setter Property="Margin" Value="0,8,0,22"/>
+                    </Style>
+                </Grid.Resources>
+                <Button x:Name="OpenWorkFolderButton" Grid.Column="0"
+                        Content="{services:LocalizedText Key=UiExportPreset2}"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource HiddenTextButtonStyle}"
+                        ContentTemplate="{StaticResource ConversionLabelTemplate}"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left"
+                        Margin="0,0,6,0"
+                        ToolTip="{services:LocalizedToolTip Key=MainWindow_ExportPreset_OpenProjectFolder}"
+                        />
+
+                <ComboBox x:Name="ExportPresetComboBox"
+                          Grid.Column="1"
+                          HorizontalAlignment="Left" controls:ComboBoxContentWidth.IsEnabled="True"
+                          SelectionChanged="ExportPresetDescription_Changed"
+                          AutomationProperties.LabeledBy="{Binding ElementName=OpenWorkFolderButton}"
+                          Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                          ItemsSource="{Binding ExportPresets}"
+                          SelectedItem="{Binding SelectedExportPreset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+
+                          IsEnabled="{Binding CanChangeExportPreset}"
+                          IsEditable="False"/>
+
+                <TextBlock x:Name="ExportPresetDescription" Grid.Row="1" Grid.ColumnSpan="2"
+                           Style="{StaticResource ConversionDescriptionStyle}"/>
+                <Button x:Name="OpenTaskManagerButton" Grid.Row="2" Grid.Column="0"
+                        Content="{services:LocalizedText Key=UiParallel}"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource HiddenTextButtonStyle}"
+                        ContentTemplate="{StaticResource ConversionLabelTemplate}"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left"
+                        Margin="0,0,6,0"
+                        ToolTip="{services:LocalizedToolTip Key=MainWindow_Parallel_OpenTaskManager}"
+                        />
+
+                <Grid x:Name="ParallelJobsInputs" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="2"/>
+                        <ColumnDefinition Width="17"/>
+                        <ColumnDefinition Width="2"/>
+                        <ColumnDefinition Width="17"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="ParallelJobsTextBox"
+                             Grid.Column="0"
+                             Style="{StaticResource AppearanceCompactTextBoxStyle}"
+                             Text="{Binding ParallelJobsInput, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             IsEnabled="{Binding CanChangeExportOptions}"
+                             HorizontalContentAlignment="Center"
+                             VerticalContentAlignment="Center"
+                             Padding="4,0"
+                             AutomationProperties.LabeledBy="{Binding ElementName=OpenTaskManagerButton}"
+
+
+                             />
+
+                    <RepeatButton x:Name="IncreaseParallelJobsButton" Grid.Column="2"
+                            Content="▲"
+                            Style="{StaticResource StepperRepeatButtonStyle}"
+                            IsEnabled="{Binding CanChangeExportOptions}"
+                            />
+
+                    <RepeatButton x:Name="DecreaseParallelJobsButton" Grid.Column="4"
+                            Content="▼"
+                            Style="{StaticResource StepperRepeatButtonStyle}"
+                            IsEnabled="{Binding CanChangeExportOptions}"
+                            />
+                </Grid>
+
+                <TextBlock x:Name="ParallelJobsDescription" Grid.Row="3" Grid.ColumnSpan="2"
+                           Text="{services:LocalizedText Key=Settings.Conversion.Parallel.Description}"
+                           Style="{StaticResource ConversionDescriptionStyle}"/>
+                <TextBlock x:Name="SampleRateLabel" Grid.Row="4" Text="{services:LocalizedText Key=Settings.Conversion.SampleRate.Label}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox x:Name="StandardSampleRateComboBox" Grid.Row="4" Grid.Column="1"
+                          HorizontalAlignment="Left" Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                          controls:ComboBoxContentWidth.IsEnabled="True" SelectedValuePath="Tag"
+                          SelectionChanged="StandardSampleRate_Changed"
+                          AutomationProperties.LabeledBy="{Binding ElementName=SampleRateLabel}"/>
+                <TextBlock x:Name="SampleRateDescription" Grid.Row="5" Grid.ColumnSpan="2"
+                           Text="{services:LocalizedText Key=Settings.Conversion.SampleRate.Description}"
+                           Style="{StaticResource ConversionDescriptionStyle}"/>
+                <TextBlock x:Name="PassThroughHeading" Grid.Row="6" Grid.ColumnSpan="2"
+                           Text="{services:LocalizedText Key=Settings.Conversion.PassThrough.Title}"
+                           FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" TextWrapping="Wrap"/>
+                <TextBlock x:Name="PassThroughDescription" Grid.Row="7" Grid.ColumnSpan="2"
+                           Text="{services:LocalizedText Key=Settings.Conversion.PassThrough.Description}"
+                           TextWrapping="Wrap"/>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

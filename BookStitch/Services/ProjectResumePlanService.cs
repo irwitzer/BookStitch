@@ -1,4 +1,4 @@
-using BookStitch.Models;
+﻿using BookStitch.Models;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -13,16 +13,6 @@ public sealed class ProjectResumePlanService
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly HashSet<string> SupportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3",
-        ".aac",
-        ".m4a",
-        ".m4b",
-        ".wav",
-        ".flac"
-    };
-
     public ProjectResumePlan? BuildFromProjectFolder(string projectFolder)
     {
         return BuildFromProjectFolder(projectFolder, selectedPresetOverride: null);
@@ -33,14 +23,29 @@ public sealed class ProjectResumePlanService
         if (string.IsNullOrWhiteSpace(projectFolder) || !Directory.Exists(projectFolder))
             return null;
 
-        new ProjectFolderMigrationService().MigrateIfNeeded(projectFolder);
-        var importManifest = TryLoadMp3DiscManifest(ProjectFolderLayout.ResolveWorkManifestPath(projectFolder));
+        SafeFileSystemEnumeration.EnsureSafeTree(projectFolder);
+        new ProjectExtensionRollbackService().Recover(projectFolder);
+        new DiscProjectStopSaveService().Recover(projectFolder);
+        var upgrade = new ProjectUpgradeCoordinator().EnsureCurrentProjectFormat(projectFolder);
+        if (upgrade.SafetyBlocked || !upgrade.IsCurrent && !(upgrade.Outcome==ProjectUpgradeOutcome.RebuildRequired&&upgrade.ProjectFormatVersion==1))
+            throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable") +
+                $" ({upgrade.Outcome}) {upgrade.Detail}");
+        var importManifest = TryLoadMp3DiscManifest(ProjectFolderLayout.ResolveMp3DiscManifestPath(projectFolder));
         var exportManifest = TryLoadExportManifest(ProjectFolderLayout.ResolveExportManifestPath(projectFolder))
             ?? TryLoadExportManifest(ProjectFolderLayout.ResolveWorkManifestPath(projectFolder));
         var audioDiscManifest = TryLoadAudioDiscManifest(ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder));
 
         if (importManifest is null && exportManifest is null && audioDiscManifest is null)
             return null;
+
+        if (importManifest is not null)
+        {
+            importManifest = new Mp3DiscProjectService().LoadForResume(projectFolder);
+        }
+        if (audioDiscManifest is not null)
+        {
+            audioDiscManifest = new AudioDiscProjectService().LoadForResume(projectFolder);
+        }
 
         return BuildPlan(
             projectFolder,
@@ -68,7 +73,10 @@ public sealed class ProjectResumePlanService
                 ? ProjectManifestTypes.Mp3DiscProject
                 : ProjectManifestTypes.FolderProject;
 
-        var selectedPreset = FirstNonEmpty(
+        var isStoppedDiscProject = audioDiscManifest?.IsStoppedForResume == true || importManifest?.IsStoppedForResume == true;
+        var selectedPreset = isStoppedDiscProject
+            ? FirstNonEmpty(audioDiscManifest?.ExportPreset, importManifest?.ExportPreset)
+            : FirstNonEmpty(
             selectedPresetOverride,
             exportManifest?.SelectedPreset,
             exportManifest?.Export.SelectedPreset,
@@ -83,13 +91,17 @@ public sealed class ProjectResumePlanService
         }
         else if (importManifest is not null)
         {
-            tracks = BuildTrackItems(exportManifest, selectedPreset).ToList();
+            // Export plans contain only included tracks. The import inventory owns
+            // the full editable project, including sources excluded before export.
+            tracks = BuildTrackItemsFromImportedDiscs(projectFolder, importManifest).ToList();
             if (tracks.Count == 0)
-                tracks = BuildTrackItemsFromImportedDiscs(projectFolder, importManifest).ToList();
+                tracks = BuildTrackItems(exportManifest, selectedPreset).ToList();
+            else
+                ApplyExportTrackState(tracks, exportManifest, selectedPreset, ProjectManifestTypes.Mp3DiscProject);
         }
         else
         {
-            tracks = BuildFolderTrackItems(exportManifest, selectedPreset).ToList();
+            tracks = BuildFolderTrackItems(projectFolder, exportManifest, selectedPreset).ToList();
         }
 
         var completedDiscNumbers = audioDiscManifest is not null
@@ -110,16 +122,28 @@ public sealed class ProjectResumePlanService
 
         var totalDiscs = Math.Max(audioDiscManifest?.TotalDiscs ?? importManifest?.TotalDiscs ?? 0, 0);
         var nextMissingDisc = FindNextMissingDisc(totalDiscs, completedDiscNumbers);
-        var canContinueDiscImport = nextMissingDisc.HasValue && (importManifest is not null || audioDiscManifest is not null);
+        // A completed MP3 export may cover fewer discs than an old planned total.
+        // Only agreement of both current manifests closes that import lifecycle;
+        // a historical successful export alone never closes a later extension.
+        var completedMp3Lifecycle = !isStoppedDiscProject && importManifest is not null &&
+            string.Equals(importManifest.PipelineState, ProjectPipelineStateNames.Completed, StringComparison.OrdinalIgnoreCase) &&
+            (string.Equals(exportManifest?.State.Status, ProjectManifestStatuses.Completed, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(exportManifest?.State.Status, ProjectManifestStatuses.ReviewBeforeMerge, StringComparison.OrdinalIgnoreCase));
+        var mergePaused = exportManifest?.Resume.MergePaused == true;
+        var canContinueDiscImport = nextMissingDisc.HasValue && !completedMp3Lifecycle && !mergePaused &&
+            (importManifest is not null || audioDiscManifest is not null);
         var exportStatus = exportManifest?.State.Status ?? "";
         var canResumeExport = exportManifest is not null &&
             (exportManifest.Resume.CanResume || IsInterruptedStatus(exportStatus));
 
         var createdUtc = MinNonDefault(importManifest?.CreatedUtc, exportManifest?.CreatedUtc, audioDiscManifest?.CreatedUtc) ?? DateTime.UtcNow;
         var updatedUtc = MaxNonDefault(importManifest?.UpdatedUtc, exportManifest?.UpdatedUtc, audioDiscManifest?.UpdatedUtc) ?? createdUtc;
+        var projectMetadata = new ProjectMetadataMigrationService()
+            .LoadAuthoritativeOrLegacy(projectFolder, importManifest, exportManifest, audioDiscManifest);
+        var metadata = ProjectMetadataMigrationService.CreateProjection(projectMetadata);
 
-        var bookTitle = FirstNonEmpty(exportManifest?.Metadata.Title, audioDiscManifest?.Title, importManifest?.Title);
-        var author = FirstNonEmpty(exportManifest?.Metadata.Author, audioDiscManifest?.Author, importManifest?.Author);
+        var bookTitle = metadata.Title;
+        var author = metadata.Author;
         var outputFolder = string.Equals(projectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase)
             ? FirstNonEmpty(audioDiscManifest?.OutputFolder, exportManifest?.Export.OutputFolder)
             : ResolveResumeOutputFolder(
@@ -133,12 +157,16 @@ public sealed class ProjectResumePlanService
         {
             ProjectFolder = projectFolder,
             ProjectType = projectType,
-            DisplayName = BuildDisplayName(projectFolder, exportManifest, importManifest, audioDiscManifest),
-            Status = BuildStatus(exportManifest, importManifest, audioDiscManifest, canContinueDiscImport),
+            DisplayName = BuildDisplayName(projectFolder, metadata, importManifest, audioDiscManifest),
+            Status = isStoppedDiscProject
+                ? LocalizationText.Format("Disc.StopSave.Status", completedDiscNumbers.Count, totalDiscs)
+                : BuildStatus(exportManifest, importManifest, audioDiscManifest, canContinueDiscImport),
             CanResume = canContinueDiscImport || canResumeExport || tracks.Count > 0,
+            IsStoppedDiscProject = isStoppedDiscProject,
+            IsMergePaused = mergePaused,
             CanEditTrackOrder = tracks.Count > 0,
             CanContinueDiscImport = canContinueDiscImport,
-            HasSuccessfulExport = HasSuccessfulExport(exportManifest, audioDiscManifest),
+            HasSuccessfulExport = !isStoppedDiscProject && HasSuccessfulExport(exportManifest, audioDiscManifest),
             NextMissingDiscNumber = nextMissingDisc,
             TotalDiscs = totalDiscs,
             ImportedDiscCount = completedDiscNumbers.Count,
@@ -153,11 +181,11 @@ public sealed class ProjectResumePlanService
             SelectedPreset = selectedPreset,
             BookTitle = bookTitle,
             Author = author,
-            Album = FirstNonEmpty(exportManifest?.Metadata.Album, audioDiscManifest?.Album, importManifest?.Album),
-            Narrator = FirstNonEmpty(exportManifest?.Metadata.Narrator, audioDiscManifest?.Narrator, importManifest?.Narrator),
-            Genre = FirstNonEmpty(exportManifest?.Metadata.Genre, audioDiscManifest?.Genre, importManifest?.Genre),
-            CoverSourcePath = FirstNonEmpty(exportManifest?.Metadata.CoverSourcePath, audioDiscManifest?.CoverSourcePath, importManifest?.CoverSourcePath),
-            ProcessedCoverPath = FirstNonEmpty(exportManifest?.Metadata.ProcessedCoverPath, audioDiscManifest?.ProcessedCoverPath, importManifest?.ProcessedCoverPath),
+            Album = metadata.Album,
+            Narrator = metadata.Narrator,
+            Genre = metadata.Genre,
+            CoverSourcePath = projectMetadata.Cover.SourcePath,
+            ProcessedCoverPath = projectMetadata.Cover.ProcessedPath,
             Tracks = tracks
         };
     }
@@ -190,7 +218,8 @@ public sealed class ProjectResumePlanService
     private static void ApplyExportTrackState(
         IReadOnlyList<ProjectResumeTrackItem> audioDiscTracks,
         ExportWorkManifest? exportManifest,
-        string selectedPreset)
+        string selectedPreset,
+        string projectType = ProjectManifestTypes.AudioCdProject)
     {
         if (exportManifest is null || audioDiscTracks.Count == 0)
             return;
@@ -205,6 +234,13 @@ public sealed class ProjectResumePlanService
                 group => SelectExportTrackForPreset(group, selectedPreset),
                 StringComparer.OrdinalIgnoreCase);
 
+        var exportTracksBySourceId = exportManifest.Tracks
+            .Where(track => track.SourceId != Guid.Empty)
+            .GroupBy(track => track.SourceId)
+            .ToDictionary(
+                group => group.Key,
+                group => SelectExportTrackForPreset(group, selectedPreset));
+
         var exportTracksByIndex = exportManifest.Tracks
             .Where(track => track.TrackIndex > 0)
             .GroupBy(track => track.TrackIndex)
@@ -215,20 +251,31 @@ public sealed class ProjectResumePlanService
         foreach (var audioDiscTrack in audioDiscTracks)
         {
             ExportWorkManifestTrack? exportTrack = null;
+            if (audioDiscTrack.SourceId != Guid.Empty)
+                exportTracksBySourceId.TryGetValue(audioDiscTrack.SourceId, out exportTrack);
+
             var hasStableSourcePath = !string.IsNullOrWhiteSpace(audioDiscTrack.SourcePath);
-            if (hasStableSourcePath)
+            if (exportTrack is null && hasStableSourcePath)
             {
                 exportTracksBySourcePath.TryGetValue(
                     NormalizePathForComparison(audioDiscTrack.SourcePath),
                     out exportTrack);
             }
-            else
+            else if (exportTrack is null)
             {
                 exportTracksByIndex.TryGetValue(audioDiscTrack.TrackIndex, out exportTrack);
             }
 
             if (exportTrack is null)
                 continue;
+
+            if (audioDiscTrack.SourceId == Guid.Empty)
+                audioDiscTrack.SourceId = exportTrack.SourceId;
+            if (audioDiscTrack.DurationTicks <= 0 && exportTrack.DurationTicks > 0)
+            {
+                audioDiscTrack.Duration = exportTrack.Duration;
+                audioDiscTrack.DurationTicks = exportTrack.DurationTicks;
+            }
 
             if (!string.IsNullOrWhiteSpace(exportTrack.Preset))
                 audioDiscTrack.Preset = exportTrack.Preset;
@@ -238,7 +285,7 @@ public sealed class ProjectResumePlanService
 
             var convertedPath = exportTrack.ConvertedPath ?? string.Empty;
             var canReuseConvertedFile = PreparedConvertedTrackReuseService.CanReuseForDiscProject(
-                ProjectManifestTypes.AudioCdProject,
+                projectType,
                 audioDiscTrack.SourcePath,
                 convertedPath);
 
@@ -250,7 +297,7 @@ public sealed class ProjectResumePlanService
             }
 
             audioDiscTrack.ConvertedPath = string.Empty;
-            if (string.Equals(audioDiscTrack.Action, "FLAC rippen", StringComparison.OrdinalIgnoreCase))
+            if (ProcessingActionIds.Normalize(audioDiscTrack.Action) == ProcessingActionIds.RipFlac)
             {
                 audioDiscTrack.Status = AudioDiscTrackStatus.Pending;
                 continue;
@@ -285,11 +332,18 @@ public sealed class ProjectResumePlanService
     }
 
 
-    private static IEnumerable<ProjectResumeTrackItem> BuildFolderTrackItems(ExportWorkManifest? exportManifest, string selectedPreset)
+    private static IEnumerable<ProjectResumeTrackItem> BuildFolderTrackItems(string projectFolder, ExportWorkManifest? exportManifest, string selectedPreset)
     {
         if (exportManifest is null)
             yield break;
 
+        // Excluded sources have no converted/export entry, but their import identity
+        // is still required to restore track-list state and immutable source metadata.
+        var sourceIdentitiesByPath = new SourceCopyIdentityStore().Load(projectFolder)
+            .Where(identity => identity.SourceId != Guid.Empty)
+            .GroupBy(identity => NormalizePathForComparison(Path.Combine(projectFolder, identity.TargetRelativePath)),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().SourceId, StringComparer.OrdinalIgnoreCase);
         var manifestTracksBySourcePath = exportManifest.Tracks
             .Where(track => !string.IsNullOrWhiteSpace(track.SourcePath))
             .GroupBy(
@@ -339,6 +393,8 @@ public sealed class ProjectResumePlanService
             yield return new ProjectResumeTrackItem
             {
                 TrackIndex = index + 1,
+                SourceId = manifestTrack?.SourceId is { } sourceId && sourceId != Guid.Empty
+                    ? sourceId : sourceIdentitiesByPath.GetValueOrDefault(NormalizePathForComparison(sourcePath)),
                 DiscNumber = null,
                 TrackNumber = index + 1,
                 SourcePath = sourcePath,
@@ -349,7 +405,7 @@ public sealed class ProjectResumePlanService
                     : manifestTrack.ChapterTitle,
                 Duration = manifestTrack?.Duration ?? string.Empty,
                 DurationTicks = manifestTrack?.DurationTicks,
-                Action = manifestTrack?.Action ?? string.Empty,
+                Action = ProcessingActionIds.NormalizeOrEmpty(manifestTrack?.Action),
                 Preset = manifestTrack?.Preset ?? selectedPreset,
                 Status = manifestTrack?.Status ?? ProjectManifestTrackStatuses.Pending,
                 ConvertedPath = manifestTrack?.ConvertedPath ?? string.Empty
@@ -377,6 +433,7 @@ public sealed class ProjectResumePlanService
             yield return new ProjectResumeTrackItem
             {
                 TrackIndex = track.TrackIndex,
+                SourceId = track.SourceId,
                 DiscNumber = TryInferDiscNumber(track.SourcePath),
                 TrackNumber = track.TrackIndex > 0 ? track.TrackIndex : null,
                 SourcePath = track.SourcePath ?? "",
@@ -387,7 +444,7 @@ public sealed class ProjectResumePlanService
                 ChapterTitle = track.ChapterTitle ?? "",
                 Duration = track.Duration ?? "",
                 DurationTicks = track.DurationTicks,
-                Action = track.Action ?? "",
+                Action = ProcessingActionIds.NormalizeOrEmpty(track.Action),
                 Preset = track.Preset ?? "",
                 Status = track.Status ?? "",
                 ConvertedPath = track.ConvertedPath ?? ""
@@ -397,6 +454,9 @@ public sealed class ProjectResumePlanService
 
     private static string GetResumeTrackDeduplicationKey(ExportWorkManifestTrack track)
     {
+        if (track.SourceId != Guid.Empty)
+            return "sourceid:" + track.SourceId.ToString("N");
+
         if (!string.IsNullOrWhiteSpace(track.SourcePath))
             return "source:" + NormalizePathForComparison(track.SourcePath);
 
@@ -436,6 +496,7 @@ public sealed class ProjectResumePlanService
             yield return new ProjectResumeTrackItem
             {
                 TrackIndex = track.GlobalIndex,
+                SourceId = track.SourceId,
                 DiscNumber = track.DiscNumber,
                 TrackNumber = track.TrackNumber,
                 SourcePath = sourcePath,
@@ -444,7 +505,7 @@ public sealed class ProjectResumePlanService
                 ChapterTitle = track.ChapterTitle,
                 Duration = FormatDuration(track.Duration),
                 DurationTicks = track.Duration.Ticks,
-                Action = isRipped ? "Konvertieren" : "FLAC rippen",
+                Action = isRipped ? ProcessingActionIds.Convert : ProcessingActionIds.RipFlac,
                 Preset = manifest.ExportPreset,
                 Status = isRipped ? ProjectManifestTrackStatuses.Pending : AudioDiscTrackStatus.Pending,
                 ConvertedPath = ""
@@ -484,6 +545,7 @@ public sealed class ProjectResumePlanService
                 yield return new ProjectResumeTrackItem
                 {
                     TrackIndex = trackIndex++,
+                    SourceId = FindMp3DiscSourceId(disc, projectFolder, file),
                     DiscNumber = disc.DiscNumber > 0 ? disc.DiscNumber : TryInferDiscNumber(file),
                     TrackNumber = trackNumber++,
                     SourcePath = file,
@@ -491,7 +553,7 @@ public sealed class ProjectResumePlanService
                     RelativeFolder = GetRelativeFolder(projectFolder, file),
                     ChapterTitle = Path.GetFileNameWithoutExtension(file),
                     Duration = "",
-                    Action = "Konvertieren",
+                    Action = ProcessingActionIds.Convert,
                     Preset = importManifest.ExportPreset ?? "",
                     Status = ProjectManifestTrackStatuses.Pending,
                     ConvertedPath = ""
@@ -515,12 +577,36 @@ public sealed class ProjectResumePlanService
         return "";
     }
 
+    private static Guid FindMp3DiscSourceId(Mp3DiscProjectManifestDisc disc, string projectFolder, string file)
+    {
+        if (disc.SourceFiles.Count == 0)
+            return Guid.Empty;
+
+        string relative;
+        try
+        {
+            relative = Path.GetRelativePath(ProjectFolderLayout.GetOriginalsFolder(projectFolder), file);
+        }
+        catch
+        {
+            relative = Path.GetFileName(file);
+        }
+
+        var normalizedRelative = relative.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        var fileName = Path.GetFileName(file);
+
+        return disc.SourceFiles.FirstOrDefault(sourceFile =>
+            sourceFile.SourceId != Guid.Empty &&
+            (string.Equals(sourceFile.RelativePath, normalizedRelative, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(sourceFile.SourceFileName, fileName, StringComparison.OrdinalIgnoreCase)))?.SourceId ?? Guid.Empty;
+    }
+
     private static IEnumerable<string> EnumerateAudioFiles(string folder)
     {
         IEnumerable<string> files;
         try
         {
-            files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories).ToList();
+            files = SafeFileSystemEnumeration.EnumerateFiles(folder).ToList();
         }
         catch
         {
@@ -528,14 +614,14 @@ public sealed class ProjectResumePlanService
         }
 
         return files
-            .Where(file => SupportedAudioExtensions.Contains(Path.GetExtension(file)))
+            .Where(file => AudioInputFormatCatalog.IsLocalImportExtension(Path.GetExtension(file)))
             .Where(file => !file.EndsWith(".part", StringComparison.OrdinalIgnoreCase))
             .Where(file => !file.EndsWith(".copying", StringComparison.OrdinalIgnoreCase))
             .OrderBy(file => file, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
 
-    private static Mp3DiscProjectManifest? TryLoadMp3DiscManifest(string manifestPath)
+    internal static Mp3DiscProjectManifest? TryLoadMp3DiscManifest(string manifestPath)
     {
         try
         {
@@ -543,21 +629,35 @@ public sealed class ProjectResumePlanService
                 return null;
 
             var json = File.ReadAllText(manifestPath, Encoding.UTF8);
-            if (!json.Contains("Mp3Disc", StringComparison.OrdinalIgnoreCase))
-                return null;
+            PersistentJsonSchema.Read(
+                json,
+                "MP3-CD-Projektmanifest",
+                manifestPath,
+                Mp3DiscManifestVersions.CurrentSchemaVersion);
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("ImportedDiscs", out _) &&
+                !document.RootElement.TryGetProperty("TotalDiscs", out _))
+            {
+                PersistentJsonSchema.RequireState(json, manifestPath, "Tracks", "Export", "State");
+                return null; // A valid work/export manifest occupies the shared project.json filename.
+            }
 
             var manifest = JsonSerializer.Deserialize<Mp3DiscProjectManifest>(json, JsonOptions);
-            return manifest?.ProjectType.Contains("Mp3Disc", StringComparison.OrdinalIgnoreCase) == true
-                ? manifest
-                : null;
+            if (manifest?.ProjectType.Contains("Mp3Disc", StringComparison.OrdinalIgnoreCase) != true)
+                throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
+            return manifest;
         }
-        catch
+        catch (PersistentJsonSchemaException)
         {
-            return null;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable"), ex);
         }
     }
 
-    private static AudioDiscProjectManifest? TryLoadAudioDiscManifest(string manifestPath)
+    internal static AudioDiscProjectManifest? TryLoadAudioDiscManifest(string manifestPath)
     {
         try
         {
@@ -565,18 +665,30 @@ public sealed class ProjectResumePlanService
                 return null;
 
             var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+            PersistentJsonSchema.Read(
+                json,
+                "Audio-CD-Projektmanifest",
+                manifestPath,
+                AudioDiscProjectManifestVersions.CurrentSchemaVersion);
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("Discs", out _))
+                throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
             var manifest = JsonSerializer.Deserialize<AudioDiscProjectManifest>(json, JsonOptions);
-            return string.Equals(manifest?.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase)
-                ? manifest
-                : null;
+            if (!string.Equals(manifest?.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase))
+                throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
+            return manifest;
         }
-        catch
+        catch (PersistentJsonSchemaException)
         {
-            return null;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable"), ex);
         }
     }
 
-    private static ExportWorkManifest? TryLoadExportManifest(string manifestPath)
+    internal static ExportWorkManifest? TryLoadExportManifest(string manifestPath)
     {
         try
         {
@@ -584,6 +696,14 @@ public sealed class ProjectResumePlanService
                 return null;
 
             var json = File.ReadAllText(manifestPath, Encoding.UTF8);
+            PersistentJsonSchema.Read(
+                json,
+                "Work-/Export-Manifest",
+                manifestPath,
+                ExportWorkManifestVersions.CurrentSchemaVersion);
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("ImportedDiscs", out _) &&
+                !document.RootElement.TryGetProperty("Tracks", out _)) return null;
             if (json.Contains("\"ProjectType\"", StringComparison.OrdinalIgnoreCase) &&
                 json.Contains("\"Mp3Disc\"", StringComparison.OrdinalIgnoreCase) &&
                 !json.Contains("\"FormatVersion\"", StringComparison.OrdinalIgnoreCase))
@@ -591,15 +711,20 @@ public sealed class ProjectResumePlanService
                 return null;
             }
 
+            PersistentJsonSchema.RequireState(json, manifestPath, "Tracks", "Export", "State");
             var manifest = JsonSerializer.Deserialize<ExportWorkManifest>(json, JsonOptions);
             if (manifest is null || string.IsNullOrWhiteSpace(manifest.ProjectType))
-                return null;
+                throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
 
             return manifest;
         }
-        catch
+        catch (PersistentJsonSchemaException)
         {
-            return null;
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new IOException(LocalizationText.Get("Persistence.Manifest.Unreadable"), ex);
         }
     }
 
@@ -630,12 +755,12 @@ public sealed class ProjectResumePlanService
 
     private static string BuildDisplayName(
         string projectFolder,
-        ExportWorkManifest? exportManifest,
+        ProjectMetadataProjection metadata,
         Mp3DiscProjectManifest? importManifest,
         AudioDiscProjectManifest? audioDiscManifest)
     {
-        var author = FirstNonEmpty(exportManifest?.Metadata.Author, audioDiscManifest?.Author, importManifest?.Author);
-        var title = FirstNonEmpty(exportManifest?.Metadata.Title, audioDiscManifest?.Title, importManifest?.Title);
+        var author = metadata.Author;
+        var title = metadata.Title;
 
         if (!string.IsNullOrWhiteSpace(author) && !string.IsNullOrWhiteSpace(title))
             return author + " - " + title;

@@ -1,4 +1,6 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
+using BookStitch.Models.TrackOrdering;
+using BookStitch.Services.TrackOrdering;
 using System.IO;
 
 namespace BookStitch.Services;
@@ -7,18 +9,32 @@ public sealed class ProjectResumeLoadWorkflowService
 {
     private readonly AudioDiscProjectService _audioDiscProjectService;
     private readonly TrackListStateService _trackListStateService;
+    private readonly SourceMetadataSnapshotStore _sourceMetadataSnapshotStore;
+    private readonly ProjectMetadataStore _projectMetadataStore;
 
     public ProjectResumeLoadWorkflowService(
         AudioDiscProjectService audioDiscProjectService,
-        TrackListStateService trackListStateService)
+        TrackListStateService trackListStateService,
+        SourceMetadataSnapshotStore? sourceMetadataSnapshotStore = null,
+        ProjectMetadataStore? projectMetadataStore = null)
     {
         _audioDiscProjectService = audioDiscProjectService;
         _trackListStateService = trackListStateService;
+        _sourceMetadataSnapshotStore = sourceMetadataSnapshotStore ?? new SourceMetadataSnapshotStore();
+        _projectMetadataStore = projectMetadataStore ?? new ProjectMetadataStore();
     }
 
     public ProjectResumeLoadResult Prepare(ProjectResumePlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        try
+        {
+            DiscProjectStopSaveService.ValidateResumeSources(plan);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or PersistentJsonSchemaException)
+        {
+            return ProjectResumeLoadResult.Failed(ex.Message);
+        }
 
         var isMp3DiscProject = string.Equals(
             plan.ProjectType,
@@ -36,7 +52,7 @@ public sealed class ProjectResumeLoadWorkflowService
         if (isAudioDiscProject && audioDiscManifest is null)
         {
             return ProjectResumeLoadResult.Failed(
-                "Das Audio-CD-Projektmanifest fehlt oder ist beschädigt. Das Projekt wurde nicht als lokales Projekt geöffnet.");
+                LocalizationText.Get("Resume.Load.AudioManifestInvalid"));
         }
 
         var currentFolderPath = isMp3DiscProject
@@ -45,18 +61,45 @@ public sealed class ProjectResumeLoadWorkflowService
         if (string.IsNullOrWhiteSpace(currentFolderPath) || !Directory.Exists(currentFolderPath))
             currentFolderPath = plan.ProjectFolder;
 
+        var canonicalMetadataPath = ProjectFolderLayout.GetProjectMetadataPath(plan.ProjectFolder);
+        var canonicalMetadata = File.Exists(canonicalMetadataPath)
+            ? _projectMetadataStore.LoadOrCreate(plan.ProjectFolder)
+            : null;
+
+        var sourceMetadataById = _sourceMetadataSnapshotStore
+            .LoadAll(plan.ProjectFolder)
+            .Where(snapshot => snapshot.SourceId != Guid.Empty)
+            .GroupBy(snapshot => snapshot.SourceId)
+            .ToDictionary(group => group.Key, group => group.First());
+
         var tracks = plan.Tracks
             .OrderBy(track => track.TrackIndex)
-            .Select(track => BuildTrackInfo(plan, track))
+            .Select(track => BuildTrackInfo(
+                plan,
+                track,
+                sourceMetadataById.GetValueOrDefault(track.SourceId)))
             .ToList();
-        tracks = _trackListStateService.Apply(plan.ProjectFolder, tracks);
+        var projectOrderType = isAudioDiscProject
+            ? TrackOrderProjectType.AudioDisc
+            : isMp3DiscProject
+                ? TrackOrderProjectType.Mp3Disc
+                : TrackOrderProjectType.LocalFolder;
+        var confirmedContexts = isAudioDiscProject
+            ? TrackOrderConfirmedContextFactory.CreateAudioDiscContexts(tracks)
+            : isMp3DiscProject
+                ? TrackOrderConfirmedContextFactory.CreateMp3DiscContexts(tracks)
+                : null;
+        tracks = _trackListStateService.Apply(plan.ProjectFolder, tracks, projectOrderType, confirmedContexts);
+        new TrackPreparedStateRefreshService().RefreshForCurrentPreset(tracks, plan.ProjectFolder, plan.SelectedPreset);
 
-        var awaitingAudioDiscRip = isAudioDiscProject &&
+        var awaitingAudioDiscRip = !plan.IsMergePaused && isAudioDiscProject &&
             audioDiscManifest is not null &&
             !_audioDiscProjectService.IsProjectRipCompleted(audioDiscManifest);
-        var pipelineState = awaitingAudioDiscRip || (isMp3DiscProject && plan.CanContinueDiscImport)
+        var pipelineState = plan.IsMergePaused ? ProjectPipelineState.Merging : awaitingAudioDiscRip || (isMp3DiscProject && plan.CanContinueDiscImport)
             ? ProjectPipelineState.AcquiringSources
-            : plan.HasSuccessfulExport
+            : plan.IsStoppedDiscProject
+                ? ProjectPipelineState.Converting
+                : plan.HasSuccessfulExport
                 ? ProjectPipelineState.Completed
                 : ProjectPipelineState.ReviewBeforeMerge;
         var waitingForManualMergeReview = pipelineState == ProjectPipelineState.ReviewBeforeMerge;
@@ -89,6 +132,7 @@ public sealed class ProjectResumeLoadWorkflowService
             PipelineState = pipelineState,
             CurrentFolderPath = currentFolderPath,
             SelectedFolder = string.IsNullOrWhiteSpace(plan.SourceFolder) ? plan.ProjectFolder : plan.SourceFolder,
+            CanonicalMetadata = canonicalMetadata,
             Tracks = tracks,
             StatusText = statusText,
             ProgressText = progressText,
@@ -119,7 +163,7 @@ public sealed class ProjectResumeLoadWorkflowService
                 : WorkflowProjectKind.Folder;
         var preset = ExportPreset.Parse(plan.SelectedPreset);
         var totalTracks = Math.Max(0, tracks.Count);
-        var totalChapters = Math.Max(0, tracks.Count(track => !track.IsExcluded));
+        var totalChapters = ExportPreviewMetricsService.CountPlannedChapters(tracks);
         var reusableConvertedTracks = Math.Clamp(
             tracks.Count(track => track.HasReusableConvertedFile),
             0,
@@ -188,7 +232,9 @@ public sealed class ProjectResumeLoadWorkflowService
             .DefaultIfEmpty(0)
             .Max();
 
-        return Math.Max(1, Math.Max(plan.TotalDiscs, maxTrackDisc));
+        var discCount = projectKind == WorkflowProjectKind.Mp3Disc && plan.HasSuccessfulExport && !plan.CanContinueDiscImport
+            ? plan.ImportedDiscCount : plan.TotalDiscs;
+        return Math.Max(1, Math.Max(discCount, maxTrackDisc));
     }
 
     private static (string StatusText, string ProgressText) BuildLoadStatus(
@@ -200,37 +246,40 @@ public sealed class ProjectResumeLoadWorkflowService
         if (awaitingAudioDiscRip && plan.NextMissingDiscNumber is int nextAudioDisc)
         {
             return (
-                $"Audio-CD-Projekt geladen. Fortsetzung ab Disc {nextAudioDisc} von {plan.TotalDiscs}.",
-                "Lege die benötigte Audio-CD ein und klicke auf „Start“; bereits gerippte Tracks bleiben erhalten.");
+                LocalizationText.Format("Resume.Load.AudioContinue", nextAudioDisc, plan.TotalDiscs),
+                LocalizationText.Get("Resume.Load.AudioInstruction"));
         }
 
         if (plan.CanContinueDiscImport && plan.NextMissingDiscNumber is int nextDisc)
         {
             return (
-                $"Projekt geladen. Es fehlt noch CD {nextDisc} von {plan.TotalDiscs}.",
-                $"Projekt geladen. Import kann später ab CD {nextDisc} fortgesetzt werden.");
+                LocalizationText.Format("Resume.Load.MissingDisc", nextDisc, plan.TotalDiscs),
+                LocalizationText.Format("Resume.Load.ImportLater", nextDisc));
         }
 
         if (completedProject)
         {
             return (
-                "Projekt geladen. Mindestens ein Hörbuchexport wurde bereits erfolgreich erstellt.",
-                "Trackliste und Preset prüfen. Vorhandenes Preset zusammenfügen oder ein fehlendes Preset neu konvertieren.");
+                LocalizationText.Get("Resume.Load.Completed"),
+                LocalizationText.Get("Resume.Load.CompletedInstruction"));
         }
 
         if (waitingForManualMergeReview)
         {
             return (
-                "Projekt geladen. Die Originalquellen sind vollständig und das Projekt ist bereit zur Prüfung.",
-                "Trackliste und Preset prüfen. Danach zusammenfügen oder ein fehlendes Preset neu konvertieren.");
+                LocalizationText.Get("Resume.Load.Ready"),
+                LocalizationText.Get("Resume.Load.ReviewInstruction"));
         }
 
         return (
-            "Projekt geladen.",
+            LocalizationText.Get("Resume.Load.Loaded"),
             string.Empty);
     }
 
-    private static TrackInfo BuildTrackInfo(ProjectResumePlan plan, ProjectResumeTrackItem resumeTrack)
+    private static TrackInfo BuildTrackInfo(
+        ProjectResumePlan plan,
+        ProjectResumeTrackItem resumeTrack,
+        SourceMetadataSnapshot? sourceMetadata)
     {
         var sourcePath = resumeTrack.SourcePath ?? string.Empty;
         var fileName = !string.IsNullOrWhiteSpace(resumeTrack.SourceFileName)
@@ -247,31 +296,35 @@ public sealed class ProjectResumeLoadWorkflowService
 
         var result = new TrackInfo
         {
+            SourceId = resumeTrack.SourceId,
             Index = resumeTrack.TrackIndex,
             DiscNumber = resumeTrack.DiscNumber,
             TrackNumber = resumeTrack.TrackNumber,
             FilePath = sourcePath,
             FileName = fileName,
             RelativeFolder = relativeFolder,
+            ProjectRelativeFolder = BuildProjectRelativeFolder(plan, relativeFolder),
+            HideFolderDisplay = IsDiscProject(plan.ProjectType),
             Extension = Path.GetExtension(fileName).TrimStart('.').ToUpperInvariant(),
-            TagTitle = string.Empty,
-            Artist = string.Empty,
+            TagTitle = sourceMetadata?.CanonicalFields.Title ?? string.Empty,
+            Artist = sourceMetadata?.CanonicalFields.Authors.FirstOrDefault()
+                ?? sourceMetadata?.CanonicalFields.Performers.FirstOrDefault()
+                ?? string.Empty,
+            SourceMetadataFields = sourceMetadata?.CanonicalFields,
+            SourceTrackNumber = sourceMetadata?.CanonicalFields.SourceTrackNumber,
+            SourceTrackTotal = sourceMetadata?.CanonicalFields.SourceTrackTotal,
+            SourceDiscNumber = sourceMetadata?.CanonicalFields.SourceDiscNumber,
+            SourceDiscTotal = sourceMetadata?.CanonicalFields.SourceDiscTotal,
             ChapterTitle = string.IsNullOrWhiteSpace(resumeTrack.ChapterTitle)
                 ? Path.GetFileNameWithoutExtension(fileName)
                 : resumeTrack.ChapterTitle,
             Duration = resumeTrack.Duration ?? string.Empty,
             DurationTicks = resumeTrack.DurationTicks,
-            ProcessingAction = resumeTrack.Action ?? string.Empty,
+            ProcessingAction = ProcessingActionIds.NormalizeOrEmpty(resumeTrack.Action),
             PreparedConvertedPath = resumeTrack.ConvertedPath ?? string.Empty,
             PreparedConvertedPreset = resumeTrack.Preset ?? string.Empty
         };
 
-        result.HasReusableConvertedFile =
-            string.Equals(result.PreparedConvertedPreset, plan.SelectedPreset, StringComparison.OrdinalIgnoreCase) &&
-            PreparedConvertedTrackReuseService.CanReuseForDiscProject(
-                plan.ProjectType,
-                result.FilePath,
-                result.PreparedConvertedPath);
 
         try
         {
@@ -282,19 +335,25 @@ public sealed class ProjectResumeLoadWorkflowService
             }
             else
             {
-                result.Warning = string.Equals(plan.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase) &&
-                                 string.Equals(resumeTrack.Action, "FLAC rippen", StringComparison.OrdinalIgnoreCase)
-                    ? string.Empty
-                    : "Quelldatei fehlt";
+                if (!(string.Equals(plan.ProjectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase) &&
+                      ProcessingActionIds.Normalize(resumeTrack.Action) == ProcessingActionIds.RipFlac))
+                {
+                    result.SetWarning(TrackWarningPresentation.Format(TrackWarningCodes.MissingSource),
+                        TrackWarningCodes.MissingSource);
+                }
             }
         }
         catch
         {
-            result.Warning = "Quelldatei konnte nicht geprüft werden";
+            result.Warning = LocalizationText.Get("Resume.Load.SourceCheckFailed");
         }
 
         return result;
     }
+
+    private static bool IsDiscProject(string? projectType) =>
+        string.Equals(projectType, ProjectManifestTypes.Mp3DiscProject, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(projectType, ProjectManifestTypes.AudioCdProject, StringComparison.OrdinalIgnoreCase);
 
     private static string GetRelativeFolderSafe(string? sourceRoot, string? sourcePath)
     {
@@ -310,6 +369,25 @@ public sealed class ProjectResumeLoadWorkflowService
         {
             return string.Empty;
         }
+    }
+
+    private static string BuildProjectRelativeFolder(ProjectResumePlan plan, string relativeFolder)
+    {
+        if (!string.Equals(plan.ProjectType, ProjectManifestTypes.FolderProject, StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        if (string.IsNullOrWhiteSpace(plan.SourceFolder))
+            return relativeFolder;
+
+        var rootName = Path.GetFileName(
+            Path.GetFullPath(plan.SourceFolder)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(rootName))
+            return relativeFolder;
+
+        return string.IsNullOrWhiteSpace(relativeFolder) || relativeFolder == "."
+            ? rootName
+            : Path.Combine(rootName, relativeFolder);
     }
 }
 
@@ -327,6 +405,7 @@ public sealed class ProjectResumeLoadResult
     public ProjectPipelineState PipelineState { get; init; } = ProjectPipelineState.Preparing;
     public string CurrentFolderPath { get; init; } = string.Empty;
     public string SelectedFolder { get; init; } = string.Empty;
+    public ProjectMetadata? CanonicalMetadata { get; init; }
     public IReadOnlyList<TrackInfo> Tracks { get; init; } = [];
     public string StatusText { get; init; } = string.Empty;
     public string ProgressText { get; init; } = string.Empty;

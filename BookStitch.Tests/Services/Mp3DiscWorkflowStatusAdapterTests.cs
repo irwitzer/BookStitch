@@ -9,6 +9,18 @@ public sealed class Mp3DiscWorkflowStatusAdapterTests
     private readonly Mp3DiscWorkflowStatusAdapter _adapter = new();
     private readonly WorkflowStatusFormatter _formatter = new();
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(5, 6)]
+    [InlineData(6, 7)]
+    public void Waiting_status_uses_last_completed_disc_not_next_disc(int completedDisc, int waitingDisc)
+    {
+        var snapshot = _adapter.CreateRunningSnapshot("project", ProjectPipelineState.AcquiringSources,
+            completedDisc, 7, 0, 0, 20, 20, 20, [], ExportPreset.Parse("AAC Stereo 192 kbps"),
+            currentDiscFinished: true);
+        Assert.Contains($"MP3-CD {waitingDisc} von 7 einlegen", _formatter.Format(snapshot).TeletextText);
+    }
+
     [Fact]
     public void RunningSnapshot_FormatsCopyAndLiveConversion()
     {

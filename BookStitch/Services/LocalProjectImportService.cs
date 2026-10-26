@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 
 namespace BookStitch.Services;
@@ -13,7 +12,8 @@ public sealed record LocalProjectCopiedFile(
     int TotalFiles,
     string SourceFile,
     string TargetFile,
-    bool WasReused);
+    bool WasReused,
+    SourceFileCopyIdentity? SourceIdentity = null);
 
 public sealed record LocalProjectImportResult(
     string SourceFolder,
@@ -27,28 +27,26 @@ public sealed class LocalProjectImportService : ILocalProjectImportService
 {
     public const string OriginalsFolderName = ProjectFolderLayout.OriginalsFolderName;
     private const int CopyBufferSize = 1024 * 1024;
+    private readonly ProjectFolderNameService _projectFolderNameService = new();
+    private readonly SourceCopyIdentityStore _sourceCopyIdentityStore = new();
 
     public string CreateProjectFolder(
         string localProjectsFolder,
         string sourceFolder,
-        DateTime? localNow = null)
+        DateTime? localNow = null,
+        int targetSampleRateHz = 44100, bool allowAacReuse = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(localProjectsFolder);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceFolder);
 
-        Directory.CreateDirectory(localProjectsFolder);
-
         var sourceName = new DirectoryInfo(Path.GetFullPath(sourceFolder)).Name;
-        var safeName = MakeSafeFileName(sourceName);
-        if (string.IsNullOrWhiteSpace(safeName))
-            safeName = "Ordnerprojekt";
-
-        var timestamp = (localNow ?? DateTime.Now)
-            .ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
-
-        return Path.Combine(
-            Path.GetFullPath(localProjectsFolder),
-            $"{safeName}_{timestamp}");
+        var projectFolder = _projectFolderNameService.CreateUniqueProjectFolder(
+            localProjectsFolder,
+            sourceName,
+            "Ordnerprojekt",
+            localNow);
+        new FolderProjectManifestService().Create(projectFolder, Path.GetFullPath(sourceFolder), targetSampleRateHz, allowAacReuse);
+        return projectFolder;
     }
 
     public async Task<LocalProjectImportResult> CopySourcesAsync(
@@ -82,33 +80,11 @@ public sealed class LocalProjectImportService : ILocalProjectImportService
 
         var completedFiles = 0;
 
-        foreach (var sourceFile in orderedFiles)
+        try
         {
-            if (cancellationToken.IsCancellationRequested)
+            foreach (var sourceFile in orderedFiles)
             {
-                return new LocalProjectImportResult(
-                    sourceRoot,
-                    fullProjectFolder,
-                    originalsFolder,
-                    orderedFiles.Count,
-                    completedFiles,
-                    WasCanceled: true);
-            }
-
-            var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
-            var targetFile = Path.Combine(originalsFolder, relativePath);
-            var targetDirectory = Path.GetDirectoryName(targetFile);
-            if (!string.IsNullOrWhiteSpace(targetDirectory))
-                Directory.CreateDirectory(targetDirectory);
-
-            var wasReused = IsCompleteExistingCopy(sourceFile, targetFile);
-            if (!wasReused)
-            {
-                try
-                {
-                    await CopyFileAtomicallyAsync(sourceFile, targetFile, cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                if (cancellationToken.IsCancellationRequested)
                 {
                     return new LocalProjectImportResult(
                         sourceRoot,
@@ -118,27 +94,56 @@ public sealed class LocalProjectImportService : ILocalProjectImportService
                         completedFiles,
                         WasCanceled: true);
                 }
+
+                var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
+                var targetFile = Path.Combine(originalsFolder, relativePath);
+                var targetDirectory = Path.GetDirectoryName(targetFile);
+                if (!string.IsNullOrWhiteSpace(targetDirectory))
+                    Directory.CreateDirectory(targetDirectory);
+
+                SourceFileCopyService.CleanupTemporaryCopy(targetFile);
+                string? contentSha256 = null;
+                var wasReused = _sourceCopyIdentityStore.CanReuseExistingCopy(
+                    fullProjectFolder,
+                    sourceFile,
+                    targetFile, cancellationToken);
+                if (!wasReused)
+                {
+                    contentSha256 = await SourceFileCopyService.CopyAtomicallyAsync(sourceFile, targetFile, cancellationToken);
+                }
+
+                var sourceIdentity = _sourceCopyIdentityStore.RecordCopiedFile(
+                    fullProjectFolder,
+                    sourceFile,
+                    targetFile,
+                    contentSha256: contentSha256, cancellationToken: cancellationToken);
+
+                completedFiles++;
+                progress?.Report(new LocalProjectCopyProgress(
+                    completedFiles,
+                    orderedFiles.Count,
+                    Path.GetFileName(sourceFile)));
+                copiedFileProgress?.Report(new LocalProjectCopiedFile(
+                    completedFiles,
+                    orderedFiles.Count,
+                    sourceFile,
+                    targetFile,
+                    wasReused,
+                    sourceIdentity));
             }
 
-            completedFiles++;
-            progress?.Report(new LocalProjectCopyProgress(
-                completedFiles,
+            return new LocalProjectImportResult(
+                sourceRoot,
+                fullProjectFolder,
+                originalsFolder,
                 orderedFiles.Count,
-                Path.GetFileName(sourceFile)));
-            copiedFileProgress?.Report(new LocalProjectCopiedFile(
-                completedFiles,
-                orderedFiles.Count,
-                sourceFile,
-                targetFile,
-                wasReused));
+                completedFiles);
         }
-
-        return new LocalProjectImportResult(
-            sourceRoot,
-            fullProjectFolder,
-            originalsFolder,
-            orderedFiles.Count,
-            completedFiles);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new LocalProjectImportResult(sourceRoot, fullProjectFolder, originalsFolder,
+                orderedFiles.Count, completedFiles, WasCanceled: true);
+        }
     }
 
     private static void ValidateSourceFiles(string sourceRoot, IReadOnlyCollection<string> sourceFiles)
@@ -146,7 +151,7 @@ public sealed class LocalProjectImportService : ILocalProjectImportService
         foreach (var sourceFile in sourceFiles)
         {
             if (!File.Exists(sourceFile))
-                throw new FileNotFoundException("Eine lokale Quelldatei wurde nicht gefunden.", sourceFile);
+                throw new FileNotFoundException(LocalizationText.Get("Sources.LocalFileMissing"), sourceFile);
 
             var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
             if (Path.IsPathRooted(relativePath) ||
@@ -160,74 +165,4 @@ public sealed class LocalProjectImportService : ILocalProjectImportService
         }
     }
 
-    private static bool IsCompleteExistingCopy(string sourceFile, string targetFile)
-    {
-        if (!File.Exists(targetFile))
-            return false;
-
-        try
-        {
-            return new FileInfo(sourceFile).Length == new FileInfo(targetFile).Length;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    private static async Task CopyFileAtomicallyAsync(
-        string sourceFile,
-        string targetFile,
-        CancellationToken cancellationToken)
-    {
-        var copyingPath = targetFile + ".copying";
-
-        try
-        {
-            if (File.Exists(copyingPath))
-                File.Delete(copyingPath);
-
-            await using (var sourceStream = new FileStream(
-                             sourceFile,
-                             FileMode.Open,
-                             FileAccess.Read,
-                             FileShare.Read,
-                             CopyBufferSize,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
-            await using (var targetStream = new FileStream(
-                             copyingPath,
-                             FileMode.CreateNew,
-                             FileAccess.Write,
-                             FileShare.None,
-                             CopyBufferSize,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
-            {
-                await sourceStream.CopyToAsync(targetStream, CopyBufferSize, cancellationToken);
-                await targetStream.FlushAsync(cancellationToken);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            File.Move(copyingPath, targetFile, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(copyingPath))
-                File.Delete(copyingPath);
-        }
-    }
-
-    private static string MakeSafeFileName(string value)
-    {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var cleaned = new string(value
-            .Select(character => invalidChars.Contains(character) ? '_' : character)
-            .ToArray())
-            .Trim();
-
-        return string.Join("_", cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-    }
 }

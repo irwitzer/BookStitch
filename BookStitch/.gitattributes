@@ -61,3 +61,8 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+# Export manifest hashes require exact bytes across Git checkouts.
+Resources/BookStitch.LanguageMaster.json -text diff whitespace=cr-at-eol
+Resources/BookStitch.LocalizationExport.json -text diff whitespace=cr-at-eol
+Resources/LocalizationResources.*.resx -text diff whitespace=cr-at-eol

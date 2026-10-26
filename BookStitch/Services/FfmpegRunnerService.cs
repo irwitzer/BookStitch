@@ -7,18 +7,24 @@ namespace BookStitch.Services;
 
 public sealed class FfmpegRunnerService
 {
+    private const int CapturedOutputLimit = 40000;
+    private static readonly Regex ProgressTimeRegex = new(@"time=(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     public async Task<FfmpegRunResult> RunAsync(
         string ffmpegPath,
         IReadOnlyList<string> arguments,
         CancellationToken token,
-        Action<TimeSpan>? onProgress = null)
+        Action<TimeSpan>? onProgress = null,
+        PerformanceExternalProcessContext? performanceContext = null)
     {
+        token.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(ffmpegPath))
-            throw new InvalidOperationException("FFmpeg ist nicht eingerichtet.");
+            throw new InvalidOperationException(LocalizationText.Get("Tools.Ffmpeg.NotConfigured"));
 
         using var process = new Process();
         var stderr = new StringBuilder();
         var stdout = new StringBuilder();
+        Exception? progressError = null;
         var stderrClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var stdoutClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -44,12 +50,8 @@ public sealed class FfmpegRunnerService
                 return;
             }
 
-            if (stdout.Length < 40000)
-                stdout.AppendLine(e.Data);
-
-            var progress = TryParseProgressLine(e.Data);
-            if (progress.HasValue)
-                onProgress?.Invoke(progress.Value);
+            AppendBounded(stdout, e.Data);
+            ReportProgress(e.Data);
         };
 
         process.ErrorDataReceived += (_, e) =>
@@ -60,28 +62,68 @@ public sealed class FfmpegRunnerService
                 return;
             }
 
-            if (stderr.Length < 40000)
-                stderr.AppendLine(e.Data);
-
-            var progress = TryParseProgressLine(e.Data);
-            if (progress.HasValue)
-                onProgress?.Invoke(progress.Value);
+            AppendBounded(stderr, e.Data);
+            ReportProgress(e.Data);
         };
+
+        void ReportProgress(string line)
+        {
+            if (onProgress is null || Volatile.Read(ref progressError) is not null)
+                return;
+
+            try
+            {
+                var progress = TryParseProgressLine(line);
+                if (progress.HasValue)
+                    onProgress(progress.Value);
+            }
+            catch (Exception error)
+            {
+                // Process events run on background threads; report failures through RunAsync.
+                Interlocked.CompareExchange(ref progressError, error, null);
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                catch (Exception cleanupError) when (cleanupError is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    Trace.TraceWarning("FFmpeg stop after progress failure failed: {0}", cleanupError.Message);
+                }
+            }
+        }
+
+        var performanceScope =
+            performanceContext?.Start("ffmpeg", "ffmpeg.run") ?? default;
 
         try
         {
+            token.ThrowIfCancellationRequested();
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
             await process.WaitForExitAsync(token);
-            await Task.WhenAll(stdoutClosed.Task, stderrClosed.Task);
+            await ExternalProcessCleanup.DrainStreamsBoundedAsync(
+                    stdoutClosed.Task,
+                    stderrClosed.Task,
+                    ExternalProcessCleanup.StreamDrainTimeout)
+                .ConfigureAwait(false);
 
+            if (progressError is not null)
+                throw new InvalidOperationException("FFmpeg progress could not be processed.", progressError);
+            performanceScope.Complete(process.ExitCode);
             return new FfmpegRunResult(process.ExitCode, stdout.ToString(), stderr.ToString());
         }
         catch (OperationCanceledException)
         {
-            await StopProcessAfterCancellationAsync(process, stdoutClosed.Task, stderrClosed.Task);
+            performanceScope.Cancel();
+            await ExternalProcessCleanup.StopAfterCancellationAsync(
+                    process,
+                    stdoutClosed.Task,
+                    stderrClosed.Task)
+                .ConfigureAwait(false);
+            throw;
+        }
+        catch
+        {
+            performanceScope.Fail();
             throw;
         }
     }
@@ -93,7 +135,7 @@ public sealed class FfmpegRunnerService
 
     private static TimeSpan? TryParseFfmpegProgressTime(string line)
     {
-        var match = Regex.Match(line, @"time=(\d+):(\d+):(\d+(?:\.\d+)?)");
+        var match = ProgressTimeRegex.Match(line);
 
         if (!match.Success)
             return null;
@@ -107,7 +149,14 @@ public sealed class FfmpegRunnerService
         if (!double.TryParse(match.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
             return null;
 
-        return TimeSpan.FromSeconds(hours * 3600 + minutes * 60 + seconds);
+        try
+        {
+            return TimeSpan.FromSeconds(hours * 3600d + minutes * 60d + seconds);
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
     }
 
     private static TimeSpan? TryParseFfmpegProgressKeyValue(string line)
@@ -125,7 +174,8 @@ public sealed class FfmpegRunnerService
         if (string.Equals(key, "out_time_ms", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(key, "out_time_us", StringComparison.OrdinalIgnoreCase))
         {
-            return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var microseconds)
+            return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var microseconds) &&
+                   microseconds >= long.MinValue / 10 && microseconds <= long.MaxValue / 10
                 ? TimeSpan.FromTicks(microseconds * 10)
                 : null;
         }
@@ -136,40 +186,16 @@ public sealed class FfmpegRunnerService
         return null;
     }
 
-    private static async Task StopProcessAfterCancellationAsync(
-        Process process,
-        Task stdoutClosed,
-        Task stderrClosed)
+    private static void AppendBounded(StringBuilder builder, string line)
     {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Wenn der Prozess bereits weg ist, ist das okay.
-        }
-
-        try
-        {
-            if (!process.HasExited)
-                await process.WaitForExitAsync(CancellationToken.None);
-        }
-        catch
-        {
-            // Der Abbruch bleibt maßgeblich; Cleanup-Fehler dürfen ihn nicht ersetzen.
-        }
-
-        try
-        {
-            await Task.WhenAll(stdoutClosed, stderrClosed).WaitAsync(TimeSpan.FromSeconds(2));
-        }
-        catch
-        {
-            // Umgeleitete Streams können bei hartem Prozessabbruch verzögert schließen.
-        }
+        var remaining = CapturedOutputLimit - builder.Length;
+        if (remaining <= 0) return;
+        builder.Append(line.AsSpan(0, Math.Min(remaining, line.Length)));
+        remaining = CapturedOutputLimit - builder.Length;
+        if (remaining > 0)
+            builder.Append(Environment.NewLine.AsSpan(0, Math.Min(remaining, Environment.NewLine.Length)));
     }
+
 }
 
 public sealed record FfmpegRunResult(int ExitCode, string Stdout, string Stderr)
@@ -179,7 +205,7 @@ public sealed record FfmpegRunResult(int ExitCode, string Stdout, string Stderr)
         var text = string.IsNullOrWhiteSpace(Stderr) ? Stdout : Stderr;
 
         if (string.IsNullOrWhiteSpace(text))
-            return "FFmpeg hat keine Fehlermeldung ausgegeben.";
+            return LocalizationText.Get("Tools.Ffmpeg.NoErrorOutput");
 
         var lines = text
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)

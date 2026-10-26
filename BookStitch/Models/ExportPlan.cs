@@ -19,4 +19,7 @@ public sealed record ExportPlan(
     string FinalOutputFolder,
     string FinalOutputFileName,
     string FinalPartPath,
-    string ManifestPath);
+    string ManifestPath)
+{
+    public int TargetSampleRateHz { get; init; } = 44100;
+}

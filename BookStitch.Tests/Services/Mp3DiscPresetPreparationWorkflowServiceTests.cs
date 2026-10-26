@@ -7,6 +7,45 @@ namespace BookStitch.Tests.Services;
 
 public sealed class Mp3DiscPresetPreparationWorkflowServiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Newly_prepared_tracks_register_verified_cache_before_completion(bool background)
+    {
+        using var folder = new TemporaryFolder();
+        var source = CreateNonEmptyFile(folder.Path, "CD 01/Track 01.mp3", "original payload");
+        var track = CreateTrack("CD 01", "Track 01.mp3", 1, ProcessingActionIds.Reuse);
+        track.SourceId = Guid.NewGuid();
+        var preset = ExportPreset.Parse("AAC Mono 64 kbps");
+        var convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(folder.Path, preset.GetFolderName());
+        var manifest = new ExportWorkManifest();
+        var work = new WorkManifestService();
+        var registered = 0;
+        void Persist(Mp3DiscPresetPreparationItem item)
+        {
+            work.UpdateTrack(manifest, item.Index, item.Track, item.SourcePath, item.ConvertedPath, preset);
+            registered++;
+        }
+        var service = CreateService();
+        if (background)
+        {
+            var tasks = new List<Task>();
+            using var semaphore = new SemaphoreSlim(1);
+            service.StartBackgroundPreparation([track], folder.Path, preset, convertedFolder,
+                (_, _) => false, semaphore, tasks, new object(), () => true, 1,
+                () => Assert.Equal(1, registered), () => Assert.Fail("Unexpected preparation failure"),
+                CancellationToken.None, Persist);
+            await Task.WhenAll(tasks);
+        }
+        else
+            await service.PrepareMissingTracksAsync([track], folder.Path, preset, convertedFolder,
+                (_, _) => false, 1, (_, _) => Assert.Equal(1, registered), CancellationToken.None,
+                persistPreparedTrack: Persist);
+        Assert.Equal(1, registered);
+        var converted = ConvertedTrackPathService.GetConvertedTrackPath(convertedFolder, source, track);
+        Assert.True(work.CanReuseConvertedTrack(manifest, 0, track, source, converted, preset));
+        Assert.False(work.CanReuseConvertedTrack(manifest, 0, track, source, converted, ExportPreset.Parse("AAC Stereo 192 kbps")));
+    }
     [Fact]
     public async Task PrepareMissingTracksAsync_CopiesTakeOverTracksAndReportsProgress()
     {
@@ -58,6 +97,35 @@ public sealed class Mp3DiscPresetPreparationWorkflowServiceTests
 
         Assert.Equal(1, completed);
         Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public async Task PrepareMissingTracksAsync_ForwardsPerformanceContextToAudioPreparation()
+    {
+        using var folder = new TemporaryFolder();
+        var sourcePath = CreateNonEmptyFile(folder.Path, "CD 01/Track 01.mp3", "payload");
+        var convertedFolder = Path.Combine(folder.Path, "converted", "aac_stereo_128k");
+        var track = CreateTrack("CD 01", Path.GetFileName(sourcePath), 1, processingAction: "Konvertieren");
+        var processor = new RecordingAudioExportProcessingService();
+        var service = new Mp3DiscPresetPreparationWorkflowService(
+            new Mp3DiscPreparationService(),
+            processor,
+            () => "ffmpeg");
+        var context = CreatePerformanceContext();
+
+        var completed = await service.PrepareMissingTracksAsync(
+            [track],
+            folder.Path,
+            ExportPreset.Parse("AAC Stereo 128 kbps"),
+            convertedFolder,
+            (_, _) => false,
+            maxParallel: 1,
+            onProgress: null,
+            CancellationToken.None,
+            context);
+
+        Assert.Equal(1, completed);
+        Assert.Same(context, processor.LastPreparationContext);
     }
 
     [Fact]
@@ -146,6 +214,9 @@ public sealed class Mp3DiscPresetPreparationWorkflowServiceTests
             () => string.Empty);
     }
 
+    private static PerformanceExternalProcessContext CreatePerformanceContext() =>
+        new(new PerformanceTraceService(enabled: true), Guid.NewGuid());
+
     private static TrackInfo CreateTrack(string relativeFolder, string fileName, int trackNumber, string processingAction)
     {
         return new TrackInfo
@@ -156,6 +227,7 @@ public sealed class Mp3DiscPresetPreparationWorkflowServiceTests
             RelativeFolder = relativeFolder,
             FileName = fileName,
             Extension = Path.GetExtension(fileName).TrimStart('.'),
+            SampleRateHz = 44100,
             ProcessingAction = processingAction
         };
     }

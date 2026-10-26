@@ -1,0 +1,57 @@
+<UserControl x:Class="BookStitch.Controls.ConceptCompatibilityFieldControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls"
+             Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/BookStitch;component/Themes/ConceptDialogStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="{Binding CompatibilityFieldLabel}"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+            <controls:InfoPoint x:Name="CompatibilityInfoPoint"
+                                Grid.Column="2"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center"
+                                Title="{DynamicResource InfoCompatibilityDescriptionTitle}"
+                                Body="{DynamicResource InfoCompatibilityDescriptionBody}"/>
+            <ToggleButton x:Name="CompatibilityDescriptionToggle"
+                          Grid.Column="3"
+                          Content="{services:LocalizedText Key=UiInBeschreibung}"
+                          HorizontalAlignment="Right"
+                          Style="{StaticResource ConceptSpecialFunctionChipToggleStyle}"
+                          IsChecked="{Binding IsCompatibilityDescriptionEnabled, Mode=TwoWay}"
+                          AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.CompatibilityInDescription}"/>
+        </Grid>
+        <Border MinHeight="120" Style="{StaticResource ConceptRoundedInputBorderStyle}">
+            <TextBox x:Name="CompatibilityFieldTextBox"
+                     Text="{Binding CompatibilityFieldText, Mode=OneWay}"
+                     IsReadOnly="True"
+                     IsTabStop="False"
+                     Focusable="False"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     Background="Transparent"
+                     Foreground="{DynamicResource MainTextBrush}"
+                     BorderThickness="0"
+                     Padding="6,4"
+                     AutomationProperties.Name="{services:LocalizedText Key=Metadata.Search.CompatibilityField}"/>
+        </Border>
+    </StackPanel>
+</UserControl>

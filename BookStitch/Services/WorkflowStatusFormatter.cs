@@ -1,10 +1,13 @@
-﻿using System.Globalization;
+using System.Globalization;
 using BookStitch.Models;
 
 namespace BookStitch.Services;
 
 public sealed class WorkflowStatusFormatter
 {
+    private static string L(string key, params object?[] args) =>
+        string.Format(CultureInfo.CurrentCulture, LocalizationText.Get("MainWindow.Status." + key), args);
+
     public WorkflowStatusViewState Format(WorkflowStatusSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -18,8 +21,8 @@ public sealed class WorkflowStatusFormatter
         if (snapshot.Warning is not null)
         {
             return new WorkflowStatusViewState(
-                $"Warnung | {snapshot.Warning.Message}",
-                "100 % | wartet auf Bestätigung",
+                L("Warning", snapshot.Warning.Message),
+                L("WaitingConfirmation"),
                 100);
         }
 
@@ -27,20 +30,20 @@ public sealed class WorkflowStatusFormatter
         {
             var percent = ClampPercent(snapshot.MergeProgress?.Percent ?? 0);
             return new WorkflowStatusViewState(
-                "Zusammenfügen abgebrochen | Bereit zum Zusammenfügen",
-                $"{percent} % | abgebrochen",
+                L("MergeAborted"),
+                L("PercentAborted", percent),
                 percent,
                 ProgressVisualKind: WorkflowProgressVisualKind.Merge);
         }
 
         if (snapshot.IsExportAborted)
-            return new WorkflowStatusViewState("Export abgebrochen", "100 % | bereit", 100);
+            return new WorkflowStatusViewState(L("ExportAborted"), L("Ready100"), 100);
 
         if (snapshot.MergeProgress is { IsWritingMetadata: true })
         {
             return new WorkflowStatusViewState(
-                "Zusammenfügen abgeschlossen, Metadaten werden geschrieben ...",
-                "100 % | Metadaten werden geschrieben ...",
+                L("WritingMetadata"),
+                L("WritingMetadataProgress"),
                 100,
                 ProgressVisualKind: WorkflowProgressVisualKind.Merge);
         }
@@ -48,8 +51,8 @@ public sealed class WorkflowStatusFormatter
         if (snapshot.MergeProgress is not null)
         {
             return new WorkflowStatusViewState(
-                "Zusammenfügen ...",
-                $"{ClampPercent(snapshot.MergeProgress.Percent)} % | Datei {snapshot.MergeProgress.CurrentFile} von {snapshot.MergeProgress.TotalFiles}",
+                L("Merging"),
+                L("MergeProgress", ClampPercent(snapshot.MergeProgress.Percent), snapshot.MergeProgress.CurrentFile, snapshot.MergeProgress.TotalFiles),
                 ClampPercent(snapshot.MergeProgress.Percent),
                 ProgressVisualKind: WorkflowProgressVisualKind.Merge);
         }
@@ -64,8 +67,8 @@ public sealed class WorkflowStatusFormatter
         {
             var count = snapshot.AnalysisProgress?.Total ?? snapshot.TotalSourceItems;
             return new WorkflowStatusViewState(
-                $"Projekt vorbereitet • {count} Tracks erkannt",
-                "100 % | Track-Analyse abgeschlossen",
+                L("ProjectPrepared", count),
+                L("TrackAnalysisCompleted"),
                 100);
         }
 
@@ -82,16 +85,16 @@ public sealed class WorkflowStatusFormatter
             return FormatWork(snapshot);
 
         if (snapshot.ActiveActivities.Contains(WorkflowActivity.PreparingProject))
-            return new WorkflowStatusViewState("Projekt wird gestartet ...", "0 % | Initialisierung", 0);
+            return new WorkflowStatusViewState(L("ProjectStarting"), L("Initializing"), 0);
 
-        return new WorkflowStatusViewState("Quelle auswählen oder Projekt öffnen.", "0 % | bereit", 0);
+        return new WorkflowStatusViewState(L("SelectSource"), L("Ready0"), 0);
     }
 
     private static WorkflowStatusViewState FormatWork(WorkflowStatusSnapshot snapshot)
     {
         var source = snapshot.SourceProgress;
         var conversion = snapshot.ConversionProgress;
-        var prefix = snapshot.IsPaused ? "Pause • " : snapshot.IsExtension ? "Projekt wird erweitert • " : string.Empty;
+        var prefix = snapshot.IsPaused ? L("PausePrefix") : snapshot.IsExtension ? L("ExtensionPrefix") : string.Empty;
         var teletext = prefix + (snapshot.IsPaused
             ? BuildPausedTeletext(snapshot.ProjectKind, source, conversion)
             : BuildWorkTeletext(snapshot.ProjectKind, source, conversion));
@@ -117,20 +120,20 @@ public sealed class WorkflowStatusFormatter
         ConversionActivityProgress? conversion)
     {
         if (source is null)
-            return conversion is null ? "Pausiert" : BuildConversionTeletext(conversion);
+            return conversion is null ? L("Paused") : BuildConversionTeletext(conversion);
 
         string sourceText;
         if (projectKind is WorkflowProjectKind.AudioDisc or WorkflowProjectKind.Mp3Disc)
         {
-            var label = projectKind == WorkflowProjectKind.AudioDisc ? "Audio-CD" : "MP3-CD";
+            var label = projectKind == WorkflowProjectKind.AudioDisc ? LocalizationText.Get("Disc.Media.Audio") : LocalizationText.Get("Disc.Media.Mp3");
             var suffix = source.Kind == SourceAcquisitionKind.Ripping && !string.IsNullOrWhiteSpace(source.WorkingFormat)
                 ? $" {source.WorkingFormat}"
                 : string.Empty;
-            sourceText = $"{label} {source.CurrentDisc} von {source.TotalDiscs} • {source.CompletedCurrentSource:00} / {source.TotalCurrentSource:00}{suffix}";
+            sourceText = L("PausedDiscProgress", label, source.CurrentDisc, source.TotalDiscs, source.CompletedCurrentSource.ToString("00", CultureInfo.CurrentCulture), source.TotalCurrentSource.ToString("00", CultureInfo.CurrentCulture), suffix);
         }
         else
         {
-            sourceText = $"Kopieren • {source.CompletedProject} / {source.TotalProject}";
+            sourceText = L("CopyingCount", source.CompletedProject, source.TotalProject);
         }
 
         return conversion is null ? sourceText : $"{sourceText} | {BuildConversionTeletext(conversion)}";
@@ -156,30 +159,33 @@ public sealed class WorkflowStatusFormatter
     {
         if (projectKind is WorkflowProjectKind.AudioDisc or WorkflowProjectKind.Mp3Disc)
         {
-            var label = projectKind == WorkflowProjectKind.AudioDisc ? "Audio-CD" : "MP3-CD";
+            var label = projectKind == WorkflowProjectKind.AudioDisc ? LocalizationText.Get("Disc.Media.Audio") : LocalizationText.Get("Disc.Media.Mp3");
             if (source.AllSourcesFinished)
-                return $"{label} {source.TotalDiscs} von {source.TotalDiscs} fertig";
+                return L("DiscFinished", label, source.TotalDiscs, source.TotalDiscs);
 
             if (source.CurrentSourceFinished)
-                return $"{label} {Math.Min(source.CurrentDisc + 1, source.TotalDiscs)} von {source.TotalDiscs} einlegen";
+                return L("InsertDisc", label, Math.Min(source.CurrentDisc + 1, source.TotalDiscs), source.TotalDiscs);
 
-            var verb = source.Kind == SourceAcquisitionKind.Ripping ? "wird gerippt" : "wird kopiert";
+            var verb = source.Kind == SourceAcquisitionKind.Ripping ? L("RippingVerb") : L("CopyingVerb");
             var suffix = source.Kind == SourceAcquisitionKind.Ripping && !string.IsNullOrWhiteSpace(source.WorkingFormat)
                 ? $" {source.WorkingFormat}"
                 : string.Empty;
-            return $"{label} {source.CurrentDisc} von {source.TotalDiscs} {verb} • {source.CompletedCurrentSource:00} / {source.TotalCurrentSource:00}{suffix}";
+            var key = string.IsNullOrWhiteSpace(source.DriveDisplayName)
+                ? "ActiveDiscProgress"
+                : "ActiveDiscProgressWithDrive";
+            return L(key, label, source.CurrentDisc, source.TotalDiscs, verb, source.CompletedCurrentSource.ToString("00", CultureInfo.CurrentCulture), source.TotalCurrentSource.ToString("00", CultureInfo.CurrentCulture), suffix, source.DriveDisplayName);
         }
 
         if (source.AllSourcesFinished)
-            return $"Kopieren abgeschlossen {source.CompletedProject} / {source.TotalProject}";
+            return L("CopyCompleted", source.CompletedProject, source.TotalProject);
 
-        return $"Kopieren • {source.CompletedProject} / {source.TotalProject}";
+        return L("CopyingCount", source.CompletedProject, source.TotalProject);
     }
 
     private static string BuildConversionTeletext(ConversionActivityProgress conversion)
     {
-        var label = conversion.IsLive ? "Live-Konvertierung" : "Neu konvertieren";
-        return $"{label} {conversion.Completed} / {conversion.Total} {FormatPreset(conversion)}";
+        var label = conversion.IsLive ? L("LiveConversion") : L("NewConversion");
+        return L("ConversionCount", label, conversion.Completed, conversion.Total, FormatPreset(conversion));
     }
 
     private static string BuildWorkProgress(
@@ -187,12 +193,12 @@ public sealed class WorkflowStatusFormatter
         SourceAcquisitionProgress? source,
         ConversionActivityProgress? conversion)
     {
-        var paused = snapshot.IsPaused ? " | pausiert" : string.Empty;
+        var paused = snapshot.IsPaused ? L("PausedSuffix") : string.Empty;
 
         if (source is not null && !source.AllSourcesFinished && !source.CurrentSourceFinished)
         {
-            var verb = source.Kind == SourceAcquisitionKind.Ripping ? "gerippt" : "kopiert";
-            var active = FormatActiveConversionJobs(conversion, "Konvertierung");
+            var verb = source.Kind == SourceAcquisitionKind.Ripping ? L("RippedVerb") : L("CopiedVerb");
+            var active = FormatActiveConversionJobs(conversion, L("ConversionJobs"));
             var completed = source.CompletedProject;
             var total = source.TotalProject;
             return $"{ClampPercent(source.Percent)} %{paused} | {completed} / {total} {verb}{active}";
@@ -200,8 +206,8 @@ public sealed class WorkflowStatusFormatter
 
         if (conversion is not null)
         {
-            var active = FormatActiveConversionJobs(conversion, "Aktive Jobs");
-            return $"{ClampPercent(conversion.Percent)} %{paused} | {conversion.Completed} / {conversion.Total} konvertiert{active}";
+            var active = FormatActiveConversionJobs(conversion, L("ActiveJobs"));
+            return L("ConvertedProgress", ClampPercent(conversion.Percent), paused, conversion.Completed, conversion.Total, active);
         }
 
         return $"{ClampPercent(source?.Percent ?? 0)} %{paused}";
@@ -223,25 +229,25 @@ public sealed class WorkflowStatusFormatter
         return analysis.Kind switch
         {
             WorkflowAnalysisKind.SourceTracks => new WorkflowStatusViewState(
-                "Projekt wird vorbereitet ...",
-                $"{percent} % | Track-Analyse läuft • {analysis.Completed} / {analysis.Total}",
+                L("ProjectPreparing"),
+                L("TrackAnalysisProgress", percent, analysis.Completed, analysis.Total),
                 percent),
             WorkflowAnalysisKind.ConvertedTracks => new WorkflowStatusViewState(
                 BuildStableContext(snapshot),
-                $"{percent} % | AAC-Analyse läuft • {analysis.Completed} / {analysis.Total}",
+                L("AacAnalysisProgress", percent, analysis.Completed, analysis.Total),
                 percent),
             WorkflowAnalysisKind.Chapters => new WorkflowStatusViewState(
-                "Kapitel werden eingelesen ...",
-                $"{percent} % | Kapitel {analysis.Completed} / {analysis.Total}",
+                L("ReadingChapters"),
+                L("ChapterProgress", percent, analysis.Completed, analysis.Total),
                 percent),
-            _ => new WorkflowStatusViewState("Projekt wird vorbereitet ...", $"{percent} %", percent)
+            _ => new WorkflowStatusViewState(L("ProjectPreparing"), $"{percent} %", percent)
         };
     }
 
     private static WorkflowStatusViewState FormatReady(WorkflowStatusSnapshot snapshot, bool loaded)
     {
         var teletext = BuildReadyText(snapshot);
-        var progress = loaded ? "100 % | geladenes Projekt" : "100 %";
+        var progress = loaded ? L("Loaded100") : "100 %";
         return new WorkflowStatusViewState(
             teletext,
             progress,
@@ -256,17 +262,20 @@ public sealed class WorkflowStatusFormatter
         var total = conversion?.Total ?? snapshot.TotalSourceItems;
         var sourceSummary = snapshot.ProjectKind switch
         {
-            WorkflowProjectKind.AudioDisc => $"{GetDiscCount(snapshot)} Audio-CDs / {snapshot.TotalChapters} Kapitel",
-            WorkflowProjectKind.Mp3Disc => $"{GetDiscCount(snapshot)} MP3-CDs / {snapshot.TotalChapters} Kapitel",
-            WorkflowProjectKind.Folder => $"{snapshot.TotalSourceItems} Dateien / {snapshot.TotalChapters} Kapitel",
-            _ => $"{snapshot.TotalChapters} Kapitel"
+            WorkflowProjectKind.AudioDisc => L("AudioDiscChapterSummary", GetDiscCount(snapshot), snapshot.TotalChapters),
+            WorkflowProjectKind.Mp3Disc => L("Mp3DiscChapterSummary", GetDiscCount(snapshot), snapshot.TotalChapters),
+            WorkflowProjectKind.Folder => L("FileChapterSummary", snapshot.TotalSourceItems, snapshot.TotalChapters),
+            _ => L("ChapterSummary", snapshot.TotalChapters)
         };
         var preset = conversion is null ? "AAC" : FormatPreset(conversion);
+        var completed = Math.Clamp(conversion?.Completed ?? 0, 0, Math.Max(0, total));
+        var remaining = Math.Max(0, total - completed);
+        var percent = ClampPercent(conversion?.Percent ?? 0);
 
         return new WorkflowStatusViewState(
-            $"{sourceSummary} | Neu konvertieren • 0 / {total} {preset}",
-            "0 % | bereit",
-            0,
+            L("PresetChangePending", sourceSummary, remaining, total, preset),
+            L("PreparedProgress", percent, completed, total),
+            percent,
             ProgressVisualKind: WorkflowProgressVisualKind.Conversion);
     }
 
@@ -276,16 +285,16 @@ public sealed class WorkflowStatusFormatter
         {
             var sourceSummary = BuildLoadedSourceSummary(snapshot);
             return new WorkflowStatusViewState(
-                $"{sourceSummary} | Neu konvertieren • {conversion.Completed} / {conversion.Total} {FormatPreset(conversion)}",
-                $"{ClampPercent(conversion.Percent)} % | geladenes Projekt",
+                L("PresetChangePending", sourceSummary, conversion.Completed, conversion.Total, FormatPreset(conversion)),
+                L("LoadedProgress", ClampPercent(conversion.Percent)),
                 ClampPercent(conversion.Percent));
         }
 
         if (snapshot.ProjectState == ProjectPipelineState.Completed)
         {
             return new WorkflowStatusViewState(
-                $"{BuildLoadedSourceSummary(snapshot)} / {snapshot.TotalChapters} Kapitel | Bereit",
-                "100 % | geladenes Projekt",
+                L("LoadedReady", BuildLoadedSourceSummary(snapshot), snapshot.TotalChapters),
+                L("Loaded100"),
                 100);
         }
 
@@ -297,8 +306,8 @@ public sealed class WorkflowStatusFormatter
         var sourceSummary = BuildCompletedSourceSummary(snapshot);
         var size = snapshot.OutputFileSizeBytes is > 0 ? $" {FormatFileSize(snapshot.OutputFileSizeBytes.Value)}" : string.Empty;
         return new WorkflowStatusViewState(
-            $"{sourceSummary} / {snapshot.TotalChapters} Kapitel{size} | Hörbuch erfolgreich erstellt.",
-            "100 % | fertig",
+            L("ExportSuccess", sourceSummary, snapshot.TotalChapters, size),
+            L("Finished100"),
             100,
             ProgressVisualKind: WorkflowProgressVisualKind.Merge);
     }
@@ -309,34 +318,34 @@ public sealed class WorkflowStatusFormatter
         var parts = new List<string>
         {
             $"{DetermineCurrentPercent(snapshot)} %",
-            "Fehler"
+            L("ErrorLabel")
         };
 
         var source = snapshot.SourceProgress;
         if (source is not null)
         {
             if (snapshot.ProjectKind == WorkflowProjectKind.AudioDisc)
-                parts.Add($"Audio-CD {source.CurrentDisc} von {source.TotalDiscs}");
+                parts.Add(L("DiscCount", "Audio-CD", source.CurrentDisc, source.TotalDiscs));
             else if (snapshot.ProjectKind == WorkflowProjectKind.Mp3Disc)
-                parts.Add($"MP3-CD {source.CurrentDisc} von {source.TotalDiscs}");
+                parts.Add(L("DiscCount", "MP3-CD", source.CurrentDisc, source.TotalDiscs));
 
-            var verb = source.Kind == SourceAcquisitionKind.Ripping ? "gerippt" : "kopiert";
+            var verb = source.Kind == SourceAcquisitionKind.Ripping ? L("RippedVerb") : L("CopiedVerb");
             parts.Add($"{source.CompletedProject} / {source.TotalProject} {verb}");
         }
 
         if (error.FailedTrackOrFileNumber is int failed)
         {
-            var noun = snapshot.ProjectKind == WorkflowProjectKind.AudioDisc ? "Track" : "Datei";
-            parts.Add($"Fehler bei {noun} {failed}");
+            var noun = snapshot.ProjectKind == WorkflowProjectKind.AudioDisc ? L("TrackLabel") : L("FileLabel");
+            parts.Add(L("ItemError", noun, failed));
         }
 
         if (snapshot.ConversionProgress is not null)
-            parts.Add($"{snapshot.ConversionProgress.Completed} / {snapshot.ConversionProgress.Total} konvertiert");
+            parts.Add(L("ConvertedCount", snapshot.ConversionProgress.Completed, snapshot.ConversionProgress.Total));
         else if (snapshot.MergeProgress is not null)
-            parts.Add($"Datei {snapshot.MergeProgress.CurrentFile} von {snapshot.MergeProgress.TotalFiles}");
+            parts.Add(L("FileCount", snapshot.MergeProgress.CurrentFile, snapshot.MergeProgress.TotalFiles));
 
         return new WorkflowStatusViewState(
-            $"Fehler | {error.Message}",
+            L("ErrorMessage", error.Message),
             string.Join(" | ", parts),
             DetermineCurrentPercent(snapshot));
     }
@@ -344,13 +353,13 @@ public sealed class WorkflowStatusFormatter
     private static WorkflowStatusViewState FormatRollback(WorkflowRollbackStatus rollback) => rollback.Phase switch
     {
         WorkflowRollbackPhase.Running => new WorkflowStatusViewState(
-            "Erweiterung abgebrochen | Änderungen werden zurückgesetzt ...",
-            "Rollback läuft ...",
+            L("RollbackRunning"),
+            L("RollbackProgress"),
             0,
             true),
         WorkflowRollbackPhase.Completed => new WorkflowStatusViewState(
-            "Erweiterung zurückgesetzt | Projekt wiederhergestellt",
-            "Rollback abgeschlossen",
+            L("RollbackCompleted"),
+            L("RollbackFinished"),
             100),
         _ => new WorkflowStatusViewState(string.Empty, string.Empty, 0)
     };
@@ -367,8 +376,8 @@ public sealed class WorkflowStatusFormatter
             : string.Empty;
 
         return string.IsNullOrWhiteSpace(conversionText)
-            ? $"{sourceText} | Bereit zum Zusammenfügen"
-            : $"{sourceText} | {conversionText} | Bereit zum Zusammenfügen";
+            ? L("ReadyToMerge", sourceText)
+            : L("ReadyToMergeWithConversion", sourceText, conversionText);
     }
 
     private static string BuildStableContext(WorkflowStatusSnapshot snapshot)
@@ -376,15 +385,15 @@ public sealed class WorkflowStatusFormatter
         if (snapshot.SourceProgress is not null || snapshot.ConversionProgress is not null)
             return BuildWorkTeletext(snapshot.ProjectKind, snapshot.SourceProgress, snapshot.ConversionProgress);
 
-        return "Projekt wird vorbereitet ...";
+        return L("ProjectPreparing");
     }
 
     private static string BuildLoadedSourceSummary(WorkflowStatusSnapshot snapshot) => snapshot.ProjectKind switch
     {
-        WorkflowProjectKind.AudioDisc => $"{GetDiscCount(snapshot)} Audio-CDs",
-        WorkflowProjectKind.Mp3Disc => $"{GetDiscCount(snapshot)} MP3-CDs",
-        WorkflowProjectKind.Folder => $"{snapshot.TotalSourceItems} Dateien",
-        _ => "Projekt"
+        WorkflowProjectKind.AudioDisc => L("AudioDiscSummary", GetDiscCount(snapshot)),
+        WorkflowProjectKind.Mp3Disc => L("Mp3DiscSummary", GetDiscCount(snapshot)),
+        WorkflowProjectKind.Folder => L("FileSummary", snapshot.TotalSourceItems),
+        _ => L("ProjectLabel")
     };
 
     private static string BuildCompletedSourceSummary(WorkflowStatusSnapshot snapshot) => BuildLoadedSourceSummary(snapshot);

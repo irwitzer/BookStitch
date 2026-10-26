@@ -1,0 +1,975 @@
+<Window x:Class="BookStitch.DeveloperToolsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dialog="clr-namespace:BookStitch.Dialog"
+    xmlns:controls="clr-namespace:BookStitch.Controls"
+    xmlns:services="clr-namespace:BookStitch.Services"
+    Title="{services:LocalizedText Key=Developer.BookStitchDeveloperTools}"
+    Icon="/BookStitch;component/Assets/Icons/icon/BookStitch-Icon-OpenBook.ico"
+    Width="1080"
+    Height="760"
+    MinWidth="1030"
+    MinHeight="520"
+    WindowStartupLocation="Manual"
+    ShowInTaskbar="True"
+    Topmost="False"
+    KeyDown="DeveloperToolsWindow_KeyDown"
+    Foreground="{DynamicResource MainTextBrush}"
+    FontFamily="Segoe UI"
+    Style="{StaticResource LargeResizableWindowStyle}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <Style x:Key="BookStitchSliderStyle" TargetType="Slider">
+                <Setter Property="Height" Value="30" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid VerticalAlignment="Center">
+                                <Border Height="6"
+                                    Background="{DynamicResource ScrollBarTrackBrush}"
+                                    BorderBrush="{DynamicResource InputBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    VerticalAlignment="Center" />
+                                <Track x:Name="PART_Track"
+                                    VerticalAlignment="Center"
+                                    IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.DecreaseLarge}"
+                                            Background="{DynamicResource AccentBrush}"
+                                            BorderThickness="0">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Height="6"
+                                                        Background="{TemplateBinding Background}"
+                                                        CornerRadius="3" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Width="18" Height="18">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border Background="{DynamicResource AccentSoftBrush}"
+                                                        BorderBrush="#8CE7EA"
+                                                        BorderThickness="1"
+                                                        CornerRadius="9" />
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.IncreaseLarge}"
+                                            Background="Transparent"
+                                            BorderThickness="0" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="DebugValueTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="22" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource AppearanceComboBoxStyle}">
+                <Setter Property="Height" Value="27" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <DockPanel>
+        <controls:LargeResizableWindowHeader DockPanel.Dock="Top"
+            Padding="14,0,8,0"
+            CloseRequested="Close_Click">
+            <controls:LargeResizableWindowHeader.TitleContent>
+                <TextBlock Text="{services:LocalizedText Key=Developer.DeveloperTools}"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource LargeResizableWindowHeaderTitleTextStyle}" />
+            </controls:LargeResizableWindowHeader.TitleContent>
+        </controls:LargeResizableWindowHeader>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource NavigationDialogNavigationHostStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="{services:LocalizedText Key=DeveloperTools.Categories}"
+                        Margin="8,0,8,8" FontWeight="SemiBold"
+                        Foreground="{DynamicResource MutedTextBrush}" />
+                    <ListBox Grid.Row="1" VerticalAlignment="Top" KeyboardNavigation.TabIndex="0" x:Name="DeveloperNavigationList"
+                        Style="{StaticResource NavigationDialogListStyle}"
+                        ItemContainerStyle="{StaticResource NavigationDialogItemStyle}"
+                        SelectionChanged="DeveloperNavigationList_SelectionChanged"
+                        AutomationProperties.Name="{services:LocalizedText Key=UiKategorie}">
+                        <ListBoxItem Tag="Status" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Status}" />
+                        <ListBoxItem Tag="Appearance" Content="{services:LocalizedText Key=UiDarstellung}" />
+                        <ListBoxItem Tag="Images" Content="{services:LocalizedText Key=Developer.Images.Category}" />
+                        <ListBoxItem Tag="Projects" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Environment}" />
+                        <ListBoxItem Tag="Tools" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Tools}" />
+                        <ListBoxItem Tag="Sounds" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Sounds}" />
+                        <ListBoxItem Tag="Chapters" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Decisions}" />
+                        <ListBoxItem Tag="Performance" Content="{services:LocalizedText Key=DeveloperTools.Navigation.Performance}" />
+                    </ListBox>
+                    <Button Grid.Row="2" KeyboardNavigation.TabIndex="1" Content="{services:LocalizedText Key=DeveloperTools.Restart}"
+                        Style="{StaticResource SecondaryCompactButtonStyle}"
+                        Click="RestartBookStitchButton_Click" Margin="8,18,8,0"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="{services:LocalizedText Key=DeveloperTools.Restart}" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="1"
+                Style="{StaticResource NavigationDialogContentHostStyle}"
+                Padding="0">
+                <Grid x:Name="DeveloperContentHost">
+                    <Grid x:Name="StatusSection"
+                        Tag="Status"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="22">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.LiveState}"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource AccentForegroundBrush}"
+                                        Margin="0,0,0,18" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ProjectState}"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,6" />
+                                    <TextBlock x:Name="PipelineStateTextBlock"
+                                        Text="–"
+                                        Style="{StaticResource DebugValueTextStyle}"
+                                        Margin="0,0,0,22" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.MainWindowStatus}"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,6" />
+                                    <TextBlock x:Name="MainStatusTextBlock"
+                                        Text="–"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        TextWrapping="Wrap"
+                                        Margin="0,0,0,18" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.Progress}"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,6" />
+                                    <TextBlock x:Name="ProgressStatusTextBlock"
+                                        Text="–"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        TextWrapping="Wrap" />
+                                    <Separator Margin="0,22,0,18" Opacity="0.35" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ThisTabShowsLiveDiagnosticState}"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="AppearanceSection"
+                        Tag="Appearance"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="22">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="24" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{services:LocalizedText Key=Developer.TestAppearanceLive}"
+                                            FontSize="20"
+                                            FontWeight="SemiBold"
+                                            Foreground="{DynamicResource AccentForegroundBrush}"
+                                            Margin="0,0,0,18" />
+                                        <TextBlock Text="{services:LocalizedText Key=Developer.Images.Hint}"
+                                            Foreground="{DynamicResource MutedTextBrush}"
+                                            TextWrapping="Wrap"
+                                            Margin="0,0,0,18" />
+                                        <Grid MaxWidth="700" HorizontalAlignment="Left">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="24" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{services:LocalizedText Key=UiHintergrund}"
+                                                    FontWeight="SemiBold"
+                                                    Margin="0,0,0,6" />
+                                                <ComboBox x:Name="BackgroundPresetComboBox"
+                                                    Height="27"
+                                                    Style="{StaticResource AppearanceComboBoxStyle}"
+                                                    SelectionChanged="BackgroundPresetComboBox_Changed" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="{services:LocalizedText Key=Developer.TextColors}"
+                                                    FontWeight="SemiBold"
+                                                    Margin="0,0,0,6" />
+                                                <ComboBox x:Name="TextColorPresetComboBox"
+                                                    Height="27"
+                                                    Style="{StaticResource AppearanceComboBoxStyle}"
+                                                    SelectionChanged="TextColorPresetComboBox_Changed" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <StackPanel MaxWidth="300"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,22,0,0">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.TrackListRowHeight}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,6" />
+                                            <ComboBox x:Name="TrackGridRowHeightComboBox"
+                                                Height="27"
+                                                Style="{StaticResource AppearanceComboBoxStyle}"
+                                                SelectionChanged="TrackGridRowHeightComboBox_Changed" />
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.SixSizesChangesApplyImmediatelyToThe}"
+                                                Foreground="{DynamicResource MutedTextBrush}"
+                                                TextWrapping="Wrap"
+                                                Margin="0,6,0,0" />
+                                        </StackPanel>
+                                        <StackPanel MaxWidth="700"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,24,0,0">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.UIAnimations}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,10" />
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="290" />
+                                                    <ColumnDefinition Width="24" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{services:LocalizedText Key=Developer.TagBarAnimationDuration}" Margin="0,0,0,6" />
+                                                    <DockPanel LastChildFill="True">
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                            Text="ms"
+                                                            VerticalAlignment="Center"
+                                                            Margin="8,0,0,0"
+                                                            Foreground="{DynamicResource MutedTextBrush}" />
+                                                        <TextBox x:Name="MetadataAnimationMillisecondsTextBox"
+                                                            Height="27"
+                                                            LostFocus="MetadataAnimationMillisecondsTextBox_LostFocus"
+                                                            KeyDown="MetadataAnimationMillisecondsTextBox_KeyDown" />
+                                                    </DockPanel>
+                                                </StackPanel>
+                                                <Button x:Name="ToggleMetadataPanelPreviewButton"
+                                                    Grid.Column="2"
+                                                    Content="{services:LocalizedText Key=Developer.TestTagBar}"
+                                                    MinWidth="160"
+                                                    VerticalAlignment="Bottom"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Click="ToggleMetadataPanelPreview_Click" />
+                                            </Grid>
+                                            <Grid Margin="0,0,0,10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="290" />
+                                                    <ColumnDefinition Width="24" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{services:LocalizedText Key=Developer.ProjectPageAnimationDuration}" Margin="0,0,0,6" />
+                                                    <DockPanel LastChildFill="True">
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                            Text="ms"
+                                                            VerticalAlignment="Center"
+                                                            Margin="8,0,0,0"
+                                                            Foreground="{DynamicResource MutedTextBrush}" />
+                                                        <TextBox x:Name="ProjectSetupPageAnimationMillisecondsTextBox"
+                                                            Height="27"
+                                                            LostFocus="ProjectSetupPageAnimationMillisecondsTextBox_LostFocus"
+                                                            KeyDown="ProjectSetupPageAnimationMillisecondsTextBox_KeyDown" />
+                                                    </DockPanel>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2"
+                                                    Orientation="Horizontal"
+                                                    VerticalAlignment="Bottom">
+                                                    <Button x:Name="ProjectSetupPagePreviousButton"
+                                                        Content="←"
+                                                        Width="38"
+                                                        Margin="0,0,6,0"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="ProjectSetupPagePreviousButton_Click"
+                                                        AutomationProperties.Name="{services:LocalizedText Key=Developer.TestPreviousProjectPage}" />
+                                                    <Button x:Name="ProjectSetupPageNextButton"
+                                                        Content="→"
+                                                        Width="38"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Click="ProjectSetupPageNextButton_Click"
+                                                        AutomationProperties.Name="{services:LocalizedText Key=Developer.TestNextProjectPage}" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <CheckBox x:Name="ForceShowFfmpegSetupButtonCheckBox"
+                                                Content="{services:LocalizedText Key=Developer.AlwaysShowTheFFmpegSetupButton}"
+                                                Foreground="{DynamicResource MainTextBrush}"
+                                                FontWeight="SemiBold"
+                                                Checked="ForceShowFfmpegSetupButtonCheckBox_Changed"
+                                                Unchecked="ForceShowFfmpegSetupButtonCheckBox_Changed" />
+                                        </StackPanel>
+                                        <StackPanel MaxWidth="700"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,24,0,0">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.RememberDialogPositionAndSize}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,6" />
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.EnabledDialogsSaveTheirSizeAndPosition}"
+                                                Foreground="{DynamicResource MutedTextBrush}"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,10" />
+                                            <UniformGrid Columns="2">
+                                                <CheckBox x:Name="DeveloperToolsPlacementCheckBox"
+                                                    Tag="DeveloperTools"
+                                                    Content="{services:LocalizedText Key=Developer.DeveloperTools}"
+                                                    Margin="0,0,18,8"
+                                                    AutomationProperties.Name="{services:LocalizedText Key=Developer.RememberDeveloperToolsGeometry}"
+                                                    Checked="DialogPlacementRememberCheckBox_Changed"
+                                                    Unchecked="DialogPlacementRememberCheckBox_Changed" />
+                                                <CheckBox x:Name="GlobalSettingsPlacementCheckBox"
+                                                    Tag="GlobalSettings"
+                                                    Content="{services:LocalizedText Key=Developer.GlobalSettings}"
+                                                    Margin="0,0,18,8"
+                                                    AutomationProperties.Name="{services:LocalizedText Key=Developer.RememberGlobalSettingsGeometry}"
+                                                    Checked="DialogPlacementRememberCheckBox_Changed"
+                                                    Unchecked="DialogPlacementRememberCheckBox_Changed" />
+                                                <CheckBox x:Name="ProjectSetupPlacementCheckBox"
+                                                    Tag="ProjectSetup"
+                                                    Content="{services:LocalizedText Key=MainWindow.Action.PrepareProject}"
+                                                    Margin="0,0,18,8"
+                                                    AutomationProperties.Name="{services:LocalizedText Key=Developer.RememberProjectSetupGeometry}"
+                                                    Checked="DialogPlacementRememberCheckBox_Changed"
+                                                    Unchecked="DialogPlacementRememberCheckBox_Changed" />
+                                                <CheckBox x:Name="MetadataDialogPlacementCheckBox"
+                                                    Tag="MetadataDialog"
+                                                    Content="{services:LocalizedText Key=Project.Browser.MetadataHeading}"
+                                                    Margin="0,0,18,8"
+                                                    AutomationProperties.Name="{services:LocalizedText Key=Developer.RememberMetadataDialogGeometry}"
+                                                    Checked="DialogPlacementRememberCheckBox_Changed"
+                                                    Unchecked="DialogPlacementRememberCheckBox_Changed" />
+                                                <CheckBox x:Name="ResumeProjectPlacementCheckBox"
+                                                    Tag="ResumeProject"
+                                                    Content="{services:LocalizedText Key=UiProjektFortsetzen}"
+                                                    Margin="0,0,18,8"
+                                                    AutomationProperties.Name="{services:LocalizedText Key=Developer.RememberResumeDialogGeometry}"
+                                                    Checked="DialogPlacementRememberCheckBox_Changed"
+                                                    Unchecked="DialogPlacementRememberCheckBox_Changed" />
+                                            </UniformGrid>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,24,0,0" HorizontalAlignment="Left">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.ProgressArtwork.Test}"
+                                                       FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                            <WrapPanel>
+                                                <ComboBox x:Name="ProgressPreviewKindComboBox" SelectedIndex="0" MinWidth="110"
+                                                          Margin="0,0,12,8" Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                                          AutomationProperties.Name="{services:LocalizedText Key=Developer.ProgressArtwork.Test}">
+                                                    <ComboBoxItem Content="{services:LocalizedText Key=Developer.ProgressArtwork.Petrol}"/>
+                                                    <ComboBoxItem Content="{services:LocalizedText Key=Developer.ProgressArtwork.Gold}"/>
+                                                </ComboBox>
+                                                <TextBlock x:Name="ProgressPreviewSecondsLabel" VerticalAlignment="Center" Margin="0,0,8,8"
+                                                           Text="{services:LocalizedText Key=Developer.ProgressArtwork.Seconds}"/>
+                                                <TextBox x:Name="ProgressPreviewSecondsTextBox" Text="3" Width="60" Margin="0,0,12,8"
+                                                         Style="{StaticResource AppearanceCompactTextBoxStyle}"
+                                                         AutomationProperties.LabeledBy="{Binding ElementName=ProgressPreviewSecondsLabel}"/>
+                                                <Button x:Name="TestProgressArtworkButton" Content="{services:LocalizedText Key=Developer.ProgressArtwork.Start}"
+                                                        Style="{StaticResource SecondaryCompactButtonStyle}" Margin="0,0,0,8"
+                                                        Click="TestProgressArtwork_Click"/>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Border Grid.Column="2"
+                                        VerticalAlignment="Top"
+                                        Background="{DynamicResource InputBackgroundBrush}"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="14">
+                                        <StackPanel>
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.WindowDimensions}"
+                                                FontSize="16"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource AccentForegroundBrush}"
+                                                Margin="0,0,0,12" />
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.MainWindow}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,5" />
+                                            <TextBlock x:Name="MainWindowMetricsTextBlock"
+                                                Text="–"
+                                                TextWrapping="Wrap"
+                                                Foreground="{DynamicResource MutedTextBrush}" />
+                                            <Separator Margin="0,12" Opacity="0.35" />
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.ActiveWindow}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,5" />
+                                            <TextBlock x:Name="ActiveWindowMetricsTextBlock"
+                                                Text="–"
+                                                TextWrapping="Wrap"
+                                                Foreground="{DynamicResource MutedTextBrush}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="ImagesSection" Tag="Images" Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="22">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.Images.Category}" FontSize="20"
+                                               FontWeight="SemiBold" Margin="0,0,0,18"/>
+                                    <TextBlock x:Name="ImagesBackgroundLabel" Text="{services:LocalizedText Key=UiHintergrund}" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="ImagesBackgroundComboBox" MinWidth="240" Margin="0,0,0,12"
+                                              AutomationProperties.LabeledBy="{Binding ElementName=ImagesBackgroundLabel}"
+                                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                              SelectionChanged="BackgroundPresetComboBox_Changed"/>
+                                    <TextBlock x:Name="ImagesTextLabel" Text="{services:LocalizedText Key=Developer.TextColors}" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="ImagesTextColorComboBox" MinWidth="240" Margin="0,0,0,12"
+                                              AutomationProperties.LabeledBy="{Binding ElementName=ImagesTextLabel}"
+                                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                              SelectionChanged="TextColorPresetComboBox_Changed"/>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.Images.Hint}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                    <Separator Margin="0,8,0,16" Opacity="0.35"/>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.Images.Variants}" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                                    <ItemsControl x:Name="ImagePreviewRolesItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,14">
+                                                    <TextBlock Text="{Binding Label}" Margin="0,0,0,5"/>
+                                                    <ComboBox ItemsSource="{Binding Choices}" SelectedValuePath="Id"
+                                                              SelectedValue="{Binding SelectedId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                              AutomationProperties.Name="{Binding Label}"
+                                                              Style="{StaticResource AppearanceCompactComboBoxStyle}" MinWidth="320">
+                                                        <ComboBox.ItemContainerStyle>
+                                                            <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                                                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}"/>
+                                                            </Style>
+                                                        </ComboBox.ItemContainerStyle>
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding DisplayName}" Opacity="{Binding Opacity}"/>
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="ProjectsSection"
+                        Tag="Projects"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="22">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                        <TextBlock Text="{services:LocalizedText Key=Developer.ProjectEnvironment}"
+                                            FontSize="20"
+                                            FontWeight="SemiBold"
+                                            Foreground="{DynamicResource AccentForegroundBrush}" />
+                                        <TextBlock x:Name="ActiveProjectEnvironmentTextBlock"
+                                            Text="{services:LocalizedText Key=UiStandard}"
+                                            FontSize="20"
+                                            FontWeight="SemiBold"
+                                            Foreground="{DynamicResource MainTextBrush}"
+                                            AutomationProperties.Name="{services:LocalizedText Key=Developer.ActiveProjectEnvironment}"
+                                            Margin="10,0,0,0" />
+                                    </StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ProjectEnvironmentForNextStart}"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,6" />
+                                    <ComboBox x:Name="ProjectEnvironmentComboBox"
+                                        Width="320"
+                                        HorizontalAlignment="Left"
+                                        SelectionChanged="ProjectEnvironmentComboBox_SelectionChanged"
+                                        AutomationProperties.Name="{services:LocalizedText Key=Developer.SelectProjectEnvironment}"
+                                        Margin="0,0,0,10">
+                                        <ComboBoxItem Content="{services:LocalizedText Key=UiStandard}" Tag="Production" />
+                                        <ComboBoxItem Content="{services:LocalizedText Key=Developer.Development}" Tag="Development" />
+                                        <ComboBoxItem Content="{services:LocalizedText Key=Developer.Tester}" Tag="XTester" />
+                                    </ComboBox>
+                                    <TextBlock x:Name="ProjectEnvironmentAvailabilityTextBlock"
+                                        TextWrapping="Wrap"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        Margin="0,0,0,14" />
+                                    <CheckBox x:Name="PrivateGenreListCheckBox"
+                                        Content="{services:LocalizedText Key=Settings.Genres.Private}"
+                                        Style="{StaticResource SettingsToggleStyle}"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,18"
+                                        Checked="PrivateGenreListCheckBox_Changed"
+                                        Unchecked="PrivateGenreListCheckBox_Changed" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="ToolsSection"
+                        Tag="Tools"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="0">
+                            <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=DeveloperTools.Navigation.Tools}"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource AccentForegroundBrush}"
+                                        Margin="0,0,0,18" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.Dialogs}"
+                                        FontSize="18"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        Margin="0,0,0,12" />
+                                    <Grid Margin="0,0,0,18">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="24" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="18" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Grid.Row="0" Grid.Column="0">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.WorkflowDialogs}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,8" />
+                                            <UniformGrid Columns="1" HorizontalAlignment="Stretch">
+                                                <Button Content="{services:LocalizedText Key=UiCDLaufwerkAuswaehlen}"
+                                                    MinWidth="150"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="DiscSourcePreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=MainWindow.Action.AddDiscs}"
+                                                    MinWidth="150"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="AddDiscsPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.OpenProject}"
+                                                    MinWidth="150"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="ResumeProjectPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.SetUpLocalProject}"
+                                                    MinWidth="150"
+                                                    Tag="Folder"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="ProjectSetupPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=MainWindow.Setup.Mp3Prepare}"
+                                                    MinWidth="150"
+                                                    Tag="Mp3Disc"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="ProjectSetupPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=MainWindow.Setup.AudioPrepare}"
+                                                    MinWidth="150"
+                                                    Tag="AudioDisc"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="ProjectSetupPreview_Click" />
+                                            </UniformGrid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="2">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.StandardMessages}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,8" />
+                                            <UniformGrid Columns="1" HorizontalAlignment="Stretch">
+                                                <Button Content="{services:LocalizedText Key=Developer.Information}"
+                                                    MinWidth="150"
+                                                    Tag="Information"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="MessagePreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.Warning}"
+                                                    MinWidth="150"
+                                                    Tag="Warning"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="MessagePreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=MainWindow.Status.ErrorLabel}"
+                                                    MinWidth="150"
+                                                    Tag="Error"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="MessagePreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.Question}"
+                                                    MinWidth="150"
+                                                    Tag="Question"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="MessagePreview_Click" />
+                                            </UniformGrid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="0">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.HybridHardwareTests}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,8" />
+                                            <UniformGrid Columns="1" HorizontalAlignment="Stretch">
+                                                <Button Content="{services:LocalizedText Key=Developer.DetectMP3CD}"
+                                                    MinWidth="150"
+                                                    Tag="Mp3New"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="HybridDiscTestPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.DuplicateMP3CD}"
+                                                    MinWidth="150"
+                                                    Tag="Mp3Duplicate"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="HybridDiscTestPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.DetectAudioCD}"
+                                                    MinWidth="150"
+                                                    Tag="AudioNew"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="HybridDiscTestPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.DuplicateAudioCD}"
+                                                    MinWidth="150"
+                                                    Tag="AudioDuplicate"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="HybridDiscTestPreview_Click" />
+                                            </UniformGrid>
+                                            <TextBlock x:Name="DiscTestStatusTextBlock"
+                                                Text="{services:LocalizedText Key=Developer.CDTestReady}"
+                                                Foreground="{DynamicResource AccentForegroundBrush}"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,3" />
+                                            <TextBlock x:Name="DiscTestProgressTextBlock"
+                                                Text=""
+                                                Foreground="{DynamicResource MutedTextBrush}"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,14" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="2">
+                                            <TextBlock Text="{services:LocalizedText Key=Developer.CDSimulation}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,8" />
+                                            <UniformGrid Columns="1" HorizontalAlignment="Stretch">
+                                                <Button Content="{services:LocalizedText Key=Developer.EmptyDrive}"
+                                                    MinWidth="150"
+                                                    Tag="EmptyDrive"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.WrongDisc}"
+                                                    MinWidth="150"
+                                                    Tag="UnsupportedDisc"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.DuplicateEjected}"
+                                                    MinWidth="150"
+                                                    Tag="DuplicateEjected"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.EjectDuplicateManually}"
+                                                    MinWidth="150"
+                                                    Tag="DuplicateManualEject"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.SlowThenDetected}"
+                                                    MinWidth="150"
+                                                    Tag="SlowThenReady"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                                <Button Content="{services:LocalizedText Key=Developer.CorrectDiscDetected}"
+                                                    MinWidth="150"
+                                                    Tag="Ready"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,0"
+                                                    Click="SimulatedDiscWaitPreview_Click" />
+                                            </UniformGrid>
+                                            <Button Content="{services:LocalizedText Key=Developer.TestDiscAnalysis}"
+                                                MinWidth="150"
+                                                HorizontalAlignment="Stretch"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Click="PreviewDiscSourceAnalysis_Click" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="SoundsSection"
+                        Tag="Sounds"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="0">
+                            <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=DeveloperTools.Navigation.Sounds}"
+                                        FontSize="18"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        Margin="0,0,0,12" />
+                                    <UniformGrid Columns="3" Margin="0,0,0,10">
+                                        <Button Content="{services:LocalizedText Key=Developer.CDChange}"
+                                            Tag="DiscChangeRequired"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.UserActionRequired}"
+                                            Tag="UserActionRequired"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.Completion}"
+                                            Tag="ProjectCompleted"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.Warning}"
+                                            Tag="Warning"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.Information}"
+                                            Tag="Information"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=MainWindow.Status.ErrorLabel}"
+                                            Tag="Error"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="NotificationPreview_Click" />
+                                    </UniformGrid>
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160" />
+                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="160" />
+                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{services:LocalizedText Key=UiEreignisprofil}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,6" />
+                                            <ComboBox x:Name="DevEventProfileComboBox"
+                                                Height="27"
+                                                Style="{StaticResource AppearanceComboBoxStyle}"
+                                                SelectionChanged="EventProfileComboBox_Changed">
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiNurCDWechsel}" Tag="DiscOnly" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiWichtigeEreignisse}" Tag="Important" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiAlleHinweise}" Tag="All" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="{services:LocalizedText Key=UiSoundbibliothek}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,6" />
+                                            <ComboBox x:Name="DevSoundLibraryComboBox"
+                                                Height="27"
+                                                Style="{StaticResource AppearanceComboBoxStyle}"
+                                                SelectionChanged="SoundLibraryComboBox_Changed">
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiKeineSounds}" Tag="None" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiSanft}" Tag="Gentle" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiBass}" Tag="Bass" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiHammondorgel}" Tag="HammondOrgan" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiWarm}" Tag="Warm" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiRetro}" Tag="Retro" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="{services:LocalizedText Key=UiFensterfokus}"
+                                                FontWeight="SemiBold"
+                                                Margin="0,0,0,6" />
+                                            <ComboBox x:Name="DevFocusProfileComboBox"
+                                                Height="27"
+                                                Style="{StaticResource AppearanceComboBoxStyle}"
+                                                SelectionChanged="FocusProfileComboBox_Changed">
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiKeinFokus}" Tag="Off" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiStandard}" Tag="Standard" />
+                                                <ComboBoxItem Content="{services:LocalizedText Key=UiInDenVordergrund}" Tag="Foreground" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+                                    <StackPanel Margin="0,0,0,4">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="{services:LocalizedText Key=UiLautstaerke}" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="DevSoundVolumeTextBlock"
+                                                Text="100 %"
+                                                Foreground="{DynamicResource AccentForegroundBrush}"
+                                                FontWeight="SemiBold"
+                                                Margin="10,0,0,0" />
+                                        </StackPanel>
+                                        <Slider x:Name="DevSoundVolumeSlider"
+                                            Width="520"
+                                            HorizontalAlignment="Stretch"
+                                            Minimum="0"
+                                            Maximum="100"
+                                            TickFrequency="1"
+                                            IsSnapToTickEnabled="True"
+                                            Style="{StaticResource BookStitchSliderStyle}"
+                                            ValueChanged="SoundVolumeSlider_ValueChanged" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                        <Button Content="{services:LocalizedText Key=Developer.UserActionIn4S}"
+                                            Tag="UserActionRequired"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="DelayedFocusPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.CDChangeIn4S}"
+                                            Tag="DiscChangeRequired"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,8,8"
+                                            Padding="10,0"
+                                            Click="DelayedFocusPreview_Click" />
+                                        <Button Content="{services:LocalizedText Key=Developer.ErrorIn4S}"
+                                            Tag="Error"
+                                            MinWidth="150"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="0,0,12,8"
+                                            Padding="10,0"
+                                            Click="DelayedFocusPreview_Click" />
+                                        <TextBlock x:Name="DelayedFocusStatusTextBlock"
+                                            Text="{services:LocalizedText Key=Developer.DelayedFocusTest}"
+                                            Foreground="{DynamicResource MutedTextBrush}"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,0,8" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="ChaptersSection"
+                        Tag="Chapters"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="0">
+                            <ScrollViewer Style="{StaticResource DialogInsetScrollViewerStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ChapterDecision}"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource AccentForegroundBrush}"
+                                        Margin="0,0,0,8" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ShowsTheComputedStateOfTheSelected}"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        TextWrapping="Wrap"
+                                        Margin="0,0,0,18" />
+                                    <TextBox x:Name="ChapterDebugTextBlock"
+                                        Text="–"
+                                        IsReadOnly="True"
+                                        AcceptsReturn="True"
+                                        TextWrapping="Wrap"
+                                        VerticalScrollBarVisibility="Auto"
+                                        MinHeight="240"
+                                        Padding="9"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        Background="{DynamicResource InputBackgroundBrush}"
+                                        BorderBrush="{DynamicResource InputBorderBrush}"
+                                        AutomationProperties.Name="{services:LocalizedText Key=Developer.ChapterDecisionAndAnalysisDetails}" />
+                                    <Separator Margin="0,22,0,18" Opacity="0.35" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.MetadataDecision}"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource AccentForegroundBrush}"
+                                        Margin="0,0,0,8" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ShowsCanonicalValuesAndTheLastSource}"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        TextWrapping="Wrap"
+                                        Margin="0,0,0,12" />
+                                    <TextBox x:Name="MetadataDebugTextBox"
+                                        Text="–"
+                                        IsReadOnly="True"
+                                        AcceptsReturn="True"
+                                        TextWrapping="Wrap"
+                                        VerticalScrollBarVisibility="Auto"
+                                        MinHeight="320"
+                                        Padding="9"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        Background="{DynamicResource InputBackgroundBrush}"
+                                        BorderBrush="{DynamicResource InputBorderBrush}"
+                                        AutomationProperties.Name="{services:LocalizedText Key=Developer.MetadataDecisionAndSourceEvidence}" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                    <Grid x:Name="PerformanceSection"
+                        Tag="Performance"
+                        Visibility="Collapsed">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" Padding="22">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.PerformanceDiagnostics}"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"
+                                        Foreground="{DynamicResource AccentForegroundBrush}"
+                                        Margin="0,0,0,14" />
+                                    <CheckBox x:Name="PerformanceDiagnosticsEnabledCheckBox"
+                                        Content="{services:LocalizedText Key=Developer.EnablePerformanceDiagnostics}"
+                                        Foreground="{DynamicResource MainTextBrush}"
+                                        FontWeight="SemiBold"
+                                        Checked="PerformanceDiagnosticsEnabledCheckBox_Changed"
+                                        Unchecked="PerformanceDiagnosticsEnabledCheckBox_Changed" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.RecordsTimingsWithinBookStitchNoTelemetryOr}"
+                                        TextWrapping="Wrap"
+                                        Foreground="{DynamicResource MutedTextBrush}"
+                                        Margin="0,7,0,22" />
+                                    <Separator Margin="0,0,0,18" Opacity="0.35" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.LiveMeasurements}"
+                                        FontSize="18"
+                                        FontWeight="SemiBold"
+                                        Margin="0,0,0,8" />
+                                    <TextBlock Text="{services:LocalizedText Key=Developer.ReservedForLiveOperationPhaseAndTiming}"
+                                        TextWrapping="Wrap"
+                                        Foreground="{DynamicResource MutedTextBrush}" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

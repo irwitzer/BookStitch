@@ -1,0 +1,83 @@
+<UserControl x:Class="BookStitch.Controls.MainOutputSettingsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:controls="clr-namespace:BookStitch.Controls">
+    <Grid x:Name="OutputRow">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataControlLead"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="MetadataLabelLead"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{services:LocalizedText Key=MainWindow.Output.Heading}"
+                       FontWeight="SemiBold" Foreground="{DynamicResource MainTextBrush}" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="{services:LocalizedText Key=MainWindow.Output.Folder}"
+                       FontWeight="SemiBold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"/>
+            <!-- Preserve the existing control offset while aligning only the visible labels. -->
+            <StackPanel Orientation="Horizontal" Visibility="Hidden" Grid.ColumnSpan="2">
+                <TextBlock Text="{services:LocalizedText Key=MainWindow.Output.Heading}" FontWeight="SemiBold" Margin="0,0,18,0"/>
+                <TextBlock Text="{services:LocalizedText Key=MainWindow.Output.Folder}" FontWeight="SemiBold" Margin="0,0,8,0"/>
+            </StackPanel>
+        </Grid>
+        <StackPanel x:Name="FolderPanel" Grid.Column="1" Orientation="Horizontal">
+            <Button x:Name="OutputFolderStateChipButton" HorizontalAlignment="Left" HorizontalContentAlignment="Stretch"
+                    Style="{StaticResource HiddenTextButtonStyle}" IsEnabled="{Binding CanChooseOutputFolder}"
+                    Click="ChangeFolder_Click" AutomationProperties.Name="{services:LocalizedText Key=AutomationChangeOutputFolder}">
+                <Border x:Name="OutputFolderStateChip" Style="{StaticResource CompactStateChipStyle}">
+                    <TextBlock x:Name="OutputFolderBadgeTextBlock" HorizontalAlignment="Stretch"
+                               VerticalAlignment="Center" TextAlignment="Left" TextTrimming="CharacterEllipsis"
+                               Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                               FontWeight="SemiBold"/>
+                </Border>
+            </Button>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="18,0,0,0">
+            <TextBlock x:Name="SubfolderLabel" Text="{services:LocalizedText Key=MainWindow.Output.Subfolder}"
+                       FontWeight="SemiBold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="OutputFolderLayoutComboBox" Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                      controls:ComboBoxContentWidth.IsEnabled="True" SelectedValuePath="Tag"
+                      SelectedValue="{Binding OutputFolderLayout, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      AutomationProperties.LabeledBy="{Binding ElementName=SubfolderLabel}">
+                <ComboBoxItem Content="{services:LocalizedText Key=UiKeinenOrdnerErstellen}" Tag="None"/>
+                <ComboBoxItem Content="{services:LocalizedText Key=UiNurAutor}" Tag="Author"/>
+                <ComboBoxItem Content="{services:LocalizedText Key=UiNurTitel}" Tag="Title"/>
+                <ComboBoxItem Content="{services:LocalizedText Key=UiAutorTitel}" Tag="AuthorTitleNested"/>
+                <ComboBoxItem Content="{services:LocalizedText Key=UiAutorAlbumTitel}" Tag="AuthorAlbumTitleNested"/>
+            </ComboBox>
+        </StackPanel>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="18,0,0,0">
+            <TextBlock x:Name="FileNameLabel" Text="{services:LocalizedText Key=UiDateiname}"
+                       FontWeight="SemiBold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="FileNameTemplateComboBox" Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                      IsEditable="True" controls:ComboBoxContentWidth.IsEnabled="True"
+                      controls:ComboBoxContentWidth.IncludeEditableText="False"
+                      Text="{Binding FileNameTemplate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      AutomationProperties.LabeledBy="{Binding ElementName=FileNameLabel}">
+                <ComboBoxItem Content="{}{Autor} - {Titel}"/>
+                <ComboBoxItem Content="{}{Titel} - {Autor}"/>
+                <ComboBoxItem Content="{}{Titel}"/>
+                <ComboBoxItem Content="{}{Autor} - {Sprecher} - {Titel}"/>
+                <ComboBoxItem Content="{}{Autor} - {Album} - {Titel}"/>
+            </ComboBox>
+        </StackPanel>
+        <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="18,0,0,0">
+            <TextBlock x:Name="ExtensionLabel" Text="{services:LocalizedText Key=MainWindow.Output.Extension}"
+                       FontWeight="SemiBold" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="OutputExtensionComboBox" Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                      controls:ComboBoxContentWidth.IsEnabled="True" SelectedValuePath="Content"
+                      SelectedValue="{Binding OutputExtension, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      AutomationProperties.LabeledBy="{Binding ElementName=ExtensionLabel}">
+                <ComboBoxItem Content=".m4a"/>
+                <ComboBoxItem Content=".m4b"/>
+            </ComboBox>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -5,6 +5,41 @@ namespace BookStitch.Tests.Services;
 
 public sealed class AudioDiscTocReaderServiceTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Data_track_control_flags_reject_mixed_and_enhanced_media_before_MCI_or_ripping(int dataIndex)
+    {
+        var buffer = CreateTocBuffer(1, 2, (1, 150), (2, 15363), (0xAA, 32314));
+        buffer[4 + dataIndex * 8 + 1] |= 0x04;
+        var toc = AudioDiscTocReaderService.ParseTocBuffer(buffer)!;
+        Assert.True(toc.ContainsDataTracks);
+        var reader = new AudioDiscReaderService(_ => toc);
+        var result = reader.ReadDisc(@"Q:\");
+        Assert.False(result.IsAudioDisc);
+        Assert.Null(result.Disc);
+        Assert.Equal(LocalizationText.Get("Disc.Audio.MixedModeUnsupported"), result.ErrorMessage);
+        Assert.True(result.IsMixedModeUnsupported);
+    }
+
+    [Fact]
+    public void Audio_track_control_attributes_are_not_misclassified_as_data()
+    {
+        var buffer = CreateTocBuffer(1, 2, (1, 150), (2, 15363), (0xAA, 32314));
+        buffer[5] |= 0x03;
+        var toc = AudioDiscTocReaderService.ParseTocBuffer(buffer)!;
+        Assert.False(toc.ContainsDataTracks);
+        Assert.Equal(new byte[] { 3, 0 }, toc.TrackControlFlags);
+    }
+
+    [Fact]
+    public void Invalid_frame_address_is_rejected_without_a_parser_exception()
+    {
+        var buffer = CreateTocBuffer(1, 2, (1, 150), (2, 15363), (0xAA, 32314));
+        buffer[11] = 75;
+        Assert.Null(AudioDiscTocReaderService.ParseTocBuffer(buffer));
+    }
+
     [Fact]
     public void ParseTocBuffer_ReturnsFrameAccurateMusicBrainzToc()
     {

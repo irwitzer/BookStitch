@@ -20,7 +20,7 @@ public sealed class SwitchableDiscWaitDialogService : IDiscWaitDialogService
 
     public Task<DiscWaitDialogOutcome> WaitForDiscAsync(
         Window owner, DiscWaitDialogRequest request,
-        Func<CancellationToken, Task<DiscPollingResult>> checkDiscAsync,
+        Func<DiscWaitCheckRequest, CancellationToken, Task<DiscPollingResult>> checkDiscAsync,
         Action<string> setStatusText, Action<string> setProgressText,
         CancellationToken token)
         => (_useBoxedDialog() ? _boxed : _legacy).WaitForDiscAsync(

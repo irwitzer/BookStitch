@@ -7,6 +7,56 @@ namespace BookStitch.Tests.Services;
 
 public sealed class ProjectResumeLoadWorkflowServiceTests
 {
+    [Theory]
+    [InlineData(ProjectManifestTypes.FolderProject)]
+    [InlineData(ProjectManifestTypes.Mp3DiscProject)]
+    [InlineData(ProjectManifestTypes.AudioCdProject)]
+    public void Prepare_MergePauseRestoresMergeContinuationWithoutAcquisitionOrConversion(string type)
+    {
+        using var folder = new TempFolder();
+        if (type == ProjectManifestTypes.AudioCdProject)
+            new AudioDiscProjectService().Save(new() { ProjectFolder = folder.Path, TotalDiscs = 2 });
+        var plan = new ProjectResumePlan { ProjectFolder = folder.Path, SourceFolder = folder.Path,
+            ProjectType = type, IsMergePaused = true,
+            SelectedPreset = "AAC Mono 64 kbps" };
+        var result = CreateService().Prepare(plan);
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal(ProjectPipelineState.Merging, result.PipelineState);
+        Assert.False(result.NeedsMp3DiscImport);
+        Assert.False(result.IsAudioDiscProjectAwaitingRip);
+        Assert.False(result.IsCompletedProject);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Prepare_Mp3MissingPlannedDiscsUsesLifecyclePlanWithoutStartingWork(bool continueImport)
+    {
+        using var folder = new TempFolder();
+        var path = Path.Combine(folder.Path, "001.mp3");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        var plan = new ProjectResumePlan
+        {
+            ProjectFolder = folder.Path, ProjectType = ProjectManifestTypes.Mp3DiscProject,
+            SourceFolder = folder.Path, HasSuccessfulExport = true, TotalDiscs = 5,
+            ImportedDiscCount = 2, CanContinueDiscImport = continueImport,
+            NextMissingDiscNumber = 3, SelectedPreset = "AAC Mono 64 kbps",
+            Tracks = [new() { TrackIndex = 1, DiscNumber = 2, SourcePath = path, SourceFileName = "001.mp3" }]
+        };
+        var loaded = CreateService().Prepare(plan);
+        Assert.True(loaded.Success, loaded.ErrorMessage);
+        Assert.Equal(continueImport, loaded.NeedsMp3DiscImport);
+        Assert.Equal(continueImport ? ProjectPipelineState.AcquiringSources : ProjectPipelineState.Completed, loaded.PipelineState);
+        Assert.Equal(!continueImport, loaded.IsCompletedProject);
+        if (!continueImport)
+        {
+            var snapshot = Assert.IsType<WorkflowStatusSnapshot>(loaded.LoadStatusSnapshot);
+            Assert.NotNull(snapshot.SourceProgress);
+            Assert.Equal(2, snapshot.SourceProgress.TotalDiscs);
+        }
+        else Assert.Null(loaded.LoadStatusSnapshot);
+    }
+
     [Fact]
     public void Prepare_MissingAudioDiscManifestFailsWithoutLocalFallback()
     {
@@ -58,7 +108,7 @@ public sealed class ProjectResumeLoadWorkflowServiceTests
                             DiscNumber = 1,
                             TrackNumber = 1,
                             FileName = "001.flac",
-                            RelativePath = "ripped\\001.flac",
+                            RelativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "001.flac"),
                             Status = AudioDiscTrackStatus.Ripped
                         },
                         new AudioDiscProjectManifestTrack
@@ -67,7 +117,7 @@ public sealed class ProjectResumeLoadWorkflowServiceTests
                             DiscNumber = 1,
                             TrackNumber = 2,
                             FileName = "002.flac",
-                            RelativePath = "ripped\\002.flac",
+                            RelativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "002.flac"),
                             Status = AudioDiscTrackStatus.Pending
                         }
                     ]
@@ -149,8 +199,8 @@ public sealed class ProjectResumeLoadWorkflowServiceTests
                     TrackCount = 2,
                     Tracks =
                     [
-                        new AudioDiscProjectManifestTrack { GlobalIndex = 1, DiscNumber = 1, TrackNumber = 1, RelativePath = "ripped\\001.flac", FileName = "001.flac", Status = AudioDiscTrackStatus.Ripped },
-                        new AudioDiscProjectManifestTrack { GlobalIndex = 2, DiscNumber = 1, TrackNumber = 2, RelativePath = "ripped\\002.flac", FileName = "002.flac", Status = AudioDiscTrackStatus.Ripped }
+                        new AudioDiscProjectManifestTrack { GlobalIndex = 1, DiscNumber = 1, TrackNumber = 1, RelativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "001.flac"), FileName = "001.flac", Status = AudioDiscTrackStatus.Ripped },
+                        new AudioDiscProjectManifestTrack { GlobalIndex = 2, DiscNumber = 1, TrackNumber = 2, RelativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "002.flac"), FileName = "002.flac", Status = AudioDiscTrackStatus.Ripped }
                     ]
                 }
             ]
@@ -187,6 +237,177 @@ public sealed class ProjectResumeLoadWorkflowServiceTests
         Assert.Equal("002.flac", result.Tracks[0].FileName);
         Assert.True(result.Tracks[0].IsExcluded);
         Assert.Equal("001.flac", result.Tracks[1].FileName);
+    }
+
+    [Fact]
+    public void Prepare_DoesNotUsePersistedTrackStateAsTagMetadataSource()
+    {
+        using var folder = new TempFolder();
+        var sourcePath = System.IO.Path.Combine(folder.Path, "source.flac");
+        var convertedPath = System.IO.Path.Combine(ProjectFolderLayout.GetConvertedFolder(folder.Path), "converted.m4a");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(convertedPath)!);
+        File.WriteAllBytes(sourcePath, [1, 2, 3]);
+        File.WriteAllBytes(convertedPath, [4, 5, 6]);
+
+        var trackListStateService = new TrackListStateService();
+        trackListStateService.Save(folder.Path,
+        [
+            new TrackInfo
+            {
+                FilePath = sourcePath,
+                FileName = "source.flac",
+                TagTitle = "Original Title - 001",
+                Artist = "Original Artist",
+                ChapterTitle = "1 Original Title"
+            }
+        ]);
+
+        var plan = new ProjectResumePlan
+        {
+            ProjectFolder = folder.Path,
+            ProjectType = ProjectManifestTypes.FolderProject,
+            SourceFolder = folder.Path,
+            SelectedPreset = "AAC Stereo 192 kbps",
+            Tracks =
+            [
+                new ProjectResumeTrackItem
+                {
+                    TrackIndex = 1,
+                    SourcePath = sourcePath,
+                    SourceFileName = "source.flac",
+                    ConvertedPath = convertedPath,
+                    Preset = "AAC Stereo 192 kbps",
+                    ChapterTitle = "AAC Arbeitsdatei Kapitel"
+                }
+            ]
+        };
+
+        var result = new ProjectResumeLoadWorkflowService(
+            new AudioDiscProjectService(),
+            trackListStateService).Prepare(plan);
+
+        var track = Assert.Single(result.Tracks);
+        Assert.Equal(string.Empty, track.TagTitle);
+        Assert.Equal(string.Empty, track.Artist);
+        Assert.Equal("1 Original Title", track.ChapterTitle);
+    }
+
+    [Fact]
+    public void Prepare_RestoresTrackTagMetadataFromImmutableSourceSnapshot()
+    {
+        using var folder = new TempFolder();
+        var sourceId = Guid.NewGuid();
+        var sourcePath = System.IO.Path.Combine(folder.Path, "001.mp3");
+        File.WriteAllBytes(sourcePath, [1, 2, 3]);
+
+        new SourceMetadataSnapshotStore().Save(
+            folder.Path,
+            new SourceMetadataSnapshot
+            {
+                SourceId = sourceId,
+                CanonicalFields = new SourceMetadataCanonicalFields
+                {
+                    Title = "001 Billy Summers",
+                    Authors = ["Stephen King"]
+                }
+            });
+
+        var plan = new ProjectResumePlan
+        {
+            ProjectFolder = folder.Path,
+            ProjectType = ProjectManifestTypes.FolderProject,
+            SourceFolder = folder.Path,
+            Tracks =
+            [
+                new ProjectResumeTrackItem
+                {
+                    SourceId = sourceId,
+                    TrackIndex = 1,
+                    SourcePath = sourcePath,
+                    SourceFileName = "001.mp3"
+                }
+            ]
+        };
+
+        var result = CreateService().Prepare(plan);
+        var track = Assert.Single(result.Tracks);
+
+        Assert.Equal("001 Billy Summers", track.TagTitle);
+        Assert.Equal("Stephen King", track.Artist);
+        Assert.NotNull(track.SourceMetadataFields);
+        Assert.Equal("001 Billy Summers", track.SourceMetadataFields.Title);
+    }
+
+    [Fact]
+    public void Prepare_WithCanonicalMetadataStore_RestoresFullCanonicalMetadata()
+    {
+        using var folder = new TempFolder();
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, "Gespeicherter Titel", MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(
+            ProjectMetadataField.Authors,
+            ["Autor 1", "Autor 2"],
+            MetadataOrigin.User);
+        metadata.SetValue(ProjectMetadataField.Description, "Beschreibung bleibt erhalten", MetadataOrigin.User);
+        metadata.SetValue<IReadOnlyList<string>>(
+            ProjectMetadataField.Languages,
+            ["de", "en"],
+            MetadataOrigin.User);
+        new ProjectMetadataStore().Save(folder.Path, metadata);
+
+        var plan = new ProjectResumePlan
+        {
+            ProjectFolder = folder.Path,
+            ProjectType = ProjectManifestTypes.FolderProject,
+            SourceFolder = folder.Path,
+            BookTitle = "Nur Projektion",
+            Author = "Nur erster Autor"
+        };
+
+        var result = CreateService().Prepare(plan);
+
+        Assert.True(result.Success);
+        var restored = Assert.IsType<ProjectMetadata>(result.CanonicalMetadata);
+        Assert.Equal("Gespeicherter Titel", restored.GetValue<string>(ProjectMetadataField.Title).Value);
+        Assert.Equal(
+            ["Autor 1", "Autor 2"],
+            restored.GetValue<IReadOnlyList<string>>(ProjectMetadataField.Authors).Value);
+        Assert.Equal(
+            "Beschreibung bleibt erhalten",
+            restored.GetValue<string>(ProjectMetadataField.Description).Value);
+        Assert.Equal(
+            ["de", "en"],
+            restored.GetValue<IReadOnlyList<string>>(ProjectMetadataField.Languages).Value);
+    }
+
+    [Fact]
+    public void Prepare_CarriesSourceIdFromResumePlanIntoTrackInfo()
+    {
+        using var folder = new TempFolder();
+        var sourceId = Guid.NewGuid();
+        var sourcePath = System.IO.Path.Combine(folder.Path, "001.mp3");
+        File.WriteAllBytes(sourcePath, [1, 2, 3]);
+
+        var plan = new ProjectResumePlan
+        {
+            ProjectFolder = folder.Path,
+            ProjectType = ProjectManifestTypes.FolderProject,
+            SourceFolder = folder.Path,
+            Tracks =
+            [
+                new ProjectResumeTrackItem
+                {
+                    SourceId = sourceId,
+                    TrackIndex = 1,
+                    SourcePath = sourcePath,
+                    SourceFileName = "001.mp3"
+                }
+            ]
+        };
+
+        var result = CreateService().Prepare(plan);
+
+        Assert.Equal(sourceId, Assert.Single(result.Tracks).SourceId);
     }
 
     [Fact]
@@ -254,7 +475,7 @@ public sealed class ProjectResumeLoadWorkflowServiceTests
                             GlobalIndex = 1,
                             DiscNumber = 1,
                             TrackNumber = 1,
-                            RelativePath = "ripped\\001.flac",
+                            RelativePath = System.IO.Path.Combine(ProjectFolderLayout.OriginalsFolderName, "001.flac"),
                             FileName = "001.flac",
                             Status = AudioDiscTrackStatus.Ripped
                         }

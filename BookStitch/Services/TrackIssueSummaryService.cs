@@ -9,35 +9,28 @@ public sealed class TrackIssueSummaryService
         ArgumentNullException.ThrowIfNull(tracks);
 
         var errorCount = 0;
-        var hintCount = 0;
-
         foreach (var track in tracks)
         {
             if (track is null)
                 continue;
 
             if (IsError(track))
-            {
                 errorCount++;
-                continue;
-            }
-
-            if (!string.IsNullOrWhiteSpace(track.Warning))
-                hintCount++;
         }
 
-        return new TrackIssueSummary(errorCount, hintCount);
+        return new TrackIssueSummary(errorCount, 0);
     }
 
     private static bool IsError(TrackInfo track)
     {
         return track.AudioValidationPassed == false ||
-               string.Equals(track.Codec, "Ungültig", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(track.ProcessingAction, "Ungültig", StringComparison.OrdinalIgnoreCase);
+               track.WarningCodes.HasFlag(TrackWarningCodes.InvalidAudio) ||
+               CodecIds.IsInvalid(track.Codec) ||
+               ProcessingActionIds.Normalize(track.ProcessingAction) == ProcessingActionIds.Invalid;
     }
 }
 
 public readonly record struct TrackIssueSummary(int ErrorCount, int HintCount)
 {
-    public string ToDisplayText() => $"Fehler: {ErrorCount} | Hinweise: {HintCount}";
+    public string ToDisplayText() => LocalizationText.Format("MainWindow.Issues.ErrorCount", ErrorCount);
 }

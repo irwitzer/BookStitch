@@ -1,3 +1,4 @@
+using System.Globalization;
 using BookStitch.Models;
 using BookStitch.Services;
 using Xunit;
@@ -9,7 +10,31 @@ public sealed class TrackIssueSummaryServiceTests
     private readonly TrackIssueSummaryService _service = new();
 
     [Fact]
-    public void Create_SeparatesInvalidAudioFromMetadataHints()
+    public void DisplayText_UsesUiCultureWhileKeepingTheErrorCount()
+    {
+        var previous = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("es-ES");
+            Assert.Equal("Errores: 2", new TrackIssueSummary(2, 0).ToDisplayText());
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = previous;
+        }
+    }
+
+    [Fact]
+    public void Create_UsesWarningCodeWithoutReadingDisplaySentence()
+    {
+        var track = new TrackInfo();
+        track.SetWarning("A translated diagnostic", TrackWarningCodes.InvalidAudio);
+
+        Assert.Equal(1, _service.Create([track]).ErrorCount);
+    }
+
+    [Fact]
+    public void Create_CountsInvalidAudioWithoutLegacyHints()
     {
         var tracks = new[]
         {
@@ -38,8 +63,8 @@ public sealed class TrackIssueSummaryServiceTests
         var result = _service.Create(tracks);
 
         Assert.Equal(1, result.ErrorCount);
-        Assert.Equal(1, result.HintCount);
-        Assert.Equal("Fehler: 1 | Hinweise: 1", result.ToDisplayText());
+        Assert.Equal(0, result.HintCount);
+        Assert.Equal("Fehler: 1", result.ToDisplayText());
     }
 
     [Fact]

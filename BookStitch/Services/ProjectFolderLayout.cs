@@ -11,8 +11,12 @@ public static class ProjectFolderLayout
 
     public const string WorkManifestFileName = "project.json";
     public const string ExportManifestFileName = "export-project.json";
-    public const string AudioDiscManifestFileName = "audio-disc-project.json";
+    public const string AudioDiscManifestFileName = "audio-cd-project.json";
+    public const string LegacyAudioDiscManifestFileName = "audio-disc-project.json";
+    public const string FolderManifestFileName = "folder-project.json";
+    public const string Mp3DiscManifestFileName = "mp3-cd-project.json";
     public const string TrackListStateFileName = "track-list-state.json";
+    public const string ProjectMetadataFileName = "project-metadata.json";
 
     public static string GetOriginalsFolder(string projectFolder) =>
         Path.Combine(projectFolder, OriginalsFolderName);
@@ -32,6 +36,26 @@ public static class ProjectFolderLayout
     public static string GetSettingsFolder(string projectFolder) =>
         Path.Combine(projectFolder, SettingsFolderName);
 
+    public static string GetMetadataFolder(string projectFolder) =>
+        Path.Combine(GetSettingsFolder(projectFolder), "metadata");
+
+    public static string GetSourceMetadataSourcesFolder(string projectFolder) =>
+        Path.Combine(GetSettingsFolder(projectFolder), "source-metadata");
+
+    public static string GetFolderManifestPath(string projectFolder) =>
+        Path.Combine(GetSettingsFolder(projectFolder), FolderManifestFileName);
+
+    public static string GetMp3DiscManifestPath(string projectFolder) =>
+        Path.Combine(GetSettingsFolder(projectFolder), Mp3DiscManifestFileName);
+
+    public static string ResolveMp3DiscManifestPath(string projectFolder)
+    {
+        var preferred = GetMp3DiscManifestPath(projectFolder);
+        if (File.Exists(preferred)) return preferred;
+        var legacy = ResolveWorkManifestPath(projectFolder);
+        return File.Exists(legacy) ? legacy : preferred;
+    }
+
     public static string GetWorkManifestPath(string projectFolder) =>
         Path.Combine(GetSettingsFolder(projectFolder), WorkManifestFileName);
 
@@ -44,14 +68,52 @@ public static class ProjectFolderLayout
     public static string GetTrackListStatePath(string projectFolder) =>
         Path.Combine(GetSettingsFolder(projectFolder), TrackListStateFileName);
 
+    public static string GetProjectMetadataPath(string projectFolder) =>
+        Path.Combine(GetSettingsFolder(projectFolder), ProjectMetadataFileName);
+
+    public static string GetSourceMetadataSnapshotPath(string projectFolder, Guid sourceId) =>
+        Path.Combine(GetSourceMetadataSourcesFolder(projectFolder), $"{sourceId:N}.json");
+
     public static string ResolveWorkManifestPath(string projectFolder) =>
         ResolveExistingOrPreferred(GetWorkManifestPath(projectFolder), Path.Combine(projectFolder, WorkManifestFileName));
 
-    public static string ResolveExportManifestPath(string projectFolder) =>
-        ResolveExistingOrPreferred(GetExportManifestPath(projectFolder), Path.Combine(projectFolder, ExportManifestFileName));
+    public static string ResolveExportManifestPath(string projectFolder)
+    {
+        var preferred = GetExportManifestPath(projectFolder);
+        if (File.Exists(preferred)) return preferred;
+        var rootExport = Path.Combine(projectFolder, ExportManifestFileName);
+        if (File.Exists(rootExport)) return rootExport;
+        var legacy = ResolveWorkManifestPath(projectFolder);
+        if (File.Exists(legacy))
+        {
+            try
+            {
+                lock (AtomicJsonStore.ForPath(legacy))
+                {
+                    // Match WorkManifestService.ReadOnly: atomic replacement must remain
+                    // possible while this read-only format probe holds the previous file.
+                    using var stream = new FileStream(legacy, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete);
+                    using var document = System.Text.Json.JsonDocument.Parse(stream);
+                    var json = document.RootElement;
+                    if (json.TryGetProperty("Tracks", out _) || json.TryGetProperty("Export", out _) || json.TryGetProperty("State", out _))
+                        return legacy;
+                }
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+        return preferred;
+    }
 
-    public static string ResolveAudioDiscManifestPath(string projectFolder) =>
-        ResolveExistingOrPreferred(GetAudioDiscManifestPath(projectFolder), Path.Combine(projectFolder, AudioDiscManifestFileName));
+    public static string ResolveAudioDiscManifestPath(string projectFolder)
+    {
+        var preferred = GetAudioDiscManifestPath(projectFolder);
+        if (File.Exists(preferred)) return preferred;
+        var legacy = Path.Combine(GetSettingsFolder(projectFolder), LegacyAudioDiscManifestFileName);
+        if (File.Exists(legacy)) return legacy;
+        legacy = Path.Combine(projectFolder, LegacyAudioDiscManifestFileName);
+        return File.Exists(legacy) ? legacy : preferred;
+    }
 
     public static string ResolveTrackListStatePath(string projectFolder) =>
         ResolveExistingOrPreferred(GetTrackListStatePath(projectFolder), Path.Combine(projectFolder, TrackListStateFileName));
@@ -83,11 +145,13 @@ public static class ProjectFolderLayout
     public static void EnsureProjectFolders(string projectFolder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectFolder);
+        ProjectFolderLayoutDiagnostics.RecordEnsureProjectFolders(projectFolder);
         Directory.CreateDirectory(projectFolder);
         Directory.CreateDirectory(GetOriginalsFolder(projectFolder));
         Directory.CreateDirectory(GetConvertedFolder(projectFolder));
         Directory.CreateDirectory(GetMergeFolder(projectFolder));
         Directory.CreateDirectory(GetSettingsFolder(projectFolder));
+        Directory.CreateDirectory(GetSourceMetadataSourcesFolder(projectFolder));
     }
 
     public static string GetProjectFolderFromManifestPath(string manifestPath)

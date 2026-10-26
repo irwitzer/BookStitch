@@ -23,7 +23,10 @@ public sealed class AudioDiscTocReaderService
     private const byte LeadOutTrackNumber = 0xAA;
     private const int CdFramesPerSecond = 75;
 
-    public AudioDiscToc? TryReadToc(string driveRoot)
+    public AudioDiscToc? TryReadToc(string driveRoot) =>
+        DiscDriveOperationService.Execute(driveRoot, () => TryReadTocCore(driveRoot));
+
+    private AudioDiscToc? TryReadTocCore(string driveRoot)
     {
 
         var devicePath = CreateDevicePath(driveRoot);
@@ -72,10 +75,10 @@ public sealed class AudioDiscTocReaderService
         {
             return null;
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
-            // Exact online metadata is optional. A TOC failure must never prevent
-            // normal Audio-CD detection or the later ripping workflow.
+            // MCI can still supply identification and presentation when exact TOC access fails.
             return null;
         }
     }
@@ -100,12 +103,15 @@ public sealed class AudioDiscTocReaderService
             return null;
 
         var offsets = new List<int>(declaredTrackCount);
+        var controlFlags = new List<byte>(declaredTrackCount);
         int? leadOutOffset = null;
 
         for (var index = 0; index < requiredDescriptorCount; index++)
         {
             var descriptorOffset = 4 + (index * TrackDescriptorSize);
             var trackNumber = buffer[descriptorOffset + 2];
+            if (buffer[descriptorOffset + 6] >= 60 || buffer[descriptorOffset + 7] >= CdFramesPerSecond)
+                return null;
             var sectorOffset = ConvertMsfToSectorOffset(
                 buffer[descriptorOffset + 5],
                 buffer[descriptorOffset + 6],
@@ -122,6 +128,7 @@ public sealed class AudioDiscTocReaderService
                 return null;
 
             offsets.Add(sectorOffset);
+            controlFlags.Add((byte)(buffer[descriptorOffset + 1] & 0x0F));
         }
 
         if (offsets.Count != declaredTrackCount || leadOutOffset is null)
@@ -144,7 +151,7 @@ public sealed class AudioDiscTocReaderService
             lastTrackNumber,
             leadOutOffset.Value,
             offsets,
-            discId);
+            discId) { TrackControlFlags = controlFlags };
     }
 
     private static int ConvertMsfToSectorOffset(byte minute, byte second, byte frame)

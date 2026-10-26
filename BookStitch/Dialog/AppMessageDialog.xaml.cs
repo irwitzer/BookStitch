@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
@@ -74,21 +74,21 @@ public partial class AppMessageDialog : Window
 
             case AppDialogKind.Error:
                 IconText.Text = "×";
-                IconText.Foreground = new SolidColorBrush(Color.FromRgb(255, 112, 112));
-                IconCircle.BorderBrush = new SolidColorBrush(Color.FromRgb(255, 112, 112));
-                IconCircle.Background = new SolidColorBrush(Color.FromRgb(45, 20, 20));
+                IconText.SetResourceReference(TextBlock.ForegroundProperty, "ErrorTextBrush");
+                IconCircle.SetResourceReference(Border.BorderBrushProperty, "ErrorTextBrush");
+                IconCircle.SetResourceReference(Border.BackgroundProperty, "ErrorSurfaceBrush");
                 break;
 
             case AppDialogKind.Question:
                 IconText.Text = "?";
-                IconText.Foreground = FindResource("AccentSoftBrush") as Brush;
-                IconCircle.BorderBrush = FindResource("AccentSoftBrush") as Brush;
+                IconText.Foreground = FindResource("AccentForegroundBrush") as Brush;
+                IconCircle.BorderBrush = FindResource("AccentForegroundBrush") as Brush;
                 break;
 
             default:
                 IconText.Text = "i";
-                IconText.Foreground = FindResource("AccentSoftBrush") as Brush;
-                IconCircle.BorderBrush = FindResource("AccentSoftBrush") as Brush;
+                IconText.Foreground = FindResource("AccentForegroundBrush") as Brush;
+                IconCircle.BorderBrush = FindResource("AccentForegroundBrush") as Brush;
                 break;
         }
     }
@@ -123,7 +123,6 @@ public partial class AppMessageDialog : Window
             {
                 Content = dialogButton.Text,
                 MinWidth = 96,
-                Height = 34,
                 Margin = new Thickness(8, 0, 0, 0),
                 IsDefault = dialogButton.IsDefault,
                 IsCancel = dialogButton.IsCancel,
@@ -132,7 +131,7 @@ public partial class AppMessageDialog : Window
                         ? "DangerButtonStyle"
                         : dialogButton.IsPrimary
                             ? "PrimaryButtonStyle"
-                            : "DialogSecondaryButtonStyle") as Style,
+                            : "SecondaryButtonStyle") as Style,
                 Tag = dialogButton.Result,
                 DataContext = dialogButton,
                 TabIndex = index
@@ -153,6 +152,9 @@ public partial class AppMessageDialog : Window
         if (sender is not Button button)
             return;
 
+        if (button.Tag is AppDialogResult proposedResult && !TryAcceptResult(proposedResult))
+            return;
+
         if (button.DataContext is AppDialogButton dialogButton &&
             !string.IsNullOrWhiteSpace(dialogButton.ClipboardText))
         {
@@ -167,6 +169,8 @@ public partial class AppMessageDialog : Window
         DialogResult = true;
         Close();
     }
+
+    protected virtual bool TryAcceptResult(AppDialogResult result) => true;
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {

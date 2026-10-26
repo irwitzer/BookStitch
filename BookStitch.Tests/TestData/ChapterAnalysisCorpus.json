@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "provenance": "synthetic-specification",
+  "description": "Adversarial regression cases derived from the V3 specification. These are not claimed to be real user corpus data.",
+  "numberingFamilies": [
+    {
+      "name": "dash-leading-track-order",
+      "values": ["1 - Prolog", "2 - Reise", "3 - Ende"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["Prolog", "Reise", "Ende"]
+    },
+    {
+      "name": "space-leading-track-order",
+      "values": ["7 Montag", "8 Dienstag", "9 Mittwoch"],
+      "trackNumbers": [7, 8, 9],
+      "expected": ["Montag", "Dienstag", "Mittwoch"]
+    },
+    {
+      "name": "uniform-base-after-projection",
+      "values": ["1 Montag", "2 Montag", "3 Montag"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["Montag", "Montag", "Montag"]
+    },
+    {
+      "name": "pure-ordinal-family",
+      "values": ["1", "2", "3", "4"],
+      "trackNumbers": [1, 2, 3, 4],
+      "expected": ["", "", "", ""]
+    },
+    {
+      "name": "two-without-ordinal-evidence",
+      "values": ["1 - Anfang", "2 - Ende"],
+      "trackNumbers": [null, null],
+      "expected": ["1 - Anfang", "2 - Ende"]
+    },
+    {
+      "name": "two-with-ordinal-evidence",
+      "values": ["1 - Anfang", "2 - Ende"],
+      "trackNumbers": [1, 2],
+      "expected": ["Anfang", "Ende"]
+    },
+    {
+      "name": "gap-remains-conservative",
+      "values": ["1 - Anfang", "3 - Mitte", "4 - Ende"],
+      "trackNumbers": [1, 3, 4],
+      "expected": ["1 - Anfang", "3 - Mitte", "4 - Ende"]
+    },
+    {
+      "name": "mixed-separators-remain",
+      "values": ["1 - Anfang", "2 Mitte", "3 - Ende"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["1 - Anfang", "2 Mitte", "3 - Ende"]
+    },
+    {
+      "name": "year-sequence-remains",
+      "values": ["1914", "1915", "1916", "1917"],
+      "trackNumbers": [1, 2, 3, 4],
+      "expected": ["1914", "1915", "1916", "1917"]
+    },
+    {
+      "name": "calendar-dates-remain",
+      "values": ["11. September", "12. September", "13. September"],
+      "trackNumbers": [11, 12, 13],
+      "expected": ["11. September", "12. September", "13. September"]
+    },
+    {
+      "name": "semantic-tag-trailing-remains",
+      "values": ["Tag 1", "Tag 2", "Tag 3"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["Tag 1", "Tag 2", "Tag 3"]
+    },
+    {
+      "name": "semantic-part-trailing-remains",
+      "values": ["Teil 1", "Teil 2", "Teil 3"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["Teil 1", "Teil 2", "Teil 3"]
+    },
+    {
+      "name": "semantic-room-remains",
+      "values": ["Raum 101", "Raum 102", "Raum 103"],
+      "trackNumbers": [1, 2, 3],
+      "expected": ["Raum 101", "Raum 102", "Raum 103"]
+    }
+  ],
+  "genericCases": [
+    { "value": "Kapitel", "expectedGeneric": true },
+    { "value": "Track", "expectedGeneric": true },
+    { "value": "Titel", "expectedGeneric": true },
+    { "value": "Teil", "expectedGeneric": true },
+    { "value": "Band", "expectedGeneric": true },
+    { "value": "Chapter", "expectedGeneric": true },
+    { "value": "Ch", "expectedGeneric": true },
+    { "value": "Title", "expectedGeneric": true },
+    { "value": "Part", "expectedGeneric": true },
+    { "value": "Capítulo", "expectedGeneric": true },
+    { "value": "Capitulo", "expectedGeneric": true },
+    { "value": "Pista", "expectedGeneric": true },
+    { "value": "Título", "expectedGeneric": true },
+    { "value": "Parte", "expectedGeneric": true },
+    { "value": "Chapitre", "expectedGeneric": true },
+    { "value": "Piste", "expectedGeneric": true },
+    { "value": "Titre", "expectedGeneric": true },
+    { "value": "Partie", "expectedGeneric": true },
+    { "value": "Capitolo", "expectedGeneric": true },
+    { "value": "Traccia", "expectedGeneric": true },
+    { "value": "Titolo", "expectedGeneric": true },
+    { "value": "Hoofdstuk", "expectedGeneric": true },
+    { "value": "Deel", "expectedGeneric": true },
+    { "value": "Teil 2", "expectedGeneric": false },
+    { "value": "Band 7", "expectedGeneric": false },
+    { "value": "Part 3", "expectedGeneric": false },
+    { "value": "Parte 4", "expectedGeneric": false },
+    { "value": "Chapter House", "expectedGeneric": false },
+    { "value": "The Final Chapter", "expectedGeneric": false },
+    { "value": "1984", "expectedGeneric": false },
+    { "value": "11. September", "expectedGeneric": false },
+    { "value": "Raum 101", "expectedGeneric": false }
+  ]
+}

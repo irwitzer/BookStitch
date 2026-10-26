@@ -1,13 +1,25 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
+using System.IO;
 
 namespace BookStitch.Services;
 
 public sealed record Mp3DiscImportPrecheckResult(
     DiscSourceAnalysis Analysis,
     string Signature,
-    bool IsAlreadyImported)
+    bool IsAlreadyImported,
+    IReadOnlyList<Mp3DiscPlannedSourceIdentity> PlannedSources)
 {
     public int TotalFiles => Analysis.SupportedAudioFiles.Count;
+
+    // Uses only scan evidence already available; never probes or reads media.
+    public PerformanceWorkloadSnapshot CreatePerformanceWorkload(int trackCount) => new()
+    {
+        ProjectType = PerformanceProjectType.Mp3Disc,
+        DiscCount = 1,
+        FileCount = TotalFiles,
+        TrackCount = trackCount,
+        InputBytes = PlannedSources.Sum(source => source.SourceSizeBytes)
+    };
 }
 
 public sealed record Mp3DiscSingleDiscImportResult(
@@ -28,15 +40,18 @@ public sealed class Mp3DiscImportWorkflowService
     private readonly Mp3DiscImportService _mp3DiscImportService;
     private readonly Mp3DiscProjectService _mp3DiscProjectService;
     private readonly DiscDriveService _discDriveService;
+    private readonly SourceCopyIdentityStore _sourceCopyIdentityStore;
 
     public Mp3DiscImportWorkflowService(
         Mp3DiscImportService mp3DiscImportService,
         Mp3DiscProjectService mp3DiscProjectService,
-        DiscDriveService? discDriveService = null)
+        DiscDriveService? discDriveService = null,
+        SourceCopyIdentityStore? sourceCopyIdentityStore = null)
     {
         _mp3DiscImportService = mp3DiscImportService;
         _mp3DiscProjectService = mp3DiscProjectService;
         _discDriveService = discDriveService ?? new DiscDriveService();
+        _sourceCopyIdentityStore = sourceCopyIdentityStore ?? new SourceCopyIdentityStore();
     }
 
     public int CountCompletedCopiedFiles(Mp3DiscProjectManifest manifest)
@@ -57,16 +72,21 @@ public sealed class Mp3DiscImportWorkflowService
 
     public Mp3DiscImportPrecheckResult AnalyzeDiscForImport(
         string sourceFolder,
-        ISet<string> importedDiscSignatures)
+        ISet<string> importedDiscSignatures,
+        CancellationToken cancellationToken = default)
     {
-        var analysis = _mp3DiscImportService.AnalyzeSource(sourceFolder);
+        var analysis = _mp3DiscImportService.AnalyzeSource(sourceFolder, cancellationToken);
         var signature = _mp3DiscImportService.CreateDiscSignature(sourceFolder, analysis);
         var isAlreadyImported = !string.IsNullOrWhiteSpace(signature) && importedDiscSignatures.Contains(signature);
 
         return new Mp3DiscImportPrecheckResult(
             analysis,
             signature,
-            isAlreadyImported);
+            isAlreadyImported,
+            Mp3DiscSourceIdentityPlanner.Create(
+                sourceFolder,
+                signature,
+                analysis.SupportedAudioFiles));
     }
 
     public Task<DiscImportResult> CopyDiscAsync(
@@ -76,7 +96,8 @@ public sealed class Mp3DiscImportWorkflowService
         int totalDiscs,
         IProgress<DiscCopyProgress>? progress,
         IProgress<DiscCopiedFile>? copiedFileProgress,
-        CancellationToken token)
+        CancellationToken token,
+        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null)
     {
         return _mp3DiscImportService.CopyDiscAsync(
             sourceFolder,
@@ -85,7 +106,8 @@ public sealed class Mp3DiscImportWorkflowService
             totalDiscs,
             progress,
             copiedFileProgress,
-            token);
+            token,
+            plannedSourceIdsByRelativePath, sourceReadStarted);
     }
 
 
@@ -99,14 +121,37 @@ public sealed class Mp3DiscImportWorkflowService
         IProgress<DiscCopyProgress>? progress,
         IProgress<DiscCopiedFile>? copiedFileProgress,
         Action<Mp3DiscImportPrecheckResult>? onReadyToCopy,
-        CancellationToken token)
+        CancellationToken token,
+        bool acceptDuplicate = false,
+        Mp3DiscPendingChapterDisc? preparedDisc = null, Action<string>? sourceReadStarted = null)
     {
-        var precheck = AnalyzeDiscForImport(sourceFolder, importedDiscSignatures);
+        var precheck = await Task.Run(
+            () => AnalyzeDiscForImport(sourceFolder, importedDiscSignatures, token), token);
 
-        if (precheck.IsAlreadyImported)
+        if (precheck.IsAlreadyImported && !acceptDuplicate)
             return new Mp3DiscSingleDiscImportResult(precheck, ImportResult: null);
 
+        if (precheck.IsAlreadyImported)
+            precheck = precheck with { IsAlreadyImported = false };
+
+        precheck = precheck with
+        {
+            PlannedSources = ReuseExistingSourceIds(
+                projectFolder,
+                discNumber,
+                preparedDisc?.DiscNumber == discNumber &&
+                    string.Equals(preparedDisc.Signature, precheck.Signature, StringComparison.OrdinalIgnoreCase)
+                    ? preparedDisc.Sources : precheck.PlannedSources,
+                manifest)
+        };
+
         onReadyToCopy?.Invoke(precheck);
+
+        var plannedSourceIdsByRelativePath = precheck.PlannedSources
+            .ToDictionary(
+                source => Mp3DiscSourceIdentityPlanner.NormalizeRelativePath(source.RelativePath),
+                source => source.SourceId,
+                StringComparer.OrdinalIgnoreCase);
 
         var importResult = await CopyDiscAsync(
             sourceFolder,
@@ -115,7 +160,8 @@ public sealed class Mp3DiscImportWorkflowService
             totalDiscs,
             progress,
             copiedFileProgress,
-            token);
+            token,
+            plannedSourceIdsByRelativePath, sourceReadStarted);
 
         if (!importResult.WasCanceled)
         {
@@ -138,10 +184,52 @@ public sealed class Mp3DiscImportWorkflowService
                 sourceFolder,
                 importResult,
                 precheck.TotalFiles,
-                sourceDriveInfo);
+                sourceDriveInfo,
+                preserveExistingDiscWithSameSignature: acceptDuplicate);
         }
 
         return new Mp3DiscSingleDiscImportResult(precheck, importResult);
+    }
+
+
+    public IReadOnlyList<Mp3DiscPlannedSourceIdentity> ReuseExistingSourceIds(
+        string projectFolder,
+        int discNumber,
+        IReadOnlyList<Mp3DiscPlannedSourceIdentity> plannedSources,
+        Mp3DiscProjectManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(projectFolder) || discNumber <= 0 || plannedSources.Count == 0)
+            return plannedSources;
+
+        var existingByTargetPath = _sourceCopyIdentityStore.Load(projectFolder)
+            .Where(identity => identity.SourceId != Guid.Empty)
+            .GroupBy(
+                identity => Mp3DiscSourceIdentityPlanner.NormalizeRelativePath(identity.TargetRelativePath),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().SourceId, StringComparer.OrdinalIgnoreCase);
+
+        var usedSourceIds = existingByTargetPath.Values
+            .Concat(manifest.ImportedDiscs.SelectMany(disc => disc.SourceFiles).Select(source => source.SourceId))
+            .Where(id => id != Guid.Empty)
+            .ToHashSet();
+
+        var discFolder = ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, discNumber);
+        return plannedSources
+            .Select(source =>
+            {
+                var targetFile = Path.Combine(discFolder, source.RelativePath);
+                var targetRelativePath = Mp3DiscSourceIdentityPlanner.NormalizeRelativePath(
+                    Path.GetRelativePath(projectFolder, targetFile));
+                if (existingByTargetPath.TryGetValue(targetRelativePath, out var existingSourceId))
+                    return source with { SourceId = existingSourceId };
+
+                // Repeated media are separate logical sources; retries keep their persisted identity.
+                var sourceId = source.SourceId;
+                while (sourceId == Guid.Empty || !usedSourceIds.Add(sourceId))
+                    sourceId = Guid.NewGuid();
+                return source with { SourceId = sourceId };
+            })
+            .ToArray();
     }
 
     public void MarkDiscCompleted(
@@ -151,7 +239,8 @@ public sealed class Mp3DiscImportWorkflowService
         string sourceFolder,
         DiscImportResult importResult,
         int fileCount,
-        DiscDriveInfo? sourceDriveInfo = null)
+        DiscDriveInfo? sourceDriveInfo = null,
+        bool preserveExistingDiscWithSameSignature = false)
     {
         _mp3DiscProjectService.MarkDiscCompleted(
             manifest,
@@ -161,6 +250,8 @@ public sealed class Mp3DiscImportWorkflowService
             importResult.ImportedFolder,
             fileCount,
             importResult.CopiedFiles,
-            sourceDriveInfo);
+            sourceDriveInfo,
+            sourceFiles: importResult.ImportedFiles,
+            preserveExistingDiscWithSameSignature: preserveExistingDiscWithSameSignature);
     }
 }

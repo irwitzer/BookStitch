@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using BookStitch.Models;
 
@@ -210,15 +210,15 @@ public class FfmpegToolStatus
         get
         {
             if (IsComplete)
-                return "FFmpeg bereit.";
+                return LocalizationText.Get("Tools.Ffmpeg.Ready");
 
             if (!FfmpegAvailable && !FfprobeAvailable)
-                return "FFmpeg nicht gefunden. ffmpeg.exe und ffprobe.exe fehlen.";
+                return LocalizationText.Get("Tools.Ffmpeg.BothMissing");
 
             if (!FfmpegAvailable)
-                return "FFmpeg unvollständig. ffmpeg.exe fehlt.";
+                return LocalizationText.Get("Tools.Ffmpeg.ExecutableMissing");
 
-            return "FFmpeg unvollständig. ffprobe.exe fehlt.";
+            return LocalizationText.Get("Tools.Ffprobe.ExecutableMissing");
         }
     }
 }

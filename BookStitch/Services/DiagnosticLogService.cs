@@ -5,29 +5,72 @@ using System.Text;
 
 namespace BookStitch.Services;
 
+internal sealed record DiagnosticLogPolicy(
+    long MaximumActiveLogBytes,
+    long MaximumTotalLogBytes,
+    int MaximumLogAgeDays)
+{
+    public static DiagnosticLogPolicy Default { get; } = new(
+        MaximumActiveLogBytes: 10L * 1024 * 1024,
+        MaximumTotalLogBytes: 200L * 1024 * 1024,
+        MaximumLogAgeDays: 90);
+}
+
 public sealed class DiagnosticLogService
 {
-    private const int MaximumLogFiles = 20;
-    private const int MaximumLogAgeDays = 30;
+    private static readonly object ProcessSync = new();
+    private static readonly Encoding LogEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     private readonly string _logFolder;
-    private readonly object _sync = new();
+    private readonly DiagnosticLogPolicy _policy;
 
     public DiagnosticLogService(string dataRootFolder)
+        : this(dataRootFolder, DiagnosticLogPolicy.Default)
     {
+    }
+
+    internal DiagnosticLogService(string dataRootFolder, DiagnosticLogPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        _policy = policy;
         _logFolder = Path.Combine(SettingsService.GetSettingsFolder(dataRootFolder), "logs");
-        Directory.CreateDirectory(_logFolder);
-        MigrateLegacyLogNames();
-        CleanupOldLogs();
+
+        try
+        {
+            lock (ProcessSync)
+            {
+                Directory.CreateDirectory(_logFolder);
+                MigrateLegacyLogNames();
+                CleanupOldLogs(LogFilePath);
+            }
+        }
+        catch
+        {
+            // Logging setup must never interrupt the application workflow.
+        }
     }
 
     public string LogFolder => _logFolder;
 
-    public string LogFilePath => Path.Combine(_logFolder, $"{DateTime.Now:yyyy.MM.dd} - BookStitch.log");
+    public string LogFilePath => GetDailyLogPath(DateTime.Now);
 
     public void WriteApplicationEvent(string eventName, string message)
     {
         Append($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {eventName}: {message}{Environment.NewLine}");
+    }
+
+    public void WritePerformanceEvent(
+        string operationName,
+        TimeSpan elapsed,
+        string? details = null)
+    {
+        var elapsedMilliseconds = elapsed.TotalMilliseconds
+            .ToString("0.0", CultureInfo.InvariantCulture);
+        var detailText = string.IsNullOrWhiteSpace(details)
+            ? string.Empty
+            : $" | {details.Trim()}";
+
+        Append($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] PERFORMANCE: {operationName} | {elapsedMilliseconds} ms{detailText}{Environment.NewLine}");
     }
 
     public void WriteTrackScan(
@@ -70,12 +113,52 @@ public sealed class DiagnosticLogService
     {
         try
         {
-            lock (_sync)
-                File.AppendAllText(LogFilePath, text, Encoding.UTF8);
+            lock (ProcessSync)
+            {
+                Directory.CreateDirectory(_logFolder);
+                var activeLogPath = GetDailyLogPath(DateTime.Now);
+                RotateActiveLogIfNeeded(activeLogPath, LogEncoding.GetByteCount(text));
+                File.AppendAllText(activeLogPath, text, LogEncoding);
+                CleanupOldLogs(activeLogPath);
+            }
         }
         catch
         {
             // Logging must never interrupt the application workflow.
+        }
+    }
+
+    private string GetDailyLogPath(DateTime date) =>
+        Path.Combine(_logFolder, $"{date:yyyy.MM.dd} - BookStitch.log");
+
+    private void RotateActiveLogIfNeeded(string activeLogPath, long appendByteCount)
+    {
+        try
+        {
+            if (!File.Exists(activeLogPath))
+                return;
+
+            var currentLength = new FileInfo(activeLogPath).Length;
+            if (currentLength <= 0 || currentLength + appendByteCount <= _policy.MaximumActiveLogBytes)
+                return;
+
+            var datePrefix = Path.GetFileName(activeLogPath)[..10];
+            var sequence = 1;
+            string archivePath;
+            do
+            {
+                archivePath = Path.Combine(
+                    _logFolder,
+                    $"{datePrefix} - BookStitch - {sequence:000}.log");
+                sequence++;
+            }
+            while (File.Exists(archivePath));
+
+            File.Move(activeLogPath, archivePath);
+        }
+        catch
+        {
+            // If rotation fails, keep appending to the active file rather than losing the log entry.
         }
     }
 
@@ -97,15 +180,15 @@ public sealed class DiagnosticLogService
                     continue;
                 }
 
-                var targetPath = Path.Combine(_logFolder, $"{date:yyyy.MM.dd} - BookStitch.log");
+                var targetPath = GetDailyLogPath(date);
                 if (!File.Exists(targetPath))
                 {
                     File.Move(legacyPath, targetPath);
                     continue;
                 }
 
-                var legacyText = File.ReadAllText(legacyPath, Encoding.UTF8);
-                File.AppendAllText(targetPath, legacyText, Encoding.UTF8);
+                var legacyText = File.ReadAllText(legacyPath, LogEncoding);
+                File.AppendAllText(targetPath, legacyText, LogEncoding);
                 File.Delete(legacyPath);
             }
         }
@@ -115,31 +198,80 @@ public sealed class DiagnosticLogService
         }
     }
 
-    private void CleanupOldLogs()
+    private void CleanupOldLogs(string activeLogPath)
     {
         try
         {
-            var files = Directory
-                .EnumerateFiles(_logFolder, "*.log", SearchOption.TopDirectoryOnly)
-                .Where(path => IsBookStitchLogFileName(Path.GetFileName(path)))
-                .Select(path => new FileInfo(path))
-                .OrderByDescending(file => file.LastWriteTime)
-                .ToList();
+            var activeFullPath = Path.GetFullPath(activeLogPath);
+            var cutoffLocal = DateTime.Now.AddDays(-_policy.MaximumLogAgeDays);
 
-            var cutoffLocal = DateTime.Now.AddDays(-MaximumLogAgeDays);
-            foreach (var file in files.Where((file, index) => index >= MaximumLogFiles || file.LastWriteTime < cutoffLocal))
+            foreach (var file in EnumerateManagedLogFiles()
+                         .Where(file =>
+                             !IsSamePath(file.FullName, activeFullPath) &&
+                             file.LastWriteTime < cutoffLocal)
+                         .ToList())
             {
-                try { file.Delete(); }
-                catch { /* Einzelne gesperrte Logs werden beim nächsten Start erneut geprüft. */ }
+                TryDelete(file);
             }
+
+            TrimTotalLogVolume(activeFullPath);
         }
         catch
         {
-            // Logrotation darf den Start der Anwendung nicht verhindern.
+            // Logrotation must never prevent application startup or logging.
         }
     }
 
-    private static bool IsBookStitchLogFileName(string fileName)
+    private void TrimTotalLogVolume(string activeFullPath)
+    {
+        var files = EnumerateManagedLogFiles()
+            .OrderBy(file => file.LastWriteTime)
+            .ThenBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var totalBytes = files.Sum(file => file.Length);
+        if (totalBytes <= _policy.MaximumTotalLogBytes)
+            return;
+
+        foreach (var file in files)
+        {
+            if (totalBytes <= _policy.MaximumTotalLogBytes)
+                break;
+            if (IsSamePath(file.FullName, activeFullPath))
+                continue;
+
+            var length = file.Length;
+            if (TryDelete(file))
+                totalBytes -= length;
+        }
+    }
+
+    private List<FileInfo> EnumerateManagedLogFiles() => Directory
+        .EnumerateFiles(_logFolder, "*.log", SearchOption.TopDirectoryOnly)
+        .Where(path => IsBookStitchLogFileName(Path.GetFileName(path)))
+        .Select(path => new FileInfo(path))
+        .ToList();
+
+    private static bool TryDelete(FileInfo file)
+    {
+        try
+        {
+            file.Delete();
+            return true;
+        }
+        catch
+        {
+            // Locked logs are retried on a later cleanup pass.
+            return false;
+        }
+    }
+
+    private static bool IsSamePath(string left, string right) =>
+        string.Equals(
+            Path.GetFullPath(left),
+            Path.GetFullPath(right),
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsBookStitchLogFileName(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName))
             return false;
@@ -147,7 +279,33 @@ public sealed class DiagnosticLogService
         if (fileName.StartsWith("BookStitch-", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return fileName.EndsWith(" - BookStitch.log", StringComparison.OrdinalIgnoreCase);
+        if (!fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || fileName.Length < 10)
+            return false;
+
+        if (!DateTime.TryParseExact(
+                fileName[..10],
+                "yyyy.MM.dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _))
+        {
+            return false;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        if (stem.EndsWith(" - BookStitch", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        const string rotatedMarker = " - BookStitch - ";
+        var markerIndex = stem.IndexOf(rotatedMarker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex != 10)
+            return false;
+
+        return int.TryParse(
+            stem[(markerIndex + rotatedMarker.Length)..],
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var sequence) && sequence > 0;
     }
 
     private static string NormalizePath(string? path)

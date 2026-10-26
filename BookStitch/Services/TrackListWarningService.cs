@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using System.Text.RegularExpressions;
 
 namespace BookStitch.Services;
@@ -14,8 +14,13 @@ public sealed class TrackListWarningService
         var changed = false;
         foreach (var track in tracks)
         {
+            if (CodecIds.IsInvalid(track.Codec) || track.AudioValidationPassed == false)
+            {
+                changed |= !track.WarningCodes.HasFlag(TrackWarningCodes.InvalidAudio);
+                track.WarningCodes |= TrackWarningCodes.InvalidAudio;
+            }
             changed |= SetFileWarning(track, BuildFileWarning(track));
-            changed |= SetChapterWarning(track, string.Empty);
+            changed |= SetChapterWarning(track, BuildInitialChapterWarning(track));
         }
 
         var sequenceNumbers = tracks.ToDictionary(track => track, ExtractSequenceNumber);
@@ -39,18 +44,29 @@ public sealed class TrackListWarningService
                 .Select(group => group.Key)
                 .ToHashSet();
 
+            var sourceSupportsMissingNumberWarning = SupportsMissingNumberWarning(
+                discTrackList
+                    .Select(track => sequenceNumbers[track])
+                    .Where(number => number.HasValue)
+                    .Select(number => number!.Value));
             int? previousNumber = null;
             foreach (var track in activeDiscTracks)
             {
                 var number = sequenceNumbers[track];
-                var warning = BuildSequenceWarning(number, previousNumber, duplicateNumbers, excludedNumbers);
-                changed |= SetChapterWarning(track, warning);
+                var warning = BuildSequenceWarning(
+                    number,
+                    previousNumber,
+                    duplicateNumbers,
+                    excludedNumbers,
+                    sourceSupportsMissingNumberWarning);
+                changed |= AddChapterWarning(track, warning);
 
                 if (number.HasValue)
                     previousNumber = number.Value;
             }
         }
 
+        changed |= ApplyInventoryGapWarnings(tracks, sequenceNumbers);
         return changed;
     }
 
@@ -62,54 +78,86 @@ public sealed class TrackListWarningService
 
     private static string BuildFileWarning(TrackInfo track)
     {
-        var warning = track.Warning ?? string.Empty;
+        var codes = track.WarningCodes;
+        var messages = new List<string>();
 
-        if (Contains(warning, "Keine gültige Audiodatei") ||
-            string.Equals(track.Codec, "Ungültig", StringComparison.OrdinalIgnoreCase) ||
+        if (codes.HasFlag(TrackWarningCodes.InvalidAudio) ||
+            CodecIds.IsInvalid(track.Codec) ||
             track.AudioValidationPassed == false)
         {
-            return "Keine gültige Audiodatei";
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.InvalidAudio));
         }
 
-        if (Contains(warning, "Quelldatei fehlt"))
-            return "Quelldatei fehlt";
+        if (codes.HasFlag(TrackWarningCodes.MissingSource))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.MissingSource));
 
-        if (Contains(warning, "Quelldatei ist leer") || Contains(warning, "Quelldatei leer"))
-            return "Quelldatei leer";
+        if (codes.HasFlag(TrackWarningCodes.EmptySource))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.EmptySource));
 
-        if (Contains(warning, "AAC-Datei ist leer") || Contains(warning, "AAC-Datei leer"))
-            return "AAC-Datei leer";
+        if (codes.HasFlag(TrackWarningCodes.EmptyAac))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.EmptyAac));
 
-        if (Contains(warning, "Nicht dekodierbar"))
-            return "Nicht dekodierbar";
+        if (codes.HasFlag(TrackWarningCodes.Undecodable))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.Undecodable));
 
-        return string.Empty;
+        return JoinWarningMessages(messages);
+    }
+
+    private static string BuildInitialChapterWarning(TrackInfo track)
+    {
+        var codes = track.WarningCodes;
+        var messages = new List<string>();
+
+        if (codes.HasFlag(TrackWarningCodes.DuplicateChapterName))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.DuplicateChapterName));
+
+        if (codes.HasFlag(TrackWarningCodes.MissingChapter))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.MissingChapter));
+
+        if (codes.HasFlag(TrackWarningCodes.DuplicateChapter))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.DuplicateChapter));
+
+        if (codes.HasFlag(TrackWarningCodes.CheckOrder))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder));
+
+        if (codes.HasFlag(TrackWarningCodes.MissingTagTitle))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle));
+
+        if (codes.HasFlag(TrackWarningCodes.UnreadableTags))
+            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags));
+
+        return JoinWarningMessages(messages);
     }
 
     private static string BuildSequenceWarning(
         int? currentNumber,
         int? previousNumber,
         ISet<int> duplicateNumbers,
-        ISet<int> excludedNumbers)
+        ISet<int> excludedNumbers,
+        bool sourceSupportsMissingNumberWarning)
     {
         if (!currentNumber.HasValue)
             return string.Empty;
 
         if (duplicateNumbers.Contains(currentNumber.Value))
-            return "Kapitel doppelt";
+            return TrackWarningPresentation.Format(TrackWarningCodes.DuplicateChapter);
 
         if (previousNumber.HasValue)
         {
-            if (currentNumber.Value == previousNumber.Value + 1)
+            var nextNumber = (long)previousNumber.Value + 1;
+            if (currentNumber.Value == nextNumber)
                 return string.Empty;
 
-            if (currentNumber.Value > previousNumber.Value + 1)
+            if (sourceSupportsMissingNumberWarning &&
+                currentNumber.Value > nextNumber)
+            {
                 return HasMissingActiveChapter(previousNumber.Value, currentNumber.Value, excludedNumbers)
-                    ? "Kapitel fehlt"
+                    ? TrackWarningPresentation.Format(TrackWarningCodes.MissingChapter)
                     : string.Empty;
+            }
 
             if (currentNumber.Value <= previousNumber.Value)
-                return "Sortierung prüfen";
+                return TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder);
         }
 
         return string.Empty;
@@ -124,6 +172,119 @@ public sealed class TrackListWarningService
         }
 
         return false;
+    }
+
+    private static bool ApplyInventoryGapWarnings(
+        IList<TrackInfo> tracks,
+        IReadOnlyDictionary<TrackInfo, int?> sequenceNumbers)
+    {
+        var changed = false;
+        changed |= ApplyDiscInventoryGapWarnings(tracks);
+
+        foreach (var discTracks in tracks.GroupBy(GetDiscWarningScope))
+        {
+            var discTrackList = discTracks.ToList();
+            var numbers = discTrackList
+                .Select(track => sequenceNumbers[track])
+                .Where(number => number.HasValue)
+                .Select(number => number!.Value)
+                .Distinct()
+                .Order()
+                .ToList();
+
+            if (!SupportsMissingNumberWarning(numbers))
+                continue;
+
+            foreach (var gap in FindInternalGaps(numbers))
+            {
+                var target = FindFirstActiveTrackAfterGap(discTrackList, sequenceNumbers, gap.End);
+                if (target is not null)
+                    changed |= AddChapterWarning(target, TrackWarningPresentation.Format(TrackWarningCodes.MissingChapter));
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool ApplyDiscInventoryGapWarnings(IList<TrackInfo> tracks)
+    {
+        var discNumbers = tracks
+            .Select(track => track.DiscNumber)
+            .Where(number => number is > 0)
+            .Select(number => number!.Value)
+            .Distinct()
+            .Order()
+            .ToList();
+
+        if (discNumbers.Count < 2)
+            return false;
+
+        var changed = false;
+        foreach (var gap in FindInternalGaps(discNumbers))
+        {
+            var target = tracks
+                .Where(track => track.DiscNumber.HasValue && track.DiscNumber.Value > gap.End)
+                .OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
+                .ThenBy(track => track.Index)
+                .FirstOrDefault(track => !track.IsExcluded)
+                ?? tracks
+                    .Where(track => track.DiscNumber.HasValue && track.DiscNumber.Value > gap.End)
+                    .OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
+                    .ThenBy(track => track.Index)
+                    .FirstOrDefault();
+
+            if (target is not null)
+                changed |= AddChapterWarning(target, FormatDiscGapWarning(gap));
+        }
+
+        return changed;
+    }
+
+    private static TrackInfo? FindFirstActiveTrackAfterGap(
+        IEnumerable<TrackInfo> tracks,
+        IReadOnlyDictionary<TrackInfo, int?> sequenceNumbers,
+        int gapEnd)
+    {
+        return tracks
+            .Where(track => !track.IsExcluded &&
+                            sequenceNumbers.TryGetValue(track, out var number) &&
+                            number.HasValue &&
+                            number.Value > gapEnd)
+            .OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
+            .ThenBy(track => track.Index)
+            .FirstOrDefault();
+    }
+
+    private static bool SupportsMissingNumberWarning(IEnumerable<int> numbers)
+    {
+        var ordered = numbers.Distinct().Order().ToList();
+        if (ordered.Zip(ordered.Skip(1), (left, right) => right - left).Any(delta => delta == 1))
+            return true;
+
+        return ordered.Count >= 2 &&
+               ordered[0] == 1 &&
+               ordered[^1] <= ordered.Count * 2;
+    }
+
+    private static IReadOnlyList<NumberGap> FindInternalGaps(IReadOnlyList<int> orderedDistinctNumbers)
+    {
+        var gaps = new List<NumberGap>();
+        for (var index = 1; index < orderedDistinctNumbers.Count; index++)
+        {
+            var previous = orderedDistinctNumbers[index - 1];
+            var current = orderedDistinctNumbers[index];
+            if (current > previous + 1)
+                gaps.Add(new NumberGap(previous + 1, current - 1));
+        }
+
+        return gaps;
+    }
+
+    private static string FormatDiscGapWarning(NumberGap gap)
+    {
+        return gap.Start == gap.End
+            ? string.Format(LocalizationText.Get("WarningSingleDiscGap"), gap.Start)
+            : string.Format(LocalizationText.Get("WarningDiscGapRange"), gap.Start, gap.End);
     }
 
     private static int? ExtractSequenceNumber(TrackInfo track)
@@ -160,8 +321,33 @@ public sealed class TrackListWarningService
         return true;
     }
 
-    private static bool Contains(string value, string marker)
+    private static bool AddChapterWarning(TrackInfo track, string value)
     {
-        return value.Contains(marker, StringComparison.OrdinalIgnoreCase);
+        return SetChapterWarning(
+            track,
+            TrackInfo.AppendWarningMessage(track.ChapterWarningText, value));
     }
+
+    private static string JoinWarningMessages(IEnumerable<string> messages)
+    {
+        var normalized = new List<string>();
+        foreach (var message in messages)
+            AddWarningMessage(normalized, message);
+
+        return string.Join(TrackInfo.WarningMessageSeparator, normalized);
+    }
+
+    private static void AddWarningMessage(ICollection<string> messages, string? message)
+    {
+        var normalized = message?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized) ||
+            messages.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        messages.Add(normalized);
+    }
+
+    private sealed record NumberGap(int Start, int End);
 }

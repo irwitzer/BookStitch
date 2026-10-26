@@ -1,20 +1,11 @@
-namespace BookStitch.Services;
+﻿namespace BookStitch.Services;
 
 public static class TitleAlbumLoadPolicy
 {
-    public static TitleAlbumLoadState Resolve(string? title, string? album, bool keepLinked)
+    public static TitleAlbumLoadState Resolve(string? title, string? album)
     {
         var normalizedTitle = title?.Trim() ?? string.Empty;
         var normalizedAlbum = album?.Trim() ?? string.Empty;
-
-        if (keepLinked)
-        {
-            var linkedValue = !string.IsNullOrWhiteSpace(normalizedAlbum)
-                ? normalizedAlbum
-                : normalizedTitle;
-
-            return new TitleAlbumLoadState(linkedValue, linkedValue);
-        }
 
         if (string.IsNullOrWhiteSpace(normalizedAlbum))
             normalizedAlbum = normalizedTitle;

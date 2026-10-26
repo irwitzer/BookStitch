@@ -1,10 +1,33 @@
 ﻿using BookStitch.Services;
+using System.Threading;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
 
 public sealed class ApplicationShutdownServiceTests
 {
+    [Theory]
+    [InlineData(false, false, false, ProjectCloseIntent.Save)]
+    [InlineData(true, false, false, ProjectCloseIntent.DeleteNewProject)]
+    [InlineData(false, true, false, ProjectCloseIntent.RollbackRun)]
+    [InlineData(false, false, true, ProjectCloseIntent.RollbackRun)]
+    [InlineData(true, true, false, ProjectCloseIntent.RollbackRun)]
+    [InlineData(true, false, true, ProjectCloseIntent.RollbackRun)]
+    public void Workspace_close_preserves_loaded_projects_and_distinguishes_new_preparation_from_rollback(
+        bool newProject, bool extension, bool reconversion, ProjectCloseIntent expected)
+    {
+        Assert.Equal(expected, ApplicationShutdownService.ResolveProjectCloseIntent(newProject, extension, reconversion));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Merge_close_discards_only_the_merge_even_if_a_previous_context_is_present(bool extension, bool reconversion)
+        => Assert.Equal(ProjectCloseIntent.DiscardMerge,
+            ApplicationShutdownService.ResolveProjectCloseIntent(false, extension, reconversion, isMerge: true));
+
     private readonly ApplicationShutdownService _service = new();
 
     [Theory]
@@ -75,16 +98,73 @@ public sealed class ApplicationShutdownServiceTests
     [Fact]
     public async Task WaitForIdleAsync_ReturnsWhenWorkFinishes()
     {
-        var active = true;
-        _ = Task.Run(async () =>
+        using var idleSignal = new ManualResetEventSlim(initialState: false);
+        var worker = new Thread(() =>
         {
-            await Task.Delay(40);
-            active = false;
-        });
+            Thread.Sleep(40);
+            idleSignal.Set();
+        })
+        {
+            IsBackground = true
+        };
+        worker.Start();
 
-        var result = await _service.WaitForIdleAsync(() => active, TimeSpan.FromSeconds(2));
+        var result = await _service.WaitForIdleAsync(
+            () => !idleSignal.IsSet,
+            TimeSpan.FromSeconds(2));
 
         Assert.True(result);
+        Assert.True(worker.Join(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task WaitForIdleAsync_ReturnsImmediatelyWhenWorkIsAlreadyIdle()
+    {
+        var checks = 0;
+
+        var result = await _service.WaitForIdleAsync(
+            () =>
+            {
+                checks++;
+                return false;
+            },
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(result);
+        Assert.Equal(1, checks);
+    }
+
+    [Fact]
+    public async Task PausedPipeline_CanBeActiveEvenWhenWorkPredicateIsImmediatelyIdle()
+    {
+        var activity = _service.GetActiveActivity(
+            isDiscImporting: false,
+            isAudioDiscProcessing: false,
+            isExporting: false,
+            isBusy: false,
+            isPipelinePaused: true,
+            hasPausedAudioDiscProject: false,
+            hasPausedMp3DiscProject: false);
+
+        var stoppedCleanly = await _service.WaitForIdleAsync(
+            () => false,
+            TimeSpan.FromSeconds(2));
+
+        Assert.Equal(ApplicationActivity.Export, activity);
+        Assert.True(stoppedCleanly);
+    }
+
+    [Fact]
+    public async Task WaitForIdleAsync_WaitsAsynchronouslyUntilWorkBecomesIdle()
+    {
+        var checks = 0;
+
+        var result = await _service.WaitForIdleAsync(
+            () => Interlocked.Increment(ref checks) < 3,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(result);
+        Assert.True(checks >= 3);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using BookStitch.Models;
+using BookStitch.Models.TrackOrdering;
+using BookStitch.Services.TrackOrdering;
 
 namespace BookStitch.Services;
 
@@ -12,64 +14,57 @@ public enum TrackNumberPreference
 
 public sealed class FolderScanner
 {
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3",
-        ".m4a",
-        ".m4b",
-        ".aac",
-        ".wav",
-        ".flac",
-        ".wma"
-    };
-
-    private static readonly Regex DiscRegex = new(
-        @"(?i)\b(?:cd|disc|disk|teil|part|volume|vol\.?)\s*[-_ ]*(?<number>\d{1,3})\b",
-        RegexOptions.Compiled);
-
     private static readonly Regex LeadingNumberTrackRegex = new(
         @"^\s*(?<number>\d{1,4})(?<suffix>[a-zA-Z]?)(?=$|[\s._\-\)])",
         RegexOptions.Compiled);
 
-    private static readonly Regex NamedTrackRegex = new(
-        @"(?i)^\s*(?:track|trk|kapitel|chapter|ch\.?|titel|title)\s*[-_. ]*(?<number>\d{1,4})(?<suffix>[a-zA-Z]?)(?=$|[\s._\-\)])",
-        RegexOptions.Compiled);
-
-    private static readonly Regex LeadingTrackNumberRegex = new(
-        @"^\s*\d{1,4}[a-zA-Z]?\s*[-_. ]*",
-        RegexOptions.Compiled);
-
-    private static readonly Regex LeadingNamedTrackNumberRegex = new(
-        @"(?i)^\s*(?:track|trk|kapitel|chapter|ch\.?|titel|title)\s*[-_. ]*\d{1,4}[a-zA-Z]?\s*[-_. ]*",
-        RegexOptions.Compiled);
-
-    private static readonly Regex MultiSpaceRegex = new(
-        @"\s+",
-        RegexOptions.Compiled);
-
-    private static readonly Regex GenericChapterRegex = new(
-        @"(?i)^(track|audio track|kapitel|chapter|titel)\s*\d*$",
-        RegexOptions.Compiled);
-
     private readonly NaturalStringComparer _naturalComparer = new();
+    private readonly TagMetadataReader _tagMetadataReader;
+    private readonly FileSystemMetadataReader _fileSystemMetadataReader;
+    private readonly TrackAutomaticOrderApplicationService _automaticOrderApplicationService;
+
+    public FolderScanner()
+        : this(new TagMetadataReader(), new FileSystemMetadataReader())
+    {
+    }
+
+    public FolderScanner(
+        TagMetadataReader tagMetadataReader,
+        FileSystemMetadataReader fileSystemMetadataReader)
+    {
+        _tagMetadataReader = tagMetadataReader;
+        _fileSystemMetadataReader = fileSystemMetadataReader;
+        _automaticOrderApplicationService = new TrackAutomaticOrderApplicationService();
+    }
 
     public List<TrackInfo> Scan(
         string rootFolder,
         TrackNumberPreference trackNumberPreference = TrackNumberPreference.EmbeddedTag,
-        Func<string, bool>? includeFile = null)
+        Func<string, bool>? includeFile = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(rootFolder))
             return [];
 
-        var files = Directory
-            .EnumerateFiles(rootFolder, "*.*", SearchOption.AllDirectories)
-            .Where(file => SupportedExtensions.Contains(Path.GetExtension(file)))
-            .Where(file => includeFile?.Invoke(file) ?? true)
-            .Select(file => CreateTrackInfo(rootFolder, file, trackNumberPreference))
-            .OrderBy(track => track.DiscNumber ?? int.MaxValue)
+        cancellationToken.ThrowIfCancellationRequested();
+        var files = new List<TrackInfo>();
+        foreach (var file in SafeFileSystemEnumeration.EnumerateFiles(rootFolder, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!AudioInputFormatCatalog.IsLocalImportExtension(Path.GetExtension(file)) ||
+                !(includeFile?.Invoke(file) ?? true)) continue;
+            try { files.Add(CreateTrackInfo(rootFolder, file, trackNumberPreference)); }
+            catch (Exception ex) when (SafeFileSystemEnumeration.IsFileSystemError(ex))
+            {
+                System.Diagnostics.Trace.TraceWarning("Track scan skipped {0}: {1}", file, ex.Message);
+            }
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+
+        _automaticOrderApplicationService.CalculateAndApply(files, TrackOrderProjectType.LocalFolder);
+        files = files
+            .OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
             .ThenBy(track => track.RelativeFolder, _naturalComparer)
-            .ThenBy(track => track.TrackNumber ?? int.MaxValue)
-            .ThenBy(track => GetTrackNumberSuffix(Path.GetFileNameWithoutExtension(track.FileName)), _naturalComparer)
             .ThenBy(track => track.FileName, _naturalComparer)
             .ToList();
 
@@ -81,92 +76,80 @@ public sealed class FolderScanner
         return files;
     }
 
-    private static TrackInfo CreateTrackInfo(
+    public Task<List<TrackInfo>> ScanAsync(
+        string rootFolder,
+        TrackNumberPreference trackNumberPreference = TrackNumberPreference.EmbeddedTag,
+        Func<string, bool>? includeFile = null,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => Scan(rootFolder, trackNumberPreference, includeFile, cancellationToken), cancellationToken);
+
+    private TrackInfo CreateTrackInfo(
         string rootFolder,
         string filePath,
         TrackNumberPreference trackNumberPreference)
     {
-        var fileInfo = new FileInfo(filePath);
-        var relativePath = Path.GetRelativePath(rootFolder, filePath);
-        var relativeFolder = Path.GetDirectoryName(relativePath) ?? "";
-        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
+        var fileSystem = _fileSystemMetadataReader.Read(rootFolder, filePath);
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileSystem.FullPath);
+        var projectRelativeFolder = BuildProjectRelativeFolder(rootFolder, fileSystem.RelativeFolder);
 
-        var discNumberFromFolder = TryExtractDiscNumber(relativeFolder);
+        var discNumberFromFolder = TryExtractDiscNumber(fileSystem.RelativeFolder);
         var trackNumberFromFile = TryExtractTrackNumber(fileNameWithoutExtension);
 
-        var tagTitle = "";
-        var artist = "";
-        int? tagDiscNumber = null;
-        int? tagTrackNumber = null;
-        var duration = "";
-        int? bitrate = null;
-        int? channels = null;
-        long? durationTicks = null;
-        var tagReadFailed = false;
-
-        try
-        {
-            using var tagFile = TagLib.File.Create(filePath);
-
-            tagTitle = tagFile.Tag.Title?.Trim() ?? "";
-
-            artist = tagFile.Tag.FirstAlbumArtist?.Trim()
-                     ?? tagFile.Tag.FirstPerformer?.Trim()
+        var tagMetadata = _tagMetadataReader.Read(filePath);
+        var originalTags = tagMetadata.Original;
+        var tagTitle = originalTags.Title;
+        var artist = originalTags.Authors.FirstOrDefault()
+                     ?? originalTags.Performers.FirstOrDefault()
                      ?? "";
-
-            if (tagFile.Tag.Disc > 0)
-                tagDiscNumber = (int)tagFile.Tag.Disc;
-
-            if (tagFile.Tag.Track > 0)
-                tagTrackNumber = (int)tagFile.Tag.Track;
-
-            if (tagFile.Properties.Duration > TimeSpan.Zero)
-            {
-                duration = FormatDuration(tagFile.Properties.Duration);
-                durationTicks = tagFile.Properties.Duration.Ticks;
-            }
-
-            if (tagFile.Properties.AudioBitrate > 0)
-                bitrate = tagFile.Properties.AudioBitrate;
-
-            if (tagFile.Properties.AudioChannels > 0)
-                channels = tagFile.Properties.AudioChannels;
-        }
-        catch
-        {
-            tagReadFailed = true;
-        }
+        var tagDiscNumber = ToPositiveInt(originalTags.DiscNumber);
+        var tagDiscTotal = ToPositiveInt(originalTags.DiscTotal);
+        var tagTrackNumber = ToPositiveInt(originalTags.TrackNumber);
+        var tagTrackTotal = ToPositiveInt(originalTags.TrackTotal);
+        var duration = tagMetadata.TechnicalDurationFallback is { } fallbackDuration
+            ? FormatDuration(fallbackDuration)
+            : "";
+        var durationTicks = tagMetadata.TechnicalDurationFallback?.Ticks;
+        var bitrate = tagMetadata.TechnicalBitrateKbpsFallback;
+        var channels = tagMetadata.TechnicalChannelsFallback;
 
         var finalDiscNumber = tagDiscNumber ?? discNumberFromFolder;
         var finalTrackNumber = trackNumberPreference == TrackNumberPreference.FileName
             ? trackNumberFromFile ?? tagTrackNumber
             : tagTrackNumber ?? trackNumberFromFile;
 
-        var chapterTitle = BuildChapterTitle(tagTitle, fileNameWithoutExtension, finalTrackNumber);
-
         var result = new TrackInfo
         {
-            FilePath = filePath,
-            FileName = Path.GetFileName(filePath),
-            RelativeFolder = relativeFolder,
-            Extension = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant(),
+            FilePath = fileSystem.FullPath,
+            FileName = fileSystem.FileName,
+            RelativeFolder = fileSystem.RelativeFolder,
+            ProjectRelativeFolder = projectRelativeFolder,
+            Extension = fileSystem.Extension.TrimStart('.').ToUpperInvariant(),
+            SourceDiscNumber = tagDiscNumber,
+            SourceDiscTotal = tagDiscTotal,
+            SourceTrackNumber = tagTrackNumber,
+            SourceTrackTotal = tagTrackTotal,
             DiscNumber = finalDiscNumber,
             TrackNumber = finalTrackNumber,
             TagTitle = tagTitle,
             Artist = artist,
-            ChapterTitle = chapterTitle,
+            SourceMetadataFields = SourceMetadataCaptureService.BuildCanonicalFields(originalTags),
+            ChapterTitle = string.Empty,
             Duration = duration,
             DurationTicks = durationTicks,
             BitrateKbps = bitrate,
+            SampleRateHz = tagMetadata.TechnicalSampleRateHzFallback,
             Channels = channels,
-            SizeMb = Math.Round(fileInfo.Length / 1024d / 1024d, 2)
+            SizeMb = Math.Round(fileSystem.SizeBytes / 1024d / 1024d, 2)
         };
 
-        if (tagReadFailed)
-            result.Warning = "Tags konnten nicht gelesen werden";
+        if (tagMetadata.Failed)
+            result.SetWarning(TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags), TrackWarningCodes.UnreadableTags);
 
         return result;
     }
+
+    private static int? ToPositiveInt(uint value) =>
+        value is > 0 and <= int.MaxValue ? (int)value : null;
 
     private static void AddWarnings(List<TrackInfo> tracks)
     {
@@ -176,25 +159,47 @@ public sealed class FolderScanner
         foreach (var track in tracks)
         {
             var warnings = new List<string>();
+            var codes = track.WarningCodes;
 
             if (!string.IsNullOrWhiteSpace(track.Warning))
                 warnings.Add(track.Warning);
 
             if (track.TrackNumber is null)
-                warnings.Add("Keine Tracknummer erkannt");
+                warnings.Add(LocalizationText.Get("WarningMissingTrackNumber"));
 
-            if (IsGenericChapterTitle(track.ChapterTitle))
-                warnings.Add("Kapitelname wirkt generisch");
-
-            if (string.IsNullOrWhiteSpace(track.TagTitle))
-                warnings.Add("Kein Tag-Titel");
-
-            track.Warning = string.Join("; ", warnings.Distinct(StringComparer.OrdinalIgnoreCase));
+            track.SetWarning(string.Join("; ", warnings.Distinct(StringComparer.OrdinalIgnoreCase)), codes);
         }
+
+        ApplyMissingTagTitleWarnings(tracks);
 
         AddDuplicateTrackNumberWarnings(tracks);
         AddMissingTrackNumberWarnings(tracks);
-        AddDuplicateChapterTitleWarnings(tracks);
+    }
+
+    internal static void ApplyMissingTagTitleWarnings(IReadOnlyList<TrackInfo> tracks)
+    {
+        var warningText = TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle);
+
+        foreach (var group in tracks.GroupBy(track => track.DiscNumber))
+        {
+            var warnMissingTitles = group.Any(track => !string.IsNullOrWhiteSpace(track.TagTitle));
+            foreach (var track in group)
+            {
+                var warnings = track.Warning
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(warning => !string.Equals(warning, warningText, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var codes = track.WarningCodes & ~TrackWarningCodes.MissingTagTitle;
+
+                if (warnMissingTitles && string.IsNullOrWhiteSpace(track.TagTitle))
+                {
+                    warnings.Add(warningText);
+                    codes |= TrackWarningCodes.MissingTagTitle;
+                }
+
+                track.SetWarning(string.Join("; ", warnings.Distinct(StringComparer.OrdinalIgnoreCase)), codes);
+            }
+        }
     }
 
     private static void AddDuplicateTrackNumberWarnings(List<TrackInfo> tracks)
@@ -221,8 +226,8 @@ public sealed class FolderScanner
                 continue;
 
             var warning = group.Key.Disc is null
-                ? "Doppelte Tracknummer"
-                : $"Doppelte Tracknummer auf Disc {group.Key.Disc}";
+                ? LocalizationText.Get("WarningDuplicateTrackNumber")
+                : string.Format(LocalizationText.Get("WarningDuplicateTrackNumberDisc"), group.Key.Disc);
 
             foreach (var track in group)
                 AppendWarning(track, warning);
@@ -263,8 +268,8 @@ public sealed class FolderScanner
                 continue;
 
             var missingText = string.Join(", ", missing.Select(number => number.ToString("000")));
-            var suffix = missing.Count == 1 ? "fehlt möglicherweise" : "fehlen möglicherweise";
-            var warning = $"Tracknummer {missingText} {suffix}";
+            var warning = string.Format(LocalizationText.Get(missing.Count == 1
+                ? "WarningSingleTrackGap" : "WarningTrackGapRange"), missingText);
 
             var firstTrack = group.OrderBy(track => track.Index).FirstOrDefault();
             if (firstTrack is not null)
@@ -272,94 +277,13 @@ public sealed class FolderScanner
         }
     }
 
-    private static void AddDuplicateChapterTitleWarnings(List<TrackInfo> tracks)
-    {
-        var duplicateChapters = tracks
-            .Where(track => !string.IsNullOrWhiteSpace(track.ChapterTitle))
-            .Where(track => !IsGenericChapterTitle(track.ChapterTitle))
-            .GroupBy(track => new
-            {
-                track.DiscNumber,
-                Title = NormalizeChapterTitle(track.ChapterTitle)
-            })
-            .Where(group => !string.IsNullOrWhiteSpace(group.Key.Title) && group.Count() > 1);
-
-        foreach (var group in duplicateChapters)
-        {
-            if (IsNumberedChapterDuplicateGroup(group))
-                continue;
-
-            foreach (var track in group)
-                AppendWarning(track, "Doppelter Kapitelname");
-        }
-    }
-
     private static void AppendWarning(TrackInfo track, string warning)
     {
+        var codes = track.WarningCodes;
         if (string.IsNullOrWhiteSpace(track.Warning))
-            track.Warning = warning;
+            track.SetWarning(warning, codes);
         else if (!track.Warning.Contains(warning, StringComparison.OrdinalIgnoreCase))
-            track.Warning += "; " + warning;
-    }
-
-    private static string BuildChapterTitle(string tagTitle, string fileNameWithoutExtension, int? trackNumber)
-    {
-        if (!string.IsNullOrWhiteSpace(tagTitle) && !IsGenericChapterTitle(tagTitle))
-            return CleanText(tagTitle);
-
-        var cleaned = CleanFileNameTitle(fileNameWithoutExtension);
-
-        if (string.IsNullOrWhiteSpace(cleaned))
-            return trackNumber is null ? "Kapitel" : $"Kapitel {trackNumber:000}";
-
-        return cleaned;
-    }
-
-    private static string CleanFileNameTitle(string fileNameWithoutExtension)
-    {
-        var cleaned = fileNameWithoutExtension.Trim();
-
-        cleaned = LeadingNamedTrackNumberRegex.Replace(cleaned, "");
-        cleaned = LeadingTrackNumberRegex.Replace(cleaned, "");
-        cleaned = cleaned.Replace('_', ' ');
-        cleaned = MultiSpaceRegex.Replace(cleaned, " ");
-        cleaned = cleaned.Trim(' ', '-', '_', '.', ',');
-
-        return cleaned;
-    }
-
-    private static string CleanText(string text)
-    {
-        var cleaned = text.Trim();
-        cleaned = cleaned.Replace('_', ' ');
-        cleaned = MultiSpaceRegex.Replace(cleaned, " ");
-        return cleaned.Trim();
-    }
-
-    private static string NormalizeChapterTitle(string chapterTitle)
-    {
-        return CleanText(chapterTitle).ToUpperInvariant();
-    }
-
-    private static bool IsNumberedChapterDuplicateGroup(IEnumerable<TrackInfo> tracks)
-    {
-        return tracks.All(track => StartsWithChapterNumber(track.ChapterTitle));
-    }
-
-    private static bool StartsWithChapterNumber(string chapterTitle)
-    {
-        if (string.IsNullOrWhiteSpace(chapterTitle))
-            return false;
-
-        return LeadingNumberTrackRegex.IsMatch(chapterTitle) || NamedTrackRegex.IsMatch(chapterTitle);
-    }
-
-    private static bool IsGenericChapterTitle(string chapterTitle)
-    {
-        if (string.IsNullOrWhiteSpace(chapterTitle))
-            return true;
-
-        return GenericChapterRegex.IsMatch(chapterTitle.Trim());
+            track.SetWarning(track.Warning + "; " + warning, codes);
     }
 
     private static int? TryExtractDiscNumber(string relativeFolder)
@@ -371,7 +295,7 @@ public sealed class FolderScanner
 
         foreach (var folder in folderParts.Reverse())
         {
-            var match = DiscRegex.Match(folder);
+            var match = ChapterMarkerCatalog.ExplicitDiscNumberRegex.Match(folder);
 
             if (match.Success && int.TryParse(match.Groups["number"].Value, out var number))
                 return number;
@@ -380,9 +304,22 @@ public sealed class FolderScanner
         return null;
     }
 
+    private static string BuildProjectRelativeFolder(string rootFolder, string relativeFolder)
+    {
+        var rootName = Path.GetFileName(
+            Path.GetFullPath(rootFolder)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(rootName))
+            rootName = rootFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return string.IsNullOrWhiteSpace(relativeFolder) || relativeFolder == "."
+            ? rootName
+            : Path.Combine(rootName, relativeFolder);
+    }
+
     private static int? TryExtractTrackNumber(string fileNameWithoutExtension)
     {
-        var match = NamedTrackRegex.Match(fileNameWithoutExtension);
+        var match = ChapterMarkerCatalog.LeadingExplicitTrackNumberRegex.Match(fileNameWithoutExtension);
 
         if (!match.Success)
             match = LeadingNumberTrackRegex.Match(fileNameWithoutExtension);
@@ -395,7 +332,7 @@ public sealed class FolderScanner
 
     private static string GetTrackNumberSuffix(string fileNameWithoutExtension)
     {
-        var match = NamedTrackRegex.Match(fileNameWithoutExtension);
+        var match = ChapterMarkerCatalog.LeadingExplicitTrackNumberRegex.Match(fileNameWithoutExtension);
 
         if (!match.Success)
             match = LeadingNumberTrackRegex.Match(fileNameWithoutExtension);

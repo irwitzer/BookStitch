@@ -7,19 +7,15 @@ namespace BookStitch.Services;
 public sealed class TrackListActionService
 {
     private readonly NaturalStringComparer _naturalStringComparer;
-    private readonly ChapterNumberingService _chapterNumberingService;
 
     public TrackListActionService()
-        : this(new NaturalStringComparer(), new ChapterNumberingService())
+        : this(new NaturalStringComparer())
     {
     }
 
-    public TrackListActionService(
-        NaturalStringComparer naturalStringComparer,
-        ChapterNumberingService chapterNumberingService)
+    public TrackListActionService(NaturalStringComparer naturalStringComparer)
     {
         _naturalStringComparer = naturalStringComparer ?? throw new ArgumentNullException(nameof(naturalStringComparer));
-        _chapterNumberingService = chapterNumberingService ?? throw new ArgumentNullException(nameof(chapterNumberingService));
     }
 
     public List<TrackInfo> Sort(
@@ -115,6 +111,18 @@ public sealed class TrackListActionService
             .ToList();
     }
 
+    public List<TrackInfo> RestoreAutomaticOrder(IReadOnlyList<TrackInfo> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+
+        return tracks
+            .Select((track, originalPosition) => new { Track = track, OriginalPosition = originalPosition })
+            .OrderBy(item => item.Track.AutomaticOrderPosition ?? int.MaxValue)
+            .ThenBy(item => item.OriginalPosition)
+            .Select(item => item.Track)
+            .ToList();
+    }
+
     public int ExcludeSelected(IReadOnlyCollection<TrackInfo> selectedTracks)
     {
         var changed = 0;
@@ -161,98 +169,22 @@ public sealed class TrackListActionService
             ExcludeSelected(selectedTracks));
     }
 
-    public void Renumber(IList<TrackInfo> tracks, bool useLeadingZeros = true)
-    {
-        ArgumentNullException.ThrowIfNull(tracks);
-
-        var activeChapterCount = tracks.Count(track => !track.IsExcluded);
-        var activeIndex = 0;
-        foreach (var track in tracks)
-        {
-            if (track.IsExcluded)
-            {
-                track.Index = 0;
-                continue;
-            }
-
-            activeIndex++;
-            track.Index = activeIndex;
-            track.ChapterTitle = RenumberChapterTitle(
-                track.ChapterTitle,
-                activeIndex,
-                activeChapterCount,
-                useLeadingZeros);
-        }
-    }
-
-
-    public int UpdateGeneratedChapterTitles(
-        IList<TrackInfo> tracks,
-        string? previousBookTitle,
-        string? currentBookTitle,
-        bool useLeadingZeros = true)
-    {
-        ArgumentNullException.ThrowIfNull(tracks);
-
-        var previousTitle = (previousBookTitle ?? string.Empty).Trim();
-        var currentTitle = (currentBookTitle ?? string.Empty).Trim();
-        var activeChapterCount = tracks.Count(track => !track.IsExcluded);
-        var changed = 0;
-
-        foreach (var track in tracks)
-        {
-            if (track.IsExcluded)
-                continue;
-
-            if (!_chapterNumberingService.TryGetTitleWithoutNumber(track.ChapterTitle, out var currentSuffix))
-                continue;
-
-            var isGeneratedTitle = string.Equals(currentSuffix, "Kapitel", StringComparison.Ordinal)
-                                   || (!string.IsNullOrWhiteSpace(previousTitle)
-                                       && string.Equals(currentSuffix, previousTitle, StringComparison.Ordinal));
-            if (!isGeneratedTitle)
-                continue;
-
-            var updatedTitle = _chapterNumberingService.BuildTitle(
-                track.Index,
-                activeChapterCount,
-                string.IsNullOrWhiteSpace(currentTitle) ? "Kapitel" : currentTitle,
-                useLeadingZeros);
-            if (string.Equals(track.ChapterTitle, updatedTitle, StringComparison.Ordinal))
-                continue;
-
-            track.ChapterTitle = updatedTitle;
-            changed++;
-        }
-
-        return changed;
-    }
-
-    public string RenumberChapterTitle(
-        string? chapterTitle,
-        int newIndex,
-        int chapterCount,
-        bool useLeadingZeros = true)
-    {
-        return _chapterNumberingService.ReformatLeadingNumber(
-            chapterTitle,
-            newIndex,
-            chapterCount,
-            useLeadingZeros);
-    }
-
     private int CompareTracksForSorting(TrackInfo left, TrackInfo right, string sortKey)
     {
         return sortKey switch
         {
             "Index" => left.Index.CompareTo(right.Index),
+            "AutomaticOrderPosition" => CompareNullableInts(left.AutomaticOrderPosition, right.AutomaticOrderPosition),
             "DiscNumber" => CompareNullableInts(left.DiscNumber, right.DiscNumber),
             "TrackNumber" => CompareNullableInts(left.TrackNumber, right.TrackNumber),
             "FileName" => CompareNatural(left.FileName, right.FileName),
+            "DisplayFolder" => CompareNatural(left.DisplayFolder, right.DisplayFolder),
             "RelativeFolder" => CompareNatural(left.RelativeFolder, right.RelativeFolder),
             "TagTitle" => CompareNatural(left.TagTitle, right.TagTitle),
             "ChapterTitle" => CompareNatural(left.ChapterTitle, right.ChapterTitle),
             "Duration" => CompareDurations(left.Duration, right.Duration),
+            "Channels" => CompareNullableInts(left.Channels, right.Channels),
+            "SampleRateHz" => CompareNullableInts(left.SampleRateHz, right.SampleRateHz),
             "BitrateKbps" => CompareNullableInts(left.BitrateKbps, right.BitrateKbps),
             "ChannelLayout" => CompareNatural(left.ChannelLayout, right.ChannelLayout),
             "Status" => CompareNatural(left.Status, right.Status),
@@ -263,7 +195,6 @@ public sealed class TrackListActionService
             "Codec" => CompareNatural(left.Codec, right.Codec),
             "ProcessingAction" => CompareNatural(left.ProcessingAction, right.ProcessingAction),
             "SizeMb" => left.SizeMb.CompareTo(right.SizeMb),
-            "ConvertedSizeMb" => left.ConvertedSizeMb.CompareTo(right.ConvertedSizeMb),
             _ => CompareNatural(left.FileName, right.FileName)
         };
     }

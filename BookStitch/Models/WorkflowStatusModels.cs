@@ -56,7 +56,8 @@ public sealed record SourceAcquisitionProgress(
     int Percent = 0,
     string? WorkingFormat = null,
     bool CurrentSourceFinished = false,
-    bool AllSourcesFinished = false);
+    bool AllSourcesFinished = false,
+    string? DriveDisplayName = null);
 
 public sealed record ConversionActivityProgress(
     int Completed,

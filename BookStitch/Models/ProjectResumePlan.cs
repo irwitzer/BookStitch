@@ -7,6 +7,8 @@ public sealed class ProjectResumePlan
     public string DisplayName { get; set; } = "";
     public string Status { get; set; } = "";
     public bool CanResume { get; set; }
+    public bool IsMergePaused { get; set; }
+    public bool IsStoppedDiscProject { get; set; }
     public bool CanEditTrackOrder { get; set; }
     public bool CanContinueDiscImport { get; set; }
     public bool HasSuccessfulExport { get; set; }
@@ -34,6 +36,7 @@ public sealed class ProjectResumePlan
 
 public sealed class ProjectResumeTrackItem
 {
+    public Guid SourceId { get; set; }
     public int TrackIndex { get; set; }
     public int? DiscNumber { get; set; }
     public int? TrackNumber { get; set; }

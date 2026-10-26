@@ -22,7 +22,7 @@ public sealed class WindowAttentionService
     {
         var settings = _settingsProvider();
         var profile = FocusSettingsService.NormalizeProfile(settings.FocusProfile);
-        var plan = FocusSettingsService.GetAttentionPlan(profile, notificationEvent);
+        var plan = FocusSettingsService.GetAttentionPlan(profile);
         if (!plan.IsEnabled)
             return;
 

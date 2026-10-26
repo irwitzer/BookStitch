@@ -1,24 +1,5 @@
 namespace BookStitch.Services;
 
-public enum DiscDriveCandidateStatus
-{
-    Accepted,
-    Unavailable,
-    Empty,
-    WrongType,
-    Duplicate,
-    Error
-}
-
-public sealed record DiscDriveCandidateResult(
-    DiscDriveCandidateStatus Status,
-    string DriveRoot,
-    DiscMediaKind MediaKind,
-    string Message = "")
-{
-    public bool IsAccepted => Status == DiscDriveCandidateStatus.Accepted;
-}
-
 public sealed class DiscDriveCandidateProbeService
 {
     private readonly DiscDriveService _discDriveService;
@@ -34,13 +15,13 @@ public sealed class DiscDriveCandidateProbeService
         {
             var drive = _discDriveService.GetDriveInfoForPath(driveRoot);
             if (drive is null)
-                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Unavailable, driveRoot, DiscMediaKind.Unknown, "Laufwerk nicht verbunden.");
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Unavailable, driveRoot, DiscMediaKind.Unknown, LocalizationText.Get("Disc.Probe.Disconnected"));
 
             if (!drive.IsReady || drive.MediaKind == DiscMediaKind.Empty)
-                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Empty, drive.RootPath, drive.MediaKind, "Kein Datenträger eingelegt.");
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Empty, drive.RootPath, drive.MediaKind, LocalizationText.Get("Disc.Probe.Empty"));
 
-            if (drive.MediaKind != expectedKind)
-                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.WrongType, drive.RootPath, drive.MediaKind, "Falscher Datenträgertyp.");
+            if (!CanAnalyzeMediaKind(drive.MediaKind, expectedKind))
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.WrongType, drive.RootPath, drive.MediaKind, LocalizationText.Get("Disc.Probe.WrongType"));
 
             return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Accepted, drive.RootPath, drive.MediaKind);
         }
@@ -50,6 +31,42 @@ public sealed class DiscDriveCandidateProbeService
         }
     }
 
+
+    public async Task<DiscDriveCandidateResult> ProbeTypeAsync(
+        string driveRoot,
+        DiscMediaKind expectedKind,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var drive = await _discDriveService.ProbeDriveAsync(
+                driveRoot,
+                operationName: "candidate.probe",
+                cancellationToken).ConfigureAwait(false);
+            if (drive is null)
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Unavailable, driveRoot, DiscMediaKind.Unknown, LocalizationText.Get("Disc.Probe.Disconnected"));
+
+            if (!drive.IsReady || drive.MediaKind == DiscMediaKind.Empty)
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Empty, drive.RootPath, drive.MediaKind, LocalizationText.Get("Disc.Probe.Empty"));
+
+            if (!CanAnalyzeMediaKind(drive.MediaKind, expectedKind))
+                return new DiscDriveCandidateResult(DiscDriveCandidateStatus.WrongType, drive.RootPath, drive.MediaKind, LocalizationText.Get("Disc.Probe.WrongType"));
+
+            return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Accepted, drive.RootPath, drive.MediaKind);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new DiscDriveCandidateResult(DiscDriveCandidateStatus.Error, driveRoot, DiscMediaKind.Unknown, ex.Message);
+        }
+    }
+
+    internal static bool CanAnalyzeMediaKind(DiscMediaKind actualKind, DiscMediaKind expectedKind) =>
+        actualKind == expectedKind || (expectedKind == DiscMediaKind.Mp3Disc && actualKind == DiscMediaKind.Unknown);
+
     public DiscDriveCandidateResult MarkDuplicate(string driveRoot, DiscMediaKind mediaKind) =>
-        new(DiscDriveCandidateStatus.Duplicate, driveRoot, mediaKind, "Datenträger wurde bereits importiert.");
+        new(DiscDriveCandidateStatus.Duplicate, driveRoot, mediaKind, LocalizationText.Get("Disc.Probe.Duplicate"));
 }

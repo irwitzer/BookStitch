@@ -11,16 +11,8 @@ namespace BookStitch.Services;
 /// <summary>
 /// Reads CD-DA sectors through the Windows CD-ROM interface and streams the
 /// resulting 44.1 kHz, 16-bit stereo PCM directly into FFmpeg. No intermediate
-/// WAV file is created. Version 1 deliberately performs a simple sequential read
-/// and leaves advanced secure-ripping strategies for a later version.
+/// WAV file is created. Sequential sector reads use bounded retries for recoverable errors.
 /// </summary>
-public sealed record AudioDiscRippedTrack(
-    int DiscNumber,
-    int GlobalIndex,
-    int TrackNumber,
-    string FilePath,
-    TimeSpan Duration);
-
 public sealed class AudioDiscRipService
 {
     private readonly AudioDiscSectorReadRetryService _sectorReadRetryService;
@@ -43,7 +35,9 @@ public sealed class AudioDiscRipService
         string ffmpegPath,
         CancellationToken cancellationToken,
         IProgress<AudioDiscRipProgress>? progress = null,
-        Func<AudioDiscRippedTrack, CancellationToken, Task>? trackRipped = null)
+        Func<AudioDiscRippedTrack, CancellationToken, Task>? trackRipped = null,
+        PerformanceExternalProcessContext? performanceContext = null,
+        Action? sectorReadRetried = null, Action<string>? sourceReadStarted = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(disc);
@@ -55,6 +49,9 @@ public sealed class AudioDiscRipService
         if (disc.Tracks.Count == 0)
             return AudioDiscRipResult.Failed("Die Audio-CD enthält keine vorbereiteten Tracks.", 0);
 
+        using var driveOperation = await DiscDriveOperationService.AcquireAsync(
+            disc.SourceDriveRoot, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         ResetLegacyShiftedRipOutputs(manifest);
 
         var drivePath = BuildDevicePath(disc.SourceDriveRoot);
@@ -75,6 +72,14 @@ public sealed class AudioDiscRipService
 
         var completedTracks = 0;
         var started = Stopwatch.StartNew();
+
+        var readStarted = false;
+        void ReportSourceReadStarted()
+        {
+            if (readStarted) return;
+            readStarted = true;
+            sourceReadStarted?.Invoke(disc.SourceDriveRoot);
+        }
 
         foreach (var track in disc.Tracks.OrderBy(item => item.TrackNumber))
         {
@@ -104,6 +109,7 @@ public sealed class AudioDiscRipService
                 track.Status = AudioDiscTrackStatus.Pending;
                 track.CompletedUtc = null;
                 track.OutputSizeBytes = null;
+                track.ContentSha256 = null;
                 track.ErrorMessage = string.Empty;
 
                 await RipTrackAsync(
@@ -119,12 +125,15 @@ public sealed class AudioDiscRipService
                         track.TrackNumber,
                         fraction,
                         started.Elapsed)),
-                    _sectorReadRetryService);
+                    _sectorReadRetryService,
+                    performanceContext,
+                    sectorReadRetried, ReportSourceReadStarted);
 
                 File.Move(partPath, finalPath, overwrite: true);
                 track.Status = AudioDiscTrackStatus.Ripped;
                 track.CompletedUtc = DateTime.UtcNow;
                 track.OutputSizeBytes = new FileInfo(finalPath).Length;
+                track.ContentSha256 = ProjectSourceIntegrityService.ComputeHash(finalPath);
                 track.ErrorMessage = string.Empty;
                 completedTracks++;
 
@@ -142,6 +151,7 @@ public sealed class AudioDiscRipService
                             disc.DiscNumber,
                             track.GlobalIndex,
                             track.TrackNumber,
+                            track.SourceId,
                             finalPath,
                             track.Duration),
                         cancellationToken);
@@ -160,6 +170,7 @@ public sealed class AudioDiscRipService
                 track.Status = AudioDiscTrackStatus.Failed;
                 track.CompletedUtc = null;
                 track.OutputSizeBytes = null;
+                track.ContentSha256 = null;
                 track.ErrorMessage = errorMessage;
                 return AudioDiscRipResult.Failed(errorMessage, completedTracks);
             }
@@ -176,7 +187,9 @@ public sealed class AudioDiscRipService
         string outputPath,
         CancellationToken cancellationToken,
         Action<double> reportFraction,
-        AudioDiscSectorReadRetryService sectorReadRetryService)
+        AudioDiscSectorReadRetryService sectorReadRetryService,
+        PerformanceExternalProcessContext? performanceContext,
+        Action? sectorReadRetried, Action? sourceReadStarted)
     {
         using var process = CreateFfmpegProcess(ffmpegPath, outputPath);
         var stderr = new StringBuilder();
@@ -187,10 +200,12 @@ public sealed class AudioDiscRipService
         };
 
         process.Start();
-        process.BeginErrorReadLine();
+        var performanceScope =
+            performanceContext?.Start("ffmpeg", "audio.rip.flac") ?? default;
 
         try
         {
+            process.BeginErrorReadLine();
             var sectorsRead = 0;
             var lastProgressReport = Stopwatch.StartNew();
             while (sectorsRead < sectorCount)
@@ -202,8 +217,10 @@ public sealed class AudioDiscRipService
                     startSector + sectorsRead,
                     count,
                     (sector, sectors) => ReadSectors(driveHandle, sector, sectors),
-                    cancellationToken);
+                    cancellationToken,
+                    sectorReadRetried);
                 await process.StandardInput.BaseStream.WriteAsync(buffer, cancellationToken);
+                if (sectorsRead == 0) sourceReadStarted?.Invoke();
                 sectorsRead += count;
 
                 if (sectorsRead >= sectorCount || lastProgressReport.Elapsed >= ProgressReportInterval)
@@ -216,6 +233,7 @@ public sealed class AudioDiscRipService
             await process.StandardInput.BaseStream.FlushAsync(cancellationToken);
             process.StandardInput.Close();
             await process.WaitForExitAsync(cancellationToken);
+            performanceScope.Complete(process.ExitCode);
 
             if (process.ExitCode != 0)
             {
@@ -225,8 +243,15 @@ public sealed class AudioDiscRipService
                     : details.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).TakeLast(12).Aggregate((a, b) => a + Environment.NewLine + b));
             }
         }
+        catch (OperationCanceledException)
+        {
+            performanceScope.Cancel();
+            TryKill(process);
+            throw;
+        }
         catch
         {
+            performanceScope.Fail();
             TryKill(process);
             throw;
         }
@@ -257,6 +282,7 @@ public sealed class AudioDiscRipService
             track.Status = AudioDiscTrackStatus.Pending;
             track.CompletedUtc = null;
             track.OutputSizeBytes = null;
+            track.ContentSha256 = null;
             track.ErrorMessage = string.Empty;
         }
 

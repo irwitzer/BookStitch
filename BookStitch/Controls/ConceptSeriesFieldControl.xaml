@@ -1,0 +1,230 @@
+<UserControl x:Class="BookStitch.Controls.ConceptSeriesFieldControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="clr-namespace:BookStitch.Services"
+             xmlns:dialog="clr-namespace:BookStitch.Dialog"
+             xmlns:controls="clr-namespace:BookStitch.Controls"
+             Focusable="False"
+             KeyboardNavigation.TabNavigation="Local">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/BookStitch;component/Themes/ConceptDialogStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="ConceptBooleanToVisibilityConverter"/>
+            <DataTemplate x:Key="ConceptSeriesEntryCandidateTemplate">
+                <Grid MinWidth="260">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding DisplayValue}"
+                               Foreground="{DynamicResource MainTextBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,12,0"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SourceCount, StringFormat={}{0}×}"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,7,0"
+                               Visibility="{Binding ShowSourceCount, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"/>
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding EvidenceLabel}"
+                               Foreground="{DynamicResource MutedTextBrush}"
+                               HorizontalAlignment="Right"/>
+                </Grid>
+            </DataTemplate>
+            <Style x:Key="ConceptSeriesValueBadgeStyle" TargetType="Border">
+                <Setter Property="MinHeight" Value="23"/>
+                <Setter Property="Padding" Value="9,3,4,3"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="7"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsDuplicateHighlighted}" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource DuplicateWarningBackgroundBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsBeingDragged}" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource DragBadgeBackgroundBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource DragBadgeBorderBrush}"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="0,0,0,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="SeriesEditorRowHost" Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="{Binding ColumnGap, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptSeriesFieldControl}}}"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="0"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding SeriesLabel}"
+                                   Margin="0,4,0,0"
+                                   VerticalAlignment="Top"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="{Binding SeriesOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                        <controls:InfoPoint Grid.Column="4"
+                                            VerticalAlignment="Center"
+                                            Title="{DynamicResource InfoSeriesTitle}"
+                                            Body="{DynamicResource InfoSeriesBody}"/>
+                    </Grid>
+                    <Border Grid.Row="1"
+                            Height="27"
+                            Visibility="{Binding IsSeriesEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}"
+                            Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                        <ComboBox x:Name="SeriesNameComboBox"
+                                  TabIndex="0"
+                                  controls:CandidateComboBoxInteraction.IsEnabled="False"
+                                  ItemsSource="{Binding SeriesEntryCandidates}"
+                                  ItemTemplate="{StaticResource ConceptSeriesEntryCandidateTemplate}"
+                                  TextSearch.TextPath="Name"
+                                  Text="{Binding SeriesNameDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="False"
+                                  StaysOpenOnEdit="True"
+                                  PreviewTextInput="SeriesNameComboBox_PreviewTextInput"
+                                  PreviewKeyDown="SeriesNameComboBox_PreviewKeyDown"
+                                  Style="{StaticResource ConceptComboBoxStyle}"
+                                  Padding="6,1"
+                                  AutomationProperties.Name="{services:LocalizedText Key=Metadata.Field.Series}">
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem">
+                                    <EventSetter Event="PreviewMouseLeftButtonUp" Handler="SeriesCandidateItem_PreviewMouseLeftButtonUp"/>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
+                        </ComboBox>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="0"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding SeriesPartLabel}"
+                                   Margin="0,4,0,0"
+                                   VerticalAlignment="Top"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="{Binding SeriesOriginLabel}" Style="{StaticResource ConceptFieldChromeOriginTextStyle}"/>
+                        <controls:InfoPoint Grid.Column="4"
+                                            VerticalAlignment="Center"
+                                            Title="{DynamicResource InfoSeriesPartTitle}"
+                                            Body="{DynamicResource InfoSeriesPartBody}"/>
+                        <ToggleButton Grid.Column="6"
+                                      HorizontalAlignment="Right"
+                                      Style="{StaticResource ConceptOutputChipToggleStyle}"
+                                      IsChecked="{Binding IsSeriesIncluded, Mode=TwoWay}"
+                                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SeriesOutputState}"/>
+                    </Grid>
+                    <Grid Grid.Row="1"
+                          Visibility="{Binding IsSeriesEditorVisible, Converter={StaticResource ConceptBooleanToVisibilityConverter}}">
+                        <Border Height="27" Style="{StaticResource ConceptRoundedInputBorderStyle}">
+                            <TextBox x:Name="SeriesPartTextBox"
+                                     TabIndex="1"
+                                     Text="{Binding SeriesPartDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     PreviewKeyDown="SeriesPartTextBox_PreviewKeyDown"
+                                     VerticalContentAlignment="Center"
+                                     HorizontalContentAlignment="Left"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource MainTextBrush}"
+                                     BorderThickness="0"
+                                     CaretBrush="{DynamicResource MainTextBrush}"
+                                     Padding="6,1"
+                                     AutomationProperties.Name="{services:LocalizedText Key=Metadata.Field.SeriesPart}"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+        </Grid>
+
+        <ItemsControl x:Name="SeriesValuesControl"
+                      Grid.Row="1"
+                      ItemsSource="{Binding SeriesValues}"
+                      Width="{Binding ActualWidth, ElementName=SeriesEditorRowHost}"
+                      HorizontalAlignment="Left"
+                      AllowDrop="True"
+                      DragOver="SeriesValues_DragOver"
+                      Drop="SeriesValues_Drop"
+                      AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectedSeries}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Style>
+                <Style TargetType="ItemsControl">
+                    <Setter Property="Margin" Value="0,8,0,0"/>
+                    <Style.Triggers>
+                        <Trigger Property="HasItems" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+                        <DataTrigger Binding="{Binding IsSeriesIncluded}" Value="False">
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="Opacity" Value="0.62"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ItemsControl.Style>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type dialog:ConceptSeriesEntryValue}">
+                    <Border Margin="0,0,6,6"
+                            HorizontalAlignment="Left"
+                            Cursor="Hand"
+                            PreviewMouseLeftButtonDown="SeriesValueBadge_PreviewMouseLeftButtonDown"
+                            PreviewMouseMove="SeriesValueBadge_PreviewMouseMove"
+                            Style="{StaticResource ConceptSeriesValueBadgeStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}"
+                                       Style="{StaticResource ConceptValueBadgeTextStyle}"
+                                       VerticalAlignment="Center"/>
+                            <Border Style="{DynamicResource ConceptSeriesPartBadgeStyle}"
+                                    Visibility="{Binding HasPart, Converter={StaticResource ConceptBooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding Part}"
+                                           Foreground="#FFFFFFFF"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <Button Click="RemoveSeriesValue_Click"
+                                    AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.RemoveSeriesEntry}"
+                                    Style="{StaticResource ConceptAuthorBadgeRemoveButtonStyle}"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>

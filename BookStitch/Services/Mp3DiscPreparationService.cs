@@ -24,6 +24,7 @@ public sealed class Mp3DiscPreparationService
 
         var trackSnapshot = tracks.ToList();
         var result = new List<Mp3DiscPresetPreparationItem>();
+        var targets = ConvertedTrackPathService.GetConvertedTrackPaths(convertedFolder, projectFolder, trackSnapshot);
 
         for (var index = 0; index < trackSnapshot.Count; index++)
         {
@@ -32,7 +33,7 @@ public sealed class Mp3DiscPreparationService
             if (!File.Exists(sourcePath))
                 continue;
 
-            var convertedPath = ConvertedTrackPathService.GetConvertedTrackPath(convertedFolder, sourcePath, track);
+            var convertedPath = targets[index];
             if (canReusePreparedTrack(sourcePath, convertedPath))
                 continue;
 
@@ -50,13 +51,14 @@ public sealed class Mp3DiscPreparationService
         return new TrackInfo
         {
             Index = copiedFile.CopiedFiles,
+            SourceId = copiedFile.SourceIdentity?.SourceId ?? Guid.Empty,
             DiscNumber = copiedFile.DiscNumber,
             TrackNumber = copiedFile.CopiedFiles,
             FilePath = copiedFile.ImportedFile,
             FileName = importedFileName,
             Extension = extension,
             Codec = extension.Equals("mp3", StringComparison.OrdinalIgnoreCase) ? "MP3" : "",
-            ProcessingAction = "Konvertieren"
+            ProcessingAction = ProcessingActionIds.Convert
         };
     }
 }

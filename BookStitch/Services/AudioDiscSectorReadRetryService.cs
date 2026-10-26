@@ -55,7 +55,8 @@ public sealed class AudioDiscSectorReadRetryService
         int startSector,
         int sectorCount,
         Func<int, int, byte[]> readSectors,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? onRetry = null)
     {
         if (startSector < 0)
             throw new ArgumentOutOfRangeException(nameof(startSector));
@@ -79,6 +80,15 @@ public sealed class AudioDiscSectorReadRetryService
                 lastError = ex;
                 if (attempt >= maximumAttempts)
                     break;
+
+                try
+                {
+                    onRetry?.Invoke();
+                }
+                catch
+                {
+                    // Diagnostic retry observation must never alter the read workflow.
+                }
 
                 await Task.Delay(_retryDelays[attempt - 1], cancellationToken);
             }
