@@ -810,7 +810,7 @@ main{background:transparent !important;}
   background-color: #041419 !important;
   background-image: url('../assets/library-center-v38-double.webp') !important;
   background-position: center top !important;
-  background-repeat: no-repeat !important;
+  background-repeat: repeat-y !important;
   background-size: max(100%, 1800px) auto !important;
   pointer-events: none !important;
 }
