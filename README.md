@@ -1,49 +1,50 @@
 # BookStitch
 
-**Turn audio tracks and CDs into a complete audiobook.**
+**Turn audio tracks and CDs into complete audiobooks.**
 
-BookStitch is an open-source Windows desktop application built with C# and WPF. Organize tracks, edit chapters and metadata, add cover art, and export an AAC-based **M4A or M4B** audiobook in one project workflow.
+BookStitch is an open-source Windows desktop application built with C# and WPF. It brings audio import, track ordering, chapter editing, metadata, cover art and AAC export together in one project workflow. Create M4A or M4B audiobooks without modifying your original audio files.
 
-Source audio is read without renaming or overwriting it. Processing takes place locally in separate project and output files.
-
-[Download releases](https://github.com/irwitzer/BookStitch/releases) · [Microsoft Store](https://apps.microsoft.com/detail/9P9MH8WL8KGP) · [Report a bug](https://github.com/irwitzer/BookStitch/issues)
+[Download BookStitch](https://github.com/irwitzer/BookStitch/releases) · [Microsoft Store](https://apps.microsoft.com/detail/9P9MH8WL8KGP) · [Report an issue](https://github.com/irwitzer/BookStitch/issues)
 
 ## Features
 
-- **Import:** local audio files, MP3/data CDs and audio CDs, including multi-disc projects.
-- **Review:** order or exclude tracks and inspect duplicate, gap and chapter warnings.
-- **Chapters:** preserve existing markers or generate and edit chapters from file names and tags.
-- **Metadata:** edit title, author, narrator, genre, other supported fields and JPEG/PNG/WebP cover art.
-- **Export:** prepare audio with FFmpeg/FFprobe and produce a chaptered, tagged M4A or M4B file.
-- **Projects:** save work and resume supported workflows; configure sounds and window-focus notifications.
-- **Languages:** 21 UI language variants, with an optional localized genre catalogue.
+- **Import local audio and CDs:** M4A, M4B, MP3, WAV, FLAC, OGG, AIFF and legacy WMA (depending on FFmpeg support); MP3/data CDs and audio CDs, including multi-disc sets.
+- **Manage tracks:** automatic ordering, manual reorder, exclusion and restoration, plus warnings for missing or duplicated track numbers.
+- **Create chapters:** detect existing embedded chapters, generate chapter suggestions from names and tags, edit titles and review chapter timelines. New exports write QuickTime chapters.
+- **Edit rich metadata:** draft and confirm values, inspect source-derived suggestions, and manage supported multi-value fields such as authors, narrators, genres and series. A localized 74-genre catalogue is available.
+- **Improve player compatibility:** configurable metadata output, including Narrator-to-Composer and Title-to-Album mappings and compatible descriptive information.
+- **Manage cover art:** import JPEG, PNG and WebP artwork, preview it and embed it into the finished audiobook.
+- **Prepare and export:** select AAC mono/stereo presets up to 256 kbps, reuse qualifying AAC without unnecessary transcoding, review before merge or enable Auto Merge, and export M4A or M4B.
+- **Resume projects:** pause or continue supported workflows, reopen projects, add sources, reconvert and export again with protected project state.
+- **Drive Circle:** coordinate up to five optical drives in configurable order with automatic disc changeover for multi-disc projects. Drive Circle is a standard BookStitch feature.
+- **Use your language:** 21 supported UI language variants, including Bernese Swiss German.
 
-**Drive Circle** can coordinate up to five optical drives for CD projects. It remains experimental and depends on the drives and discs used.
+## Installation
 
-## Install and use
+Download a Windows package from [GitHub Releases](https://github.com/irwitzer/BookStitch/releases) or install from the [Microsoft Store](https://apps.microsoft.com/detail/9P9MH8WL8KGP). For portable packages, extract the complete archive and launch `BookStitch.exe` from the extracted directory.
 
-Choose a Windows package from [GitHub Releases](https://github.com/irwitzer/BookStitch/releases) or the [Microsoft Store](https://apps.microsoft.com/detail/9P9MH8WL8KGP). For the portable ZIP, extract **all** files and run `BookStitch.exe` from that folder.
-
-To install the Store listing with WinGet:
+Install the Store listing through WinGet:
 
 ```powershell
 winget install 9P9MH8WL8KGP --source msstore
 ```
 
-**FFmpeg and FFprobe are required** for audio analysis and export but are not bundled with BookStitch. Configure an existing installation or start their setup from the application. An optical drive is needed only for CD import; packaged releases do not require the .NET SDK.
+**FFmpeg and FFprobe are required** for audio analysis and export but are not bundled with BookStitch. Configure an existing installation or start their setup from inside the application. Packaged Windows builds do not require you to install the .NET SDK; an optical drive is only needed for CD import.
 
-1. Choose an audio folder or CD source, output folder and export preset.
-2. Review track order, warnings, metadata, cover and chapters.
-3. Prepare the project. Turn off **Auto Merge** to review prepared tracks before merging, or keep it enabled for automatic continuation.
-4. Check the resulting audiobook in your preferred player.
+## Quick start
 
-## Privacy and network access
+1. Add an audio folder, local audio files or a CD project.
+2. Review track order, exclusions, chapter proposals, metadata and cover art.
+3. Choose an output folder and AAC preset. Use **Auto Merge** to finish automatically or disable it to review the prepared tracks before merging.
+4. Open the resulting M4A or M4B audiobook in your preferred player.
 
-Audiobook processing, project files and source media stay on your computer; BookStitch does not upload your audio library or provide usage telemetry. Optional online operations are separate: MusicBrainz audio-CD metadata lookup sends disc-identification information, importing a cover from a URL retrieves that image, and downloading FFmpeg or opening external links requires a network connection. These actions are not needed for ordinary local audio processing.
+## Privacy
 
-## Build and test
+BookStitch processes audio locally and does not upload your audio library or require an account. Source audio is read without being renamed or overwritten. Optional activities such as obtaining FFmpeg, fetching a cover by URL or opening external resources require a network connection.
 
-Building requires **Windows and the .NET 10 SDK**. Visual Studio with the .NET desktop development workload is optional. From the repository root:
+## Build from source
+
+Building requires Windows and the **.NET 10 SDK**. Visual Studio with the .NET desktop development workload is optional. From the repository root:
 
 ```powershell
 dotnet build ./BookStitch/BookStitch.csproj -c Release
@@ -51,22 +52,25 @@ dotnet run --project ./BookStitch/BookStitch.csproj -c Release --no-build
 dotnet test ./BookStitch.Tests/BookStitch.Tests.csproj -c Release
 ```
 
-Some media, hardware and large-project tests require external tools, fixtures or explicit opt-in. Follow the test guidance in the repository and report what was actually run.
-
-For a self-contained Windows x64 publish:
+To publish a self-contained Windows x64 distribution:
 
 ```powershell
 dotnet publish ./BookStitch/BookStitch.csproj -c Release -p:PublishProfile=EndUser -o ./artifacts/BookStitch
 ```
 
-Distribute the **complete** published directory, including runtime dependencies. See [Build and packaging notes](docs-public/release-build-notes.md).
+Distribute the full published directory and its dependencies. See [build and packaging notes](docs-public/release-build-notes.md).
 
-## Contributing
+## Documentation
 
-Focused bug reports, fixes, documentation changes and translations are welcome via [GitHub Issues](https://github.com/irwitzer/BookStitch/issues) and pull requests. Discuss substantial changes first. For bug reports, include the application and Windows versions, steps to reproduce, expected and actual results; remove personal paths or other sensitive data from logs.
+- [Changelog (English)](Changelog-EN.md)
+- [Localization guide](docs-public/localization-guide.md) · [Localization rules](BookStitch/Resources/LOCALIZATION_RULES.md)
 
-Localization uses a single [Language Master](BookStitch/Resources/BookStitch.LanguageMaster.json), not manually edited RESX files. Read the [localization guide](docs-public/localization-guide.md) and [localization rules](BookStitch/Resources/LOCALIZATION_RULES.md) before proposing translations.
+## Contributing and support
+
+Report bugs and suggest improvements through [GitHub Issues](https://github.com/irwitzer/BookStitch/issues). Include the BookStitch version, Windows version, steps to reproduce, expected and actual behavior. Remove personal information from logs before sharing them.
+
+Translations are maintained in the [Language Master](BookStitch/Resources/BookStitch.LanguageMaster.json); generated RESX files should not be edited directly.
 
 ## License
 
-BookStitch is licensed under [GNU GPL v3.0 only](LICENSE) (`GPL-3.0-only`). Third-party dependencies and assets are subject to their respective terms; see [Third-Party Notices](THIRD_PARTY_NOTICES.md).
+BookStitch is licensed under [GNU GPL v3.0 only](LICENSE) (`GPL-3.0-only`). Third-party dependencies and assets have separate license terms; see [Third-Party Notices](THIRD_PARTY_NOTICES.md).

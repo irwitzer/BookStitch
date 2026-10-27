@@ -1,6 +1,6 @@
 # Build and packaging
 
-BookStitch is a Windows WPF application targeting **.NET 10**. Use a Windows machine with the .NET 10 SDK to build and test the application. Run commands from the repository root.
+BookStitch is a Windows WPF application targeting **.NET 10**. Build and test it on Windows with the .NET 10 SDK. Run the manual commands below from the repository root.
 
 ## Build and test
 
@@ -9,28 +9,42 @@ dotnet build ./BookStitch/BookStitch.csproj -c Release
 dotnet test ./BookStitch.Tests/BookStitch.Tests.csproj -c Release
 ```
 
-Some tests require Windows/WPF, optical drives, external tools, or test media. Consult test requirements before running broader suites; do not report a successful full-suite run unless it actually completed. All application tests are maintained in the Windows test project shown above.
+Some tests require Windows/WPF, optical drives, external tools, or test media. Consult their requirements before running broader suites. All application tests are maintained in the Windows test project shown above. Report only tests that actually ran.
 
-## Portable Windows x64 package
+## Windows release builder (recommended)
 
-BookStitch's `EndUser` publish profile specifies a **self-contained, non-trimmed `win-x64`** deployment, with separate runtime files and no debug symbols:
+The public repository includes a classic Windows release builder at [`dev-support-public/BookStitchReleaseBuilder/`](../dev-support-public/BookStitchReleaseBuilder/). It produces these artifacts from a local repository checkout:
+
+- A complete self-contained **Windows x64 portable folder** and its **ZIP**.
+- A classic **Inno Setup 7 installer EXE**.
+- A **SHA-256 checksums** file for the ZIP and installer.
+
+Start the builder with its BAT launcher. It uses PowerShell 7 when available, otherwise Windows PowerShell 5.1. It checks for Inno Setup 7 and can offer installation through WinGet with user consent. The **.NET 10 SDK** is also required. The builder selects the `.iss` script, repository and output paths, supports custom release labels and filenames, and can reuse locally saved settings.
+
+See the **README in the builder folder** for the interactive workflow, file selection, settings, and output naming. The builder does not publish to GitHub or modify the repository source. Do not commit its local `builder-settings.json` or generated release files.
+
+## Manual portable Windows x64 package
+
+The `EndUser` publish profile specifies a **self-contained, non-trimmed `win-x64`** deployment with separate runtime files and no debug symbols:
 
 ```powershell
 dotnet publish ./BookStitch/BookStitch.csproj -c Release -p:PublishProfile=EndUser -o ./artifacts/BookStitch
 ```
 
-Use a **fresh, empty publish destination**. The publish output, not `bin/` build output, is the basis for distributable packages. Package the **entire** directory, not just `BookStitch.exe`. In particular, check for `TagLibSharp.dll`, the `.runtimeconfig.json` file, and .NET/Windows Desktop runtime files. Do not remove libraries or runtime files to reduce ZIP size. Verify the ZIP starts and operates on a clean compatible Windows system without a separately installed .NET runtime.
+Use a **fresh, empty publish destination**. The publish output, not ordinary `bin/` build output, is the basis for both distributable formats. Package the **entire** directory, not just `BookStitch.exe`. In particular, verify `TagLibSharp.dll`, `BookStitch.runtimeconfig.json`, and the .NET/Windows Desktop runtime files. Do not remove dependencies to reduce package size. Check portable startup on a compatible clean Windows machine without a separately installed .NET runtime.
 
-The product version is specified in `BookStitch/BookStitch.csproj`; package filenames and release descriptions must match the built version. Publish only release artifacts that have been tested.
+The product version comes from `BookStitch/BookStitch.csproj`; release filenames and descriptions must match that version. A filename suffix such as `RC1` does not by itself change the version embedded in the executable.
 
 ## External audio tools
 
-BookStitch uses **FFmpeg** and **FFprobe** for audio processing. These executables are not bundled in the application source or standard publish payload; users can configure an existing installation or use the application's setup flow. If a distributor bundles FFmpeg, they must review and meet the license obligations of the **specific build distributed**. See [Third-Party Notices](../THIRD_PARTY_NOTICES.md).
+BookStitch uses **FFmpeg** and **FFprobe** for audio processing. They are not bundled in the standard publish payload. Users may configure an existing installation or use the application's setup flow. Distributors who bundle FFmpeg must comply with the license obligations of the **specific build** distributed. See [Third-Party Notices](../THIRD_PARTY_NOTICES.md).
 
-## Installer, Store and WinGet
+## Installer, Store, and WinGet
 
-Installer and Microsoft Store packages are separate delivery formats. Build each from an equivalent **verified** application payload and test installation, uninstallation, and startup on the target system. Installer scripts and signing infrastructure are not included in this repository unless explicitly published.
+The classic Windows installer uses **Inno Setup 7** and the `.iss` script shipped with the builder. The portable ZIP and installer should be generated from the same verified publish payload. **Microsoft Store packaging is a separate MSIX workflow**, not part of this builder. Code-signing certificates and private signing infrastructure are not included in the repository.
 
-For a WinGet manifest, verify that the published installer URL and SHA-256 match the **exact release asset**; installer technology, scope, and unattended command-line switches must match the actual installer. Do not publish untested silent-install switches.
+Before publishing, verify installation, upgrade, uninstall, portable startup, version information, and that the installer preserves user projects unless deletion is explicitly confirmed. Review dependency/security advisories, including any NuGet warnings; successful compilation alone is not release approval.
 
-Generated ZIPs, MSIX/AppxUpload files, signatures, local build caches, and machine-specific build output are not source files and should not be committed.
+For a WinGet manifest, verify that the published installer URL and SHA-256 match the **exact release asset**; installation scope, installer technology, and unattended command-line switches must match the tested installer. Do not publish untested silent-install switches.
+
+Generated ZIPs, installer EXEs, MSIX/AppxUpload files, signatures, local caches, and machine-specific build outputs are not source files and should not be committed.
