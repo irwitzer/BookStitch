@@ -10079,4 +10079,8 @@ Meaning: Startet die ausgewaehlte Vorschau erneut bei null; haelt am Ende 100 Pr
     <value>Änderungen sind nur eine Vorschau. „Verstecken“ stellt die gespeicherte Darstellung wieder her. Themenfremde Bilder bleiben auswählbar.</value>
     <comment>Context: Developer Tools &gt; Bilder; temporäre, nicht gespeicherte Darstellungsvorschau. Meaning: Bildrolle, Themenzuordnung oder Vorschauhinweis; ausgegraute Bilder bleiben auswählbar.</comment>
   </data>
+  <data name="MainWindow.Ffmpeg.InstallRequired" xml:space="preserve">
+    <value>Bitte installiere zuerst FFmpeg über den Button oben rechts.</value>
+    <comment>Context: Hauptfenster, Statuszeile beim Start ohne FFmpeg. Meaning: Vor dem Öffnen oder Starten eines Projekts FFmpeg über den sichtbaren Installationsbutton oben rechts installieren. Keine automatische Installation und keine bereits laufende Installation. Placeholders: keine. FixedTerm: FFmpeg unverändert lassen. Length: moderate.</comment>
+  </data>
 </root>

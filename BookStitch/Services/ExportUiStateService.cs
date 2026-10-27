@@ -115,8 +115,8 @@ public sealed class ExportUiStateService
             CanChangeExportPreset: canInteract,
             CanOpenSettings: canInteract || canConfigureResumePreview,
             CanChangeBookMetadata: canInteract || canConfigureResumePreview,
-            CanRefreshResumeProjects: !input.IsBusy && isRestingProject,
-            CanInspectSelectedResumeProject: !input.IsBusy && isRestingProject && input.HasSelectedResumeProject,
+            CanRefreshResumeProjects: input.FfmpegAvailable && !input.IsBusy && isRestingProject,
+            CanInspectSelectedResumeProject: input.FfmpegAvailable && !input.IsBusy && isRestingProject && input.HasSelectedResumeProject,
             ExportProgressVisibility: isActivelyProcessing || input.ExportProgressPercent > 0
                 ? Visibility.Visible
                 : Visibility.Collapsed);

@@ -47,7 +47,7 @@ public sealed class CoverInteractionBoundaryTests
 
         Assert.Contains("_coverPickerService.ChooseCoverFile(", mainWindow, StringComparison.Ordinal);
         Assert.Contains("_coverPickerService.ChooseCoverFile(", projectSetup, StringComparison.Ordinal);
-        Assert.Contains("coverOwner => ChooseCover(coverOwner)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("coverOwner => ChooseCover(coverOwner, CanEditCover)", mainWindow, StringComparison.Ordinal);
         Assert.Contains("coverPickerService: _coverPickerService", mainWindow, StringComparison.Ordinal);
     }
 
@@ -118,7 +118,7 @@ public sealed class CoverInteractionBoundaryTests
         var mainWindow = LoadText("BookStitch", "MainWindow.xaml.cs");
         var projectSetup = LoadText("BookStitch", "Dialog", "DiscProjectSetupDialog.xaml.cs");
 
-        Assert.Contains("if (!CanChangeBookMetadata || _isCoverDialogOpen)", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("if (!(CanChangeBookMetadata || canEditCover?.Invoke() == true) || _isCoverDialogOpen)", mainWindow, StringComparison.Ordinal);
         Assert.Contains("_isCoverDialogOpen = true;", mainWindow, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ApplicationIdle", mainWindow, StringComparison.Ordinal);
         Assert.Contains("new Action(() => _isCoverDialogOpen = false)", mainWindow, StringComparison.Ordinal);
@@ -148,7 +148,7 @@ public sealed class CoverInteractionBoundaryTests
             SourceContract.ExtractMember(mainWindow, "public string BookTitle"),
             StringComparison.Ordinal);
 
-        var setupProcessing = SourceContract.ExtractMember(setup, "private async Task ProcessSelectedCover(string sourcePath)");
+        var setupProcessing = SourceContract.ExtractMember(setup, "private async Task ImportCoverAsync(string? sourcePath, IDataObject? data)");
         Assert.Contains("_metadataState.BookTitle.Trim()", setupProcessing, StringComparison.Ordinal);
 
         var setupAlignment = SourceContract.ExtractMember(setup, "private void AlignManagedCoverWithCommittedTitle()");
@@ -159,6 +159,23 @@ public sealed class CoverInteractionBoundaryTests
             "AlignManagedCoverWithCommittedTitle();",
             SourceContract.ExtractMember(setup, "private bool CaptureResult(bool validateForStart)"),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Preparation_cover_uses_shared_import_owner_and_handles_drop()
+    {
+        var document = LoadXaml("BookStitch", "Dialog", "DiscProjectSetupDialog.xaml");
+        var cover = SingleElement(document, "Border", "x:Name", "CoverBorder");
+        Assert.Equal("True", Attr(cover, "AllowDrop"));
+        Assert.Equal("Cover_DragOver", Attr(cover, "DragOver"));
+        Assert.Equal("Cover_Drop", Attr(cover, "Drop"));
+        var main = LoadText("BookStitch", "MainWindow.xaml.cs");
+        Assert.Contains("importCover: (path, data, owner) => ImportCoverAsync(path, data, owner, () => owner.IsVisible)", main);
+        Assert.Contains("cancelCoverImport: CancelCoverImport", main);
+        Assert.Contains("dropCover: (data, coverOwner) => ImportCoverAsync(null, data, coverOwner, CanEditCover)", main);
+        var setup = LoadText("BookStitch", "Dialog", "DiscProjectSetupDialog.xaml.cs");
+        Assert.Contains("CancelCoverImport();", SourceContract.ExtractMember(setup, "private void DiscProjectSetupDialog_Closed"));
+        Assert.Contains("CancelCoverImport();", SourceContract.ExtractMember(setup, "private void RemoveCover_Click"));
     }
 
     private static XDocument LoadXaml(params string[] relativePath) =>

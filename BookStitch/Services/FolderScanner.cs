@@ -61,12 +61,22 @@ public sealed class FolderScanner
         }
         cancellationToken.ThrowIfCancellationRequested();
 
-        _automaticOrderApplicationService.CalculateAndApply(files, TrackOrderProjectType.LocalFolder);
-        files = files
-            .OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
-            .ThenBy(track => track.RelativeFolder, _naturalComparer)
-            .ThenBy(track => track.FileName, _naturalComparer)
-            .ToList();
+        if (trackNumberPreference == TrackNumberPreference.FileName)
+        {
+            // Disc imports explicitly select filename order. Original tags remain
+            // evidence, but must not silently override that import decision.
+            files = files.OrderBy(track => track.RelativeFolder, _naturalComparer)
+                .ThenBy(track => track.FileName, _naturalComparer).ToList();
+            for (var i = 0; i < files.Count; i++)
+                files[i].AutomaticOrderPosition = i + 1;
+        }
+        else
+        {
+            _automaticOrderApplicationService.CalculateAndApply(files, TrackOrderProjectType.LocalFolder);
+            files = files.OrderBy(track => track.AutomaticOrderPosition ?? int.MaxValue)
+                .ThenBy(track => track.RelativeFolder, _naturalComparer)
+                .ThenBy(track => track.FileName, _naturalComparer).ToList();
+        }
 
         for (var i = 0; i < files.Count; i++)
             files[i].Index = i + 1;
@@ -170,36 +180,8 @@ public sealed class FolderScanner
             track.SetWarning(string.Join("; ", warnings.Distinct(StringComparer.OrdinalIgnoreCase)), codes);
         }
 
-        ApplyMissingTagTitleWarnings(tracks);
-
         AddDuplicateTrackNumberWarnings(tracks);
         AddMissingTrackNumberWarnings(tracks);
-    }
-
-    internal static void ApplyMissingTagTitleWarnings(IReadOnlyList<TrackInfo> tracks)
-    {
-        var warningText = TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle);
-
-        foreach (var group in tracks.GroupBy(track => track.DiscNumber))
-        {
-            var warnMissingTitles = group.Any(track => !string.IsNullOrWhiteSpace(track.TagTitle));
-            foreach (var track in group)
-            {
-                var warnings = track.Warning
-                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(warning => !string.Equals(warning, warningText, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                var codes = track.WarningCodes & ~TrackWarningCodes.MissingTagTitle;
-
-                if (warnMissingTitles && string.IsNullOrWhiteSpace(track.TagTitle))
-                {
-                    warnings.Add(warningText);
-                    codes |= TrackWarningCodes.MissingTagTitle;
-                }
-
-                track.SetWarning(string.Join("; ", warnings.Distinct(StringComparer.OrdinalIgnoreCase)), codes);
-            }
-        }
     }
 
     private static void AddDuplicateTrackNumberWarnings(List<TrackInfo> tracks)

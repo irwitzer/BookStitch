@@ -70,6 +70,9 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
     private string _lastAcceptedPreset = "";
     private string _outputFolder = "";
     private readonly CoverImageService _coverImageService;
+    private readonly Func<string?, IDataObject?, Window, Task>? _importCover;
+    private readonly Action? _cancelCoverImport;
+    private CancellationTokenSource? _coverImportCancellation;
     private readonly CoverPickerService _coverPickerService;
     private readonly string _coverWorkFolder;
     private string _selectedCoverSourcePath = "";
@@ -135,13 +138,18 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         Func<bool>? shouldWarnDiscCount = null,
         Action<bool>? setAlwaysWarnDiscCount = null,
         Action<int>? setCoverWarningThresholdPixels = null,
-        GlobalSettingsManager? settingsManager = null)
+        GlobalSettingsManager? settingsManager = null,
+        CoverImageService? coverImageService = null,
+        Func<string?, IDataObject?, Window, Task>? importCover = null,
+        Action? cancelCoverImport = null)
     {
         InitializeComponent();
 
         _request = request;
         _settingsManager=settingsManager;
-        _coverImageService = new CoverImageService(() => _settingsManager?.Current.CoverTransparencyMode);
+        _coverImageService = coverImageService ?? new CoverImageService(() => _settingsManager?.Current.CoverTransparencyMode);
+        _importCover = importCover;
+        _cancelCoverImport = cancelCoverImport;
         _setCoverWarningThresholdPixels = setCoverWarningThresholdPixels ?? (_ => { });
         _shouldWarnDiscCount = shouldWarnDiscCount ?? (() => true);
         _setAlwaysWarnDiscCount = setAlwaysWarnDiscCount;
@@ -981,6 +989,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
 
     private void DiscProjectSetupDialog_Closed(object? sender, EventArgs e)
     {
+        CancelCoverImport();
         WeakEventManager<DeveloperAppearancePreview, EventArgs>.RemoveHandler(DeveloperToolsCommands.AppearancePreview,
             nameof(DeveloperAppearancePreview.Changed), PreviewAppearanceChanged);
         if (_settingsManager is not null)
@@ -1025,7 +1034,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
                 LocalizationText.Get("Disc.Setup.CoverFailed.Message"), new[] { ex.Message });
             return;
         }
-        ++_coverSelectionGeneration;
+        CancelCoverImport();
         _selectedCoverSourcePath = "";
         _processedCoverPath = "";
         _metadataState.ApplyCoverMetadata("", "", MetadataOrigin.User);
@@ -1072,17 +1081,49 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
 
     private long _coverSelectionGeneration;
 
-    private async Task ProcessSelectedCover(string sourcePath)
+    private Task ProcessSelectedCover(string sourcePath) => ImportCoverAsync(sourcePath, null);
+
+    private void Cover_DragOver(object sender, DragEventArgs e)
     {
-        var generation = ++_coverSelectionGeneration;
+        e.Effects = _coverImageService.CanReadDrop(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void Cover_Drop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (_coverImageService.CanReadDrop(e.Data))
+            await ImportCoverAsync(null, e.Data);
+    }
+
+    private void CancelCoverImport()
+    {
+        ++_coverSelectionGeneration;
+        _coverImportCancellation?.Cancel();
+        _cancelCoverImport?.Invoke();
+    }
+
+    private async Task ImportCoverAsync(string? sourcePath, IDataObject? data)
+    {
+        if (_importCover is not null)
+        {
+            await _importCover(sourcePath, data, this);
+            return;
+        }
+        CancelCoverImport();
+        using var cancellation = new CancellationTokenSource();
+        _coverImportCancellation = cancellation;
+        var generation = _coverSelectionGeneration;
+        var metadata = _metadataState.CanonicalMetadata;
         try
         {
-            var result = await _coverImageService.CreateProcessedCoverAsync(
-                sourcePath,
-                _coverWorkFolder,
-                _metadataState.BookTitle.Trim(),
-                _getCoverWarningThresholdPixels());
-            if (!IsVisible || generation != _coverSelectionGeneration) return;
+            var result = data is not null
+                ? await _coverImageService.CreateDroppedCoverAsync(data, _coverWorkFolder,
+                    _metadataState.BookTitle.Trim(), _getCoverWarningThresholdPixels(), cancellation.Token)
+                : await _coverImageService.CreateProcessedCoverAsync(sourcePath!, _coverWorkFolder,
+                    _metadataState.BookTitle.Trim(), _getCoverWarningThresholdPixels(), cancellation.Token);
+            if (!IsVisible || cancellation.IsCancellationRequested || generation != _coverSelectionGeneration ||
+                !ReferenceEquals(metadata, _metadataState.CanonicalMetadata)) return;
             EmbeddedCoverService.RecordUserSelection(_metadataState.CanonicalMetadata, result.SourcePath);
             _selectedCoverSourcePath = result.SourcePath;
             _processedCoverPath = result.ProcessedJpegPath;
@@ -1099,13 +1140,19 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
                     _setCoverWarningThresholdPixels);
             }
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            AppDialogService.Error(
+            if (IsVisible && generation == _coverSelectionGeneration)
+                AppDialogService.Error(
                 this,
                 LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
                 LocalizationText.Get("Disc.Setup.CoverFailed.Message"),
                 new[] { ex.Message });
+        }
+        finally
+        {
+            if (ReferenceEquals(_coverImportCancellation, cancellation)) _coverImportCancellation = null;
         }
     }
 

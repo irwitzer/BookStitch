@@ -6,6 +6,23 @@ namespace BookStitch.Tests.Ui;
 public sealed class MainWindowLifecycleWiringTests
 {
     [Fact]
+    public void Mp3_session_pause_keeps_rows_after_drain_before_any_stop_save_or_extension_rollback()
+    {
+        var import = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> ImportMp3DiscProjectAsync");
+        var cancellation = SourceContract.ExtractMember(import, "async Task<bool> HandleImportCancellationAsync");
+        SourceContract.AssertInOrder(cancellation, "await preparedLifecycle.DrainAsync();",
+            "if (_presentationState.PauseRequested)", "EnterPipelinePause(", "return true;",
+            "if (extensionSnapshot is null)", "CancelMp3DiscImportAndShowResumeDialogAsync(",
+            "ProjectExtensionRollbackService.Rollback(");
+        var pause = SourceContract.ExtractBetween(cancellation,
+            "if (_presentationState.PauseRequested)", "if (extensionSnapshot is null)");
+        Assert.DoesNotContain("Tracks.ReplaceAll", pause);
+        Assert.DoesNotContain("BuildFromProjectFolder", pause);
+        SourceContract.AssertInOrder(import, "CreatePreviewTracksFromKnownFiles(", "AppendDiscPreviewTracks(",
+            "projectFolder, sourceFolder, totalDiscs, publishStatus: false", "UpdateIndexes();");
+    }
+
+    [Fact]
     public void Loaded_preset_advisory_runs_once_after_successful_analysis_and_reuses_the_existing_choices()
     {
         var folder = SourceContract.ExtractMember(MainWindowSource, "private async Task LoadFolderAsync(");

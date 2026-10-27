@@ -7,6 +7,13 @@ public sealed record FfmpegSettingsApplicationDecision(
 
 public static class FfmpegSettingsApplicationService
 {
+    public static string ResolveStatusText(string statusText, bool ffmpegAvailable, string readyStatus)
+    {
+        return !ffmpegAvailable && (string.IsNullOrWhiteSpace(statusText) || statusText == readyStatus)
+            ? LocalizationText.Get("MainWindow.Ffmpeg.InstallRequired")
+            : statusText;
+    }
+
     public static FfmpegSettingsApplicationDecision Create(
         string? currentFfmpegPath,
         string? detectedFfmpegPath,
@@ -27,6 +34,7 @@ public static class FfmpegSettingsApplicationService
         return new FfmpegSettingsApplicationDecision(
             ffmpegPath,
             ffprobePath,
+            statusText == LocalizationText.Get("MainWindow.Ffmpeg.InstallStarted") ||
             statusText?.StartsWith(
                 "FFmpeg ",
                 StringComparison.OrdinalIgnoreCase) == true);

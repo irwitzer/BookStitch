@@ -9,6 +9,79 @@ namespace BookStitch.Tests.Services;
 public sealed class FolderScannerTests
 {
     [Fact]
+    public void Two_disc_preview_keeps_the_complete_chapter_number_family_with_a_bad_source_tag()
+    {
+        using var folder = new TemporaryFolder();
+        var metadata = new Dictionary<string, OriginalTagMetadata>();
+        for (var number = 1; number <= 338; number++)
+        {
+            var disc = number <= 169 ? 1 : 2;
+            var name = $"{number:000}_Jensen_Oxen_Gefrorene_Flammen_CD{disc:00}.mp3";
+            folder.CreateFile($"CD {disc:00}/{name}");
+            metadata[name] = new OriginalTagMetadata
+            {
+                TrackNumber = (uint)(number == 213 ? 123 : number), DiscNumber = (uint)disc,
+                Title = number is >= 162 and <= 169 ? Path.GetFileNameWithoutExtension(name) : ""
+            };
+        }
+        var scanner = new FolderScanner(new PerFileTagMetadataReader(metadata), new FileSystemMetadataReader());
+        var tracks = scanner.Scan(folder.Path, TrackNumberPreference.FileName);
+        foreach (var track in tracks) track.SourceId = Guid.NewGuid();
+        var manifest = new Mp3DiscProjectManifest
+        {
+            ProjectId = "two-disc-regression", ProjectFolder = folder.Path, TotalDiscs = 2,
+            ImportedDiscs = [new Mp3DiscProjectManifestDisc
+            {
+                DiscNumber = 1, Signature = "disc-one", SourceFiles = tracks.Take(169).Select(t => new Mp3DiscProjectManifestSourceFile
+                { SourceId = t.SourceId, SourceFileName = t.FileName, RelativePath = t.FileName }).ToList()
+            }]
+        };
+        var pending = new Mp3DiscPendingChapterDisc(2, "disc-two", tracks.Skip(169).Select(t =>
+            new Mp3DiscPlannedSourceIdentity(t.SourceId, t.FileName, t.FileName, 0, 0)).ToArray());
+        var reconciliation = new Mp3DiscTrackReconciliationService();
+        var rows = tracks.Take(169).ToList();
+        reconciliation.AppendMissingPreviewTracks(rows, tracks.Skip(169), Path.Combine(folder.Path, "CD 02"), 2, false);
+        for (var continuation = 0; continuation < 3; continuation++)
+        {
+            reconciliation.AppendMissingPreviewTracks(rows,
+                reconciliation.CreatePreviewTracksFromKnownFiles(Path.Combine(folder.Path, "CD 02"), tracks.Skip(169).Select(t => t.FilePath)),
+                Path.Combine(folder.Path, "CD 02"), 2, false);
+            var result = new ChapterAutoEngineService().Apply(new ChapterAutoEngineRequest(
+                rows, ProjectManifestTypes.Mp3DiscProject, manifest.ProjectId, folder.Path,
+                new ChapterCanonicalMetadataSnapshot(0, "Oxen. Gefrorene Flammen", MetadataOrigin.User, null, MetadataOrigin.None),
+                new ChapterSettings { Mode = "Auto", NumberingStyle = "SpacePadded" }, false,
+                Mp3DiscManifest: manifest, PendingMp3Discs: [pending]));
+            Assert.Equal(338, rows.Count);
+            Assert.Equal(Enumerable.Range(1, 338).Select(n => (int?)n), rows.Select(t => t.TrackNumber));
+            Assert.Equal("170 Oxen. Gefrorene Flammen", rows[169].ChapterTitle);
+            Assert.Equal("213 Oxen. Gefrorene Flammen", rows[212].ChapterTitle);
+            Assert.Equal(338, result.RenderedTimeline.Count);
+        }
+    }
+
+    [Fact]
+    public void Disc_filename_order_is_consistent_with_displayed_numbers_despite_a_conflicting_tag()
+    {
+        using var folder = new TemporaryFolder();
+        var numbers = new[] { 170, 171, 212, 213, 214 };
+        var metadata = new Dictionary<string, OriginalTagMetadata>();
+        foreach (var number in numbers)
+        {
+            var name = $"{number}_Oxen_CD02.mp3";
+            folder.CreateFile(name);
+            metadata[name] = new OriginalTagMetadata { TrackNumber = (uint)(number == 213 ? 123 : number), DiscNumber = 2 };
+        }
+        var scanner = new FolderScanner(new PerFileTagMetadataReader(metadata), new FileSystemMetadataReader());
+        var imported = scanner.Scan(folder.Path, TrackNumberPreference.FileName);
+        Assert.Equal(numbers.Select(n => (int?)n), imported.Select(t => t.TrackNumber));
+        Assert.Equal(numbers.Select(n => $"{n}_Oxen_CD02.mp3"), imported.Select(t => t.FileName));
+        Assert.Equal(Enumerable.Range(1, numbers.Length).Select(n => (int?)n), imported.Select(t => t.AutomaticOrderPosition));
+        Assert.Equal(123, imported.Single(t => t.TrackNumber == 213).SourceTrackNumber);
+        // Normal folder import still uses its existing metadata/evidence policy.
+        Assert.Equal("213_Oxen_CD02.mp3", scanner.Scan(folder.Path)[0].FileName);
+    }
+
+    [Fact]
     public void Scan_reads_source_sample_rate_and_bitrate_from_the_existing_tag_read()
     {
         using var folder = new TemporaryFolder();
@@ -403,7 +476,7 @@ public sealed class FolderScannerTests
     }
 
     [Fact]
-    public void Scan_WarnsOnlyMissingTitlesInMixedAnalysisGroup()
+    public void Scan_DoesNotWarnForMissingTitlesInMixedAnalysisGroup()
     {
         using var folder = new TemporaryFolder();
         folder.CreateFile("001 One.mp3");
@@ -417,11 +490,11 @@ public sealed class FolderScannerTests
         var tracks = new FolderScanner(reader, new FileSystemMetadataReader()).Scan(folder.Path);
 
         Assert.False(tracks[0].WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
-        Assert.True(tracks[1].WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+        Assert.False(tracks[1].WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
     }
 
     [Fact]
-    public void MissingTitleReevaluation_RemovesStaleCodeAndPreservesOtherWarnings()
+    public void WarningRefresh_RemovesLegacyMissingTitleCodeAndPreservesUnreadableTags()
     {
         var titled = new TrackInfo { TagTitle = "Tagged", DiscNumber = 1 };
         var missing = new TrackInfo { DiscNumber = 1 };
@@ -429,11 +502,12 @@ public sealed class FolderScannerTests
             $"{TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags)}; {TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle)}",
             TrackWarningCodes.UnreadableTags | TrackWarningCodes.MissingTagTitle);
 
-        FolderScanner.ApplyMissingTagTitleWarnings([titled, missing]);
-        Assert.True(missing.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+        new TrackListWarningService().Apply([titled, missing]);
+        Assert.False(missing.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
+        Assert.Equal(TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags), missing.DisplayChapterWarning);
 
         titled.TagTitle = string.Empty;
-        FolderScanner.ApplyMissingTagTitleWarnings([titled, missing]);
+        new TrackListWarningService().Apply([titled, missing]);
 
         Assert.False(missing.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle));
         Assert.True(missing.WarningCodes.HasFlag(TrackWarningCodes.UnreadableTags));

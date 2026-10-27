@@ -498,7 +498,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string StatusText
     {
-        get => _presentationState.ProjectStatus(_statusText);
+        get => _presentationState.ProjectStatus(FfmpegSettingsApplicationService.ResolveStatusText(
+            _statusText, _ffmpegStatus.FfmpegAvailable, NoProjectStatusText));
         set
         {
             var change = MainWindowSelectionStateService.CreateOrdinalStringChange(
@@ -1432,12 +1433,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Die globale Werkzeugerkennung steuert Button und Sperrprofil.
         // Sie überschreibt nicht den fachlichen Projektstatus im Hauptfenster.
         if (decision.ShouldClearToolStatus)
-            StatusText = string.Empty;
+            StatusText = string.IsNullOrWhiteSpace(_currentProjectWorkFolder) ? NoProjectStatusText : string.Empty;
 
-        OnPropertyChanged(nameof(CanConfigureFfmpeg));
         OnPropertyChanged(nameof(FfmpegSetupButtonVisibility));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(CanConfigureFfmpeg));
         OnPropertyChanged(nameof(CanStartExport));
         OnPropertyChanged(nameof(CanStartNewProject));
+        OnPropertyChanged(nameof(CanRefreshResumeProjects));
+        OnPropertyChanged(nameof(CanInspectSelectedResumeProject));
+        OnPropertyChanged(nameof(FolderDiscActionVisualState));
+        OnPropertyChanged(nameof(ProjectsActionVisualState));
     }
 
     private void SaveSettingsIfReady()
@@ -2098,7 +2104,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void OpenResumeProjects_Click(object sender, RoutedEventArgs e)
     {
-        if (IsBusy)
+        if (!CanRefreshResumeProjects)
             return;
 
         try
@@ -3166,6 +3172,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         RefreshMetadataDependentUi();
 
+        bool CanEditCover() => CanChangeBookMetadata || (allowDuringProjectSetup && owner.IsVisible);
         var dialog = new MetadataDialog(
             usePrivateGenreList: _settings.UsePrivateGenreList,
             genreSettingsManager: _services.Foundation.GlobalSettingsManager,
@@ -3173,8 +3180,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             metadataState: _projectMetadata,
             appSettings: _settings,
             canChooseCover: canOpenMetadataDialog,
-            chooseCover: coverOwner => ChooseCover(coverOwner),
-            removeCover: RemoveCover,
+            chooseCover: coverOwner => ChooseCover(coverOwner, CanEditCover),
+            removeCover: () => RemoveCover(CanEditCover),
             refreshUi: RefreshMetadataDependentUi,
             appSettingsChanged: SaveSettingsIfReady,
             metadataPreferences: _settings.MetadataPreferences,
@@ -3207,7 +3214,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             chapterGridColumnLayoutState: _chapterGridColumnLayoutState,
             coverImageService: _services.Media.CoverImageService,
             coverPickerService: _coverPickerService,
-            dropCover: (data, owner) => ImportCoverAsync(null, data, owner))
+            dropCover: (data, coverOwner) => ImportCoverAsync(null, data, coverOwner, CanEditCover))
         {
             Owner = ResolveDevelopmentMetadataDialogOwner(owner)
         };
@@ -6126,6 +6133,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             await preparedLifecycle.DrainAsync();
 
+            if (_presentationState.PauseRequested)
+            {
+                // A session pause keeps accepted, uncommitted disc rows and their
+                // identities. Stop-save/discard retain their persisted-plan path.
+                _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
+                var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
+                PublishWorkflowStatus(workflowOperationId, last with { IsPaused = true });
+                EndWorkflowStatusOperation(workflowOperationId);
+                EnterPipelinePause(string.Empty, preserveWorkflowStatus: true);
+                return true;
+            }
+
             if (extensionSnapshot is null)
             {
                 var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
@@ -6136,16 +6155,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     progressText,
                     cleanupPartFiles,
                     preserveWorkflowStatus: true);
-                return true;
-            }
-
-            if (_presentationState.PauseRequested)
-            {
-                _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
-                var last = _services.Status.WorkflowStatusCoordinator.Snapshot;
-                PublishWorkflowStatus(workflowOperationId, last with { IsPaused = true });
-                EndWorkflowStatusOperation(workflowOperationId);
-                EnterPipelinePause(string.Empty, preserveWorkflowStatus: true);
                 return true;
             }
 
@@ -6496,7 +6505,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             sourceFolder,
                             discNumber,
                             clearExistingTracks: false,
-                            refreshChapterProjection: true);
+                            refreshChapterProjection: false);
+                        // Reused copies do not emit live-conversion callbacks. Restore
+                        // their paths and presentation before rendering the full preview.
+                        RefreshExistingMp3DiscTrackStateBeforeImport(
+                            projectFolder, sourceFolder, totalDiscs, publishStatus: false);
+                        UpdateIndexes();
                         RefreshTrackPresentationViews();
                         AutoFitTrackColumnsAfterRender();
                         NotifyExportUiStateChanged();
@@ -6769,13 +6783,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RefreshExistingMp3DiscTrackStateBeforeImport(
         string projectFolder,
         string sourceFolder,
-        int totalDiscs)
+        int totalDiscs,
+        bool publishStatus = true)
     {
         _services.Discs.Mp3DiscTrackReconciliationService.ReconcileImportedTrackPathsForExistingDiscs(
             Tracks,
             sourceFolder,
             projectFolder,
             totalDiscs);
+
+        var restored = _services.Discs.Mp3DiscTrackReconciliationService.RestoreImportedSourcePresentation(Tracks, projectFolder);
 
         var changed = TrackStateUpdateQueueService.ApplyUpdates(new TrackStateUpdateContext(
             Tracks,
@@ -6784,11 +6801,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             IsWorkflowActive: false,
             IsRefreshSuspended: false));
 
-        if (!changed)
+        if (!changed && restored == 0)
             return;
 
         RefreshTrackPresentationViews();
-        UpdateFinalStatus(Tracks.Count);
+        if (publishStatus)
+            UpdateFinalStatus(Tracks.Count);
     }
 
     private async Task RefreshMp3DiscTrackListAfterDiscImportAsync(
@@ -7831,9 +7849,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ChooseCover(this);
     }
 
-    private async void ChooseCover(Window owner)
+    private async void ChooseCover(Window owner, Func<bool>? canEditCover = null)
     {
-        if (!CanChangeBookMetadata || _isCoverDialogOpen)
+        if (!(CanChangeBookMetadata || canEditCover?.Invoke() == true) || _isCoverDialogOpen)
             return;
 
         _isCoverDialogOpen = true;
@@ -7852,7 +7870,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (string.IsNullOrWhiteSpace(selectedFile))
                 return;
 
-            await ImportCoverAsync(selectedFile, null, owner);
+            await ImportCoverAsync(selectedFile, null, owner, canEditCover);
         }
         finally
         {
@@ -7867,9 +7885,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RemoveCover();
     }
 
-    private void RemoveCover()
+    private void RemoveCover(Func<bool>? canEditCover = null)
     {
-        if (!CanChangeBookMetadata || string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath))
+        if (!(CanChangeBookMetadata || canEditCover?.Invoke() == true) || string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath))
             return;
 
         CancelCoverImport();
@@ -7918,9 +7936,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await ImportCoverAsync(null, e.Data, this);
     }
 
-    private async Task ImportCoverAsync(string? filePath, IDataObject? data, Window owner)
+    private async Task ImportCoverAsync(string? filePath, IDataObject? data, Window owner, Func<bool>? canEditCover = null)
     {
-        if (!CanChangeBookMetadata) return;
+        bool CanEdit() => CanChangeBookMetadata || canEditCover?.Invoke() == true;
+        if (!CanEdit()) return;
         CancelCoverImport();
         using var cancellation = new CancellationTokenSource();
         _coverImportCancellation = cancellation;
@@ -7939,7 +7958,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (cancellation.IsCancellationRequested || generation != _coverImportGeneration ||
                 !ReferenceEquals(metadata, _projectMetadata.CanonicalMetadata) ||
                 !string.Equals(projectFolder, _currentProjectWorkFolder, StringComparison.OrdinalIgnoreCase) ||
-                !CanChangeBookMetadata || !owner.IsVisible) return;
+                !CanEdit() || !owner.IsVisible) return;
             ApplyProcessedCover(result, owner);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -9083,6 +9102,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 .GetProjectSetupPageMilliseconds(_debugSettings),
             settingsManager: _services.Foundation.GlobalSettingsManager,
             shouldWarnDiscCount: () => !WarningSuppressionService.IsSuppressed(_settings, WarningSuppressionService.DiscCount),
+            coverImageService: _services.Media.CoverImageService,
+            importCover: (path, data, owner) => ImportCoverAsync(path, data, owner, () => owner.IsVisible),
+            cancelCoverImport: CancelCoverImport,
             setAlwaysWarnDiscCount: enabled =>
             {
                 WarningSuppressionService.SetSuppressed(_settings, WarningSuppressionService.DiscCount, !enabled);

@@ -7496,4 +7496,8 @@ If the files have different sample rates, only the tracks with differing rates a
     <value>Changes are preview-only. Conceal restores the saved appearance. Images for other themes remain selectable.</value>
     <comment>SourceHash: 538599672c9bd4239a3e2dbfe408a409a3e2ecb705a40cb43d0d5dd58d3bd4be</comment>
   </data>
+  <data name="MainWindow.Ffmpeg.InstallRequired" xml:space="preserve">
+    <value>Please install FFmpeg first using the button at the top right.</value>
+    <comment>SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff</comment>
+  </data>
 </root>

@@ -8,6 +8,23 @@ namespace BookStitch.Tests.Services;
 public class ExportUiStateServiceTests
 {
     [Theory]
+    [InlineData(ProjectPipelineState.Preparing)]
+    [InlineData(ProjectPipelineState.ReviewBeforeMerge)]
+    [InlineData(ProjectPipelineState.Completed)]
+    public void Projects_require_ffmpeg_and_reenable_after_tool_detection(ProjectPipelineState phase)
+    {
+        var input = Input(phase, hasSelectedProject: true);
+        var unavailable = _service.Create(input with { FfmpegAvailable = false });
+        Assert.False(unavailable.CanRefreshResumeProjects);
+        Assert.False(unavailable.CanInspectSelectedResumeProject);
+        Assert.Equal(phase != ProjectPipelineState.ReviewBeforeMerge, unavailable.CanConfigureFfmpeg);
+
+        var available = _service.Create(input);
+        Assert.True(available.CanRefreshResumeProjects);
+        Assert.True(available.CanInspectSelectedResumeProject);
+    }
+
+    [Theory]
     [InlineData("folder", "extension")]
     [InlineData("mp3", "extension")]
     [InlineData("audio", "extension")]

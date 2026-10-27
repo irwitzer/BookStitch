@@ -483,9 +483,6 @@ public sealed class TrackInfo : INotifyPropertyChanged
         if (WarningCodes.HasFlag(TrackWarningCodes.CheckOrder))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder));
 
-        if (WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle))
-            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle));
-
         if (WarningCodes.HasFlag(TrackWarningCodes.UnreadableTags))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags));
 

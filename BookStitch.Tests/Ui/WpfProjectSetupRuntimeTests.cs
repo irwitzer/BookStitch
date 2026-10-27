@@ -528,6 +528,97 @@ public sealed partial class WpfDialogRuntimeTests
         });
     }
 
+    [Theory]
+    [InlineData(ProjectSetupSourceKind.Folder)]
+    [InlineData(ProjectSetupSourceKind.Mp3Disc)]
+    [InlineData(ProjectSetupSourceKind.AudioDisc)]
+    public void Preparation_cover_drop_and_picker_share_import_and_metadata_state(ProjectSetupSourceKind kind)
+    {
+        RunOnStaThread(() =>
+        {
+            var state = new ProjectMetadataState();
+            string? receivedPath = null;
+            IDataObject? receivedData = null;
+            Window? receivedOwner = null;
+            var cancellations = 0;
+            var dialog = CreateProjectSetupDialog(kind, metadataState: state,
+                importCover: (path, data, owner) =>
+                {
+                    receivedPath = path;
+                    receivedData = data;
+                    receivedOwner = owner;
+                    state.ApplyCoverMetadata("shared-source.png", "shared-cover.jpg", MetadataOrigin.User);
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }, cancelCoverImport: () => cancellations++);
+            try
+            {
+                dialog.Show();
+                Assert.True(dialog.CoverBorder.AllowDrop);
+                var data = new DataObject(DataFormats.FileDrop, new[] { "cover.png" });
+                var importer = typeof(DiscProjectSetupDialog).GetMethod("ImportCoverAsync",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                ((System.Threading.Tasks.Task)importer.Invoke(dialog, new object?[] { null, data })!).GetAwaiter().GetResult();
+                Assert.Null(receivedPath);
+                Assert.Same(data, receivedData);
+                Assert.Same(dialog, receivedOwner);
+                Assert.Equal("shared-cover.jpg", state.ProcessedCoverPath);
+                var localPath = typeof(DiscProjectSetupDialog).GetField("_processedCoverPath",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                Assert.Equal(state.ProcessedCoverPath, localPath.GetValue(dialog));
+                ((System.Threading.Tasks.Task)importer.Invoke(dialog, new object?[] { "chosen.png", null })!).GetAwaiter().GetResult();
+                Assert.Equal("chosen.png", receivedPath);
+                Assert.Null(receivedData);
+                // A change from either other view is reflected in the preparation view too.
+                state.ApplyCoverMetadata("other.png", "other.jpg", MetadataOrigin.User);
+                Assert.Equal("other.jpg", localPath.GetValue(dialog));
+            }
+            finally { dialog.Close(); }
+            Assert.Equal(1, cancellations);
+        });
+    }
+
+    [Fact]
+    public void Preparation_drop_processes_a_real_image_without_changing_the_source()
+    {
+        RunOnStaThread(() =>
+        {
+            using var folder = new BookStitch.Tests.TestHelpers.TemporaryFolder();
+            var previousContext = System.Threading.SynchronizationContext.Current;
+            System.Threading.SynchronizationContext.SetSynchronizationContext(
+                new System.Windows.Threading.DispatcherSynchronizationContext());
+            var source = folder.CreateFile("original.png");
+            var bytes = BookStitch.Tests.TestHelpers.CoverTestImages.Create(600, 600);
+            File.WriteAllBytes(source, bytes);
+            var state = new ProjectMetadataState();
+            var dialog = CreateProjectSetupDialog(ProjectSetupSourceKind.Mp3Disc, metadataState: state,
+                coverWorkFolder: folder.Path, getCoverWarningThresholdPixels: () => 0);
+            try
+            {
+                dialog.Show();
+                var data = new DataObject(DataFormats.FileDrop, new[] { source });
+                var importer = typeof(DiscProjectSetupDialog).GetMethod("ImportCoverAsync",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                var task = (System.Threading.Tasks.Task)importer.Invoke(dialog, new object?[] { null, data })!;
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                while (!task.IsCompleted && DateTime.UtcNow < deadline)
+                {
+                    DrainDispatcher();
+                    System.Threading.Thread.Sleep(1);
+                }
+                Assert.True(task.IsCompleted);
+                task.GetAwaiter().GetResult();
+                Assert.True(File.Exists(state.ProcessedCoverPath));
+                Assert.NotNull(dialog.CoverPreviewImage.Source);
+                Assert.Equal(bytes, File.ReadAllBytes(source));
+            }
+            finally
+            {
+                dialog.Close();
+                System.Threading.SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        });
+    }
+
     private static DiscProjectSetupDialog CreateProjectSetupDialog(
         ProjectSetupSourceKind sourceKind,
         int defaultDiscCount = 1,
@@ -549,7 +640,11 @@ public sealed partial class WpfDialogRuntimeTests
         Func<bool>? shouldWarnDiscCount = null,
         Action<bool>? setAlwaysWarnDiscCount = null,
         Action<string>? setOutputFolder = null,
-        GlobalSettingsManager? settingsManager = null)
+        GlobalSettingsManager? settingsManager = null,
+        Func<string?, IDataObject?, Window, System.Threading.Tasks.Task>? importCover = null,
+        Action? cancelCoverImport = null,
+        string? coverWorkFolder = null,
+        Func<int>? getCoverWarningThresholdPixels = null)
     {
         var workFolder = Path.GetTempPath();
 
@@ -575,7 +670,7 @@ public sealed partial class WpfDialogRuntimeTests
                 FileNameTemplate: "{Autor} - {Titel}",
                 CoverSourcePath: "",
                 CoverPreviewSource: "",
-                CoverWorkFolder: workFolder,
+                CoverWorkFolder: coverWorkFolder ?? workFolder,
                 AutoMergeAfterConversion: false,
                 SourceFolder: workFolder,
                 ConfirmDiscCountOnStart: confirmDiscCountOnStart,
@@ -595,7 +690,10 @@ public sealed partial class WpfDialogRuntimeTests
             getProjectSetupPageAnimationMilliseconds: getAnimationMilliseconds,
             shouldWarnDiscCount: shouldWarnDiscCount,
             setAlwaysWarnDiscCount: setAlwaysWarnDiscCount,
-            settingsManager: settingsManager);
+            settingsManager: settingsManager,
+            importCover: importCover,
+            cancelCoverImport: cancelCoverImport,
+            getCoverWarningThresholdPixels: getCoverWarningThresholdPixels);
     }
 
     private static System.Windows.Interop.HwndSource CreateKeyboardInputSource(string name) =>

@@ -58,7 +58,9 @@ public sealed class DiscChapterProjectionWiringTests
             "CreatePreviewTracksFromKnownFiles(",
             "ApplyPlannedSourceIds(",
             "AppendDiscPreviewTracks(",
-            "refreshChapterProjection: true",
+            "refreshChapterProjection: false",
+            "RefreshExistingMp3DiscTrackStateBeforeImport(",
+            "UpdateIndexes();",
             "StartActiveMp3PerformancePhase(\"file.copy\")");
 
         Assert.Contains(

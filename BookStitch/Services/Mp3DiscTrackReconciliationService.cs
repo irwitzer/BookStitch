@@ -5,6 +5,49 @@ namespace BookStitch.Services;
 
 public sealed class Mp3DiscTrackReconciliationService
 {
+    public int RestoreImportedSourcePresentation(IEnumerable<TrackInfo> tracks, string projectFolder)
+    {
+        var originals = ProjectFolderLayout.GetOriginalsFolder(projectFolder);
+        var targetSampleRate = ProjectSampleRateService.ReadTarget(projectFolder);
+        var snapshots = new SourceMetadataSnapshotStore().LoadAll(projectFolder)
+            .ToDictionary(snapshot => snapshot.SourceId);
+        var restored = 0;
+        foreach (var track in tracks)
+        {
+            track.TargetSampleRateHz = targetSampleRate;
+            if (track.SourceId == Guid.Empty || !File.Exists(track.FilePath) ||
+                !TrackPathService.IsPathInsideFolder(track.FilePath, originals) ||
+                !snapshots.TryGetValue(track.SourceId, out var snapshot) ||
+                !PathsEqual(track.FilePath, snapshot.TechnicalInfo.SourcePath))
+                continue;
+
+            // This is presentation hydration, never a preparation checkpoint or
+            // an order decision. Keep existing verified/probed values and user state.
+            track.SourceMetadataFields ??= snapshot.CanonicalFields;
+            track.SourceTrackNumber ??= snapshot.CanonicalFields.SourceTrackNumber;
+            track.SourceTrackTotal ??= snapshot.CanonicalFields.SourceTrackTotal;
+            track.SourceDiscNumber ??= snapshot.CanonicalFields.SourceDiscNumber;
+            track.SourceDiscTotal ??= snapshot.CanonicalFields.SourceDiscTotal;
+            if (string.IsNullOrWhiteSpace(track.TagTitle))
+                track.TagTitle = snapshot.CanonicalFields.Title;
+            if (track.DurationTicks is null or <= 0 && snapshot.TechnicalInfo.Duration is { Ticks: > 0 } duration)
+            {
+                track.DurationTicks = duration.Ticks;
+                track.Duration = duration.TotalHours >= 1
+                    ? $"{(int)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}"
+                    : $"{duration.Minutes:00}:{duration.Seconds:00}";
+            }
+            track.BitrateKbps ??= snapshot.TechnicalInfo.BitrateKbps;
+            track.Channels ??= snapshot.TechnicalInfo.Channels;
+            if (string.IsNullOrWhiteSpace(track.ChannelLayout) && track.Channels.HasValue)
+                track.ChannelLayout = AudioProcessingService.FormatChannelLayout(track.Channels);
+            if (string.IsNullOrWhiteSpace(track.Codec))
+                track.Codec = snapshot.TechnicalInfo.Codec;
+            restored++;
+        }
+        return restored;
+    }
+
     public IReadOnlyList<TrackInfo> CreatePreviewTracksFromKnownFiles(
         string sourceFolder,
         IEnumerable<string> filePaths)

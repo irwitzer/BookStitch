@@ -77,6 +77,12 @@
     <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="'@(TagLibSharpRuntimeAssembly)' != ''" />
 
     <Copy SourceFiles="@(TagLibSharpRuntimeAssembly)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" Condition="'@(TagLibSharpRuntimeAssembly)' != '' and '$(PublishDir)' != ''" />
+
+    <!-- NuGet caches can carry Hidden/System attributes. Normalize only our copies,
+         so ordinary ZIP/installer wildcard enumeration cannot omit this dependency. -->
+    <Error Condition="!Exists('$(OutDir)TagLibSharp.dll')" Text="Required runtime dependency missing: $(OutDir)TagLibSharp.dll" />
+    <Exec Command="attrib.exe -H -S &quot;$(OutDir)TagLibSharp.dll&quot;" />
+    <Exec Command="attrib.exe -H -S &quot;$(PublishDir)TagLibSharp.dll&quot;" Condition="'$(PublishDir)' != '' and Exists('$(PublishDir)TagLibSharp.dll')" />
   </Target>
 
 </Project>

@@ -8,6 +8,41 @@ public class TrackListWarningServiceTests
 {
     private readonly TrackListWarningService _service = new();
 
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("en-US")]
+    [InlineData("fr-FR")]
+    [InlineData("ja-JP")]
+    public void Refresh_retires_missing_title_warnings_and_counts_without_hiding_real_warnings(string culture)
+    {
+        var previous = System.Globalization.CultureInfo.CurrentUICulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo(culture);
+            var missing = new TrackInfo { TrackNumber = 1, ChapterWarningText = "obsolete rendered title warning" };
+            missing.SetWarning(TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle), TrackWarningCodes.MissingTagTitle);
+            var real = new TrackInfo { TrackNumber = 2, WarningCodes = TrackWarningCodes.MissingTagTitle |
+                TrackWarningCodes.UnreadableTags | TrackWarningCodes.CheckOrder | TrackWarningCodes.InvalidAudio };
+            var rows = new List<TrackInfo> { missing, real };
+
+            Assert.True(_service.Apply(rows));
+            Assert.Equal(TrackWarningCodes.None, missing.WarningCodes);
+            Assert.False(missing.HasChapterWarning);
+            Assert.False(missing.HasFileWarning);
+            Assert.Equal(TrackWarningCodes.UnreadableTags | TrackWarningCodes.CheckOrder | TrackWarningCodes.InvalidAudio, real.WarningCodes);
+            Assert.Contains(TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder), real.DisplayChapterWarning);
+            Assert.Contains(TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags), real.DisplayChapterWarning);
+            Assert.Contains(TrackWarningPresentation.Format(TrackWarningCodes.InvalidAudio), real.DisplayFileWarning);
+            var metrics = TrackWarningMetricsService.Create(rows.Select(t => new TrackWarningMetric(t.DisplayFileWarning, t.DisplayChapterWarning)));
+            Assert.Equal(1, metrics.ChapterWarningCount);
+            Assert.Equal(1, metrics.FileWarningCount);
+            Assert.Same(missing, rows[0]);
+            Assert.Same(real, rows[1]);
+            Assert.False(_service.Apply(rows));
+        }
+        finally { System.Globalization.CultureInfo.CurrentUICulture = previous; }
+    }
+
     [Fact]
     public void Apply_ExtremeSourceNumberFollowedByLowerNumberPreservesOrderWarning()
     {
@@ -69,7 +104,7 @@ public class TrackListWarningServiceTests
         _service.Apply(tracks);
 
         Assert.Equal(string.Empty, tracks[0].FileWarningText);
-        Assert.Equal("Kein Tag-Titel · Tags konnten nicht gelesen werden", tracks[0].ChapterWarningText);
+        Assert.Equal("Tags konnten nicht gelesen werden", tracks[0].ChapterWarningText);
         Assert.Equal(string.Empty, tracks[0].DisplayHintWarning);
     }
 

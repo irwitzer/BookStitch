@@ -13,7 +13,7 @@ public enum TrackWarningCodes
     MissingChapter = 1 << 6,
     DuplicateChapter = 1 << 7,
     CheckOrder = 1 << 8,
-    MissingTagTitle = 1 << 9,
+    MissingTagTitle = 1 << 9, // Legacy only; no longer generated or presented as a warning.
     UnreadableTags = 1 << 10
 }
 

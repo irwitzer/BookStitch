@@ -256,6 +256,9 @@
                                             VerticalAlignment="Top"
                                             Style="{StaticResource CoverPickerBorderStyle}"
                                             MouseLeftButtonUp="CoverBorder_MouseLeftButtonUp"
+                                            AllowDrop="True"
+                                            DragOver="Cover_DragOver"
+                                            Drop="Cover_Drop"
                                             ContextMenuOpening="CoverBorder_ContextMenuOpening">
                                         <Border.ContextMenu>
                                             <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}">

@@ -391562,6 +391562,344 @@
           "note": "2026-10-24: Neuübersetzung anhand deutschem Ausgangstext, Entwicklerkontext, englischer Referenz und benachbarten UI-Begriffen semantisch geprüft; auf ausdrückliche Anweisung des Projektinhabers für den vorhandenen Stand freigegeben. KI-gestützte Prüfung, keine Muttersprachler- oder WPF-Sichtprüfung."
         }
       }
+    },
+    "MainWindow.Ffmpeg.InstallRequired": {
+      "source": {
+        "value": "Bitte installiere zuerst FFmpeg über den Button oben rechts.",
+        "comment": "Context: Hauptfenster, Statuszeile beim Start ohne FFmpeg. Meaning: Vor dem Öffnen oder Starten eines Projekts FFmpeg über den sichtbaren Installationsbutton oben rechts installieren. Keine automatische Installation und keine bereits laufende Installation. Placeholders: keine. FixedTerm: FFmpeg unverändert lassen. Length: moderate."
+      },
+      "translations": {
+        "bn-BD": {
+          "value": "প্রথমে ওপরের ডান দিকের বোতামটি ব্যবহার করে FFmpeg ইনস্টল করুন।",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "cs": {
+          "value": "Nejprve nainstaluj FFmpeg pomocí tlačítka vpravo nahoře.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "da": {
+          "value": "Installer først FFmpeg via knappen øverst til højre.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "en": {
+          "value": "Please install FFmpeg first using the button at the top right.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "es": {
+          "value": "Primero instala FFmpeg con el botón de arriba a la derecha.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "fi": {
+          "value": "Asenna ensin FFmpeg oikean yläkulman painikkeella.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "fr": {
+          "value": "Installe d’abord FFmpeg à l’aide du bouton en haut à droite.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "gsw-CH": {
+          "value": "Installier bitte zersch FFmpeg mit em Button obe rächts.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "it": {
+          "value": "Installa prima FFmpeg usando il pulsante in alto a destra.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "ja": {
+          "value": "まず、右上のボタンからFFmpegをインストールしてください。",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "nb": {
+          "value": "Installer FFmpeg først med knappen øverst til høyre.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "nl": {
+          "value": "Installeer eerst FFmpeg via de knop rechtsboven.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "pl": {
+          "value": "Najpierw zainstaluj FFmpeg przyciskiem w prawym górnym rogu.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "pt-BR": {
+          "value": "Primeiro, instale o FFmpeg usando o botão no canto superior direito.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "ru": {
+          "value": "Сначала установите FFmpeg с помощью кнопки в правом верхнем углу.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "sv": {
+          "value": "Installera först FFmpeg med knappen uppe till höger.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "tr": {
+          "value": "Önce sağ üstteki düğmeyi kullanarak FFmpeg’i yükle.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "vi": {
+          "value": "Trước tiên, hãy cài đặt FFmpeg bằng nút ở góc trên bên phải.",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "zh-CN": {
+          "value": "请先通过右上角的按钮安装 FFmpeg。",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        },
+        "zh-HK": {
+          "value": "請先透過右上角的按鈕安裝 FFmpeg。",
+          "comment": "SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff"
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "ad32013fa199d4e5edf098dfd87e1fce5ee51fb68e454853e96657ef86bad69b",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "b81c7e91015b4f8998082c1a22432969840a6d6a17463fb3b0ab7285a118215d",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "09e58b707457c728f362ff6cf29000ef57c60c2b5fcababdf42ccbde25085e3f",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "f60aaffa0d9d1a92857184cd97bf5d4f446b1c6870a050c4bf06aa62e61f4ce5",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "139fa528dfc5bd007bdb47db66338e1e017f48d9a4ffb675b72928808e86ff71",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "52ddce283d45e4f41e7f4a3b69707c89d8196dc31bbfb16c10b261a331211d94",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "8d01bd31f9c22899886361f3143ab54141b675e979bb5c16a26c8a5659273f5b",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "0d6a4a8de257760e5e5fff9415d397d9ad4e93a6477b1f4463de7f3c07ebf8b4",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "d454df21e0c331b303d546a2c8684028fefc60ac737270919377c2e524fc9df9",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "a1d06f253fd1a6d77e1c7cad0f75b5ec60c1a4fc2a7d677adab6409d52e6ce1a",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "ac4ae99daca86468fc3b0743459fbe1837133b814f958241d9a1e95505b7a5a6",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "452cfa35aa37909d64b6f0933dfd274728aeac194378cf75180c4bc550b1bf26",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "1de7ca0264d2faaf453075419957d7116ad9f6e73d7d6e6506f63af11314bb20",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "535dcd85efcb70d2cc90f53afa21457cf64e31548a58bf53ac661c48c2c9c4e2",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "12c90a27aa6709539a891a2f44da6e3ebce6a0b35b4c15783b51d8c474aa205f",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "5e173bd81ac35c97f611f613b65df1720d79356bb8fa6e7e389c2dcc776873f6",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "d1e99d7273470accc0c8687371e42e7e24ea03b4b42f1358d551c45b289eb5be",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "5e10bebdd64a2cb776f8dfc46f8966ddc6f7e948c4557126b0a6b68e58560e0d",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "43773b36829ed4e2dc95956ffa0d7a06ad1d1500089aad221a030da66aa06ce4",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "5364756eb88d9097092893a62c7a422533c904679b2016be7a4ba75977b16388",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-27",
+          "fingerprint": "ef72889c3203a2f97b1c549f3dc688d9f3773f281fa7e466f3757d1523820be7",
+          "note": "Auf ausdrücklichen Nutzerauftrag sprachlich und semantisch KI-geprüft und für diesen neuen Hinweis freigegeben: Voraussetzung, Installation über den Button oben rechts und unveränderter Produktname FFmpeg geprüft. Keine unabhängige muttersprachliche oder visuelle WPF-Abnahme behauptet."
+        }
+      },
+      "translationBase": {
+        "bn-BD": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "2b8076459626c029bec4ed8b222879c8d83dd4d4983e053e6f0af3c9f07cc144",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "cs": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "7c23a03376ac215d1e4af3c7ee396e4340581e5dddbde2c59aba22b17d9fc38b",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "da": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "d49e8c3a970a55d2a33337aa4db296043cea13e9edc71504dd24b1dad59152d9",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "en": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "ba882ebdbde764ecd3544373fa964d9b8a30cde2ecd68197e464b4a3a17fe526",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "es": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "5ec1a47ac2f99618a34e6dca36382360d0818e3f3c40e80e210a66e763298852",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "fi": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "eeed2c2b51014d9bc11afde2f138241e25bd8610dcc10d34aa6a1ec3086145da",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "fr": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "132d800dd2790a935f7e8213018238fb908fcfc3e7a85c944ba261410f3ef7ab",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "b4551d9fb93ec1a99589a38daf70b82a99402342ef651d6f76ed0fa630eaabe8",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "it": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "72c5eab571e86b0d5881c08a2421ab2188d92217f6e9485712e3db0189b4b2c3",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "ja": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "bd0410c1a065d863705f112b9de9c5ba0623d927a83a48740110fa503072542b",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "nb": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "025ac411529d757872f0761feb18dd80c0a19ceb61dcf95654b596e99d3fc234",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "nl": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "dd63c0b12257814ba13357247b70d2aa45cde3ce37cf0e3ef85c12d6d39589af",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "pl": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "251d85baf527733381c11b370774867c98a49ed819dc8757c861f5b33b4e1688",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "pt-BR": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "3f4b7be8202b519bdef4f7957270f5fbe66224f5895345966f51efd6eb297fe9",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "ru": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "004abcb8d6eb530b822aae6a679ad6c88c5219f6d3bc9143506a2216488c0606",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "sv": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "6997bf223a89f4e7cf1b616926ba825d9ffb1f5d0d5ec9e91c0be0226d19bfe2",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "tr": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "48ba1019adb48c0772b117b0c2e9093639f0a0a2de81ed6953d4c841745ce2ff",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "vi": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "f24b6b8f0cf8841cb69d4408dee6cad66c1647b376a79a70fd9c34890b9cad31",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "zh-CN": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "68f350392c1f0eedf13e1903cd9cef5d6e7bb8c01f9635b0e9e60f135fc1465d",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        },
+        "zh-HK": {
+          "sourceValueSha256": "96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff",
+          "sourceCommentSha256": "f5d452c8a18a5ab313db88b17a3cf5f69fd0ea351d73f00b825c79f9efeb4425",
+          "targetValueSha256": "7c0da4bbeb255f48cb72048c93d02f7477b2722c5ca6b3c8b67aa2cb4700a57b",
+          "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
+        }
+      }
     }
   },
   "auditImports": [

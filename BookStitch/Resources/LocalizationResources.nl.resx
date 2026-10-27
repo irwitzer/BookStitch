@@ -7440,4 +7440,8 @@ TranslationNote: Added for the 2026-10-24 complete-target-locale batch; cross-ch
     <comment>SourceHash: 538599672c9bd4239a3e2dbfe408a409a3e2ecb705a40cb43d0d5dd58d3bd4be
 TranslationNote: Added for the 2026-10-24 complete-target-locale batch; cross-checked against the German developer context and English reference. New text, not independently native-speaker-reviewed.</comment>
   </data>
+  <data name="MainWindow.Ffmpeg.InstallRequired" xml:space="preserve">
+    <value>Installeer eerst FFmpeg via de knop rechtsboven.</value>
+    <comment>SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff</comment>
+  </data>
 </root>

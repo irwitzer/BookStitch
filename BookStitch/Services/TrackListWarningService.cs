@@ -14,6 +14,13 @@ public sealed class TrackListWarningService
         var changed = false;
         foreach (var track in tracks)
         {
+            // Keep the legacy code readable, but retire it from current warning state.
+            if (track.WarningCodes.HasFlag(TrackWarningCodes.MissingTagTitle))
+            {
+                track.WarningCodes &= ~TrackWarningCodes.MissingTagTitle;
+                changed = true;
+            }
+
             if (CodecIds.IsInvalid(track.Codec) || track.AudioValidationPassed == false)
             {
                 changed |= !track.WarningCodes.HasFlag(TrackWarningCodes.InvalidAudio);
@@ -119,9 +126,6 @@ public sealed class TrackListWarningService
 
         if (codes.HasFlag(TrackWarningCodes.CheckOrder))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder));
-
-        if (codes.HasFlag(TrackWarningCodes.MissingTagTitle))
-            AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.MissingTagTitle));
 
         if (codes.HasFlag(TrackWarningCodes.UnreadableTags))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags));

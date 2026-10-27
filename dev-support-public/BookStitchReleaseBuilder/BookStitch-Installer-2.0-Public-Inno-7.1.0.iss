@@ -313,9 +313,8 @@ begin
         // Remove the projects only after Inno has removed the application.
         if DeleteProjectsAfterUninstall then
         begin
-          UninstallProgressForm.StatusLabel.Caption :=
-            CustomMessage('UninstallProjectsDeleting');
-          UninstallProgressForm.StatusLabel.Repaint;
+          // Inno 7.1.0 progress-control access can fail before DelTree; log instead.
+          Log('Deleting explicitly confirmed project folder: ' + ProjectsFolderToDelete);
 
           if not DelTree(ProjectsFolderToDelete, True, True, True) then
             MsgBox(

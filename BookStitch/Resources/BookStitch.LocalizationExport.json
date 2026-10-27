@@ -1,136 +1,136 @@
 {
   "format": "bookstitch.localization.export-manifest.v1",
-  "exportedAtUtc": "2026-10-27T15:23:39Z",
+  "exportedAtUtc": "2026-10-27T19:52:28Z",
   "mode": "release",
-  "masterFileSha256": "808a1bbd4c963300ef5c0209a16b8082be3dfd872dd810e4888c532f43cfd898",
-  "resourceInputsSha256": "78e6ecc740ff5eddf776467d55edb8c325dd632e153cf1fc1d0e1055a792bdd4",
+  "masterFileSha256": "87c504406e82f3147ff3571ac9dbff2ecabf0b598c0882a5a65e0f3287747ca1",
+  "resourceInputsSha256": "882d69e395c0140e069892c7986a45807018513cabc11f6688480b632173171c",
   "exporterVersion": "1.2.0",
   "files": [
     {
       "locale": "de",
       "fileName": "LocalizationResources.de.resx",
-      "sha256": "db065d241a7707614134caff159649bb25f8fcf6d0ea3a4ecefa40b33fe34695",
-      "bytes": 668265
+      "sha256": "c9fc18805bffe18da9ebdf450ec5f0f1167a3be7d5cb0e9a0d92e59089874d3f",
+      "bytes": 668787
     },
     {
       "locale": "bn-BD",
       "fileName": "LocalizationResources.bn-BD.resx",
-      "sha256": "b11b9657ee1257e47f3139004c3dcb5912616452a6fe23cabd1f2c147db68f39",
-      "bytes": 563644
+      "sha256": "407dbb41ba1459a95d9d5b9d1eaa78b11bc0e4cc45513e014772f2cbc9863624",
+      "bytes": 564001
     },
     {
       "locale": "cs",
       "fileName": "LocalizationResources.cs.resx",
-      "sha256": "d991b88dfc5faecb2233c0fd63a18dc05665915dd4188f21e9704ffe8832d890",
-      "bytes": 454638
+      "sha256": "63aa7e1e708d5f27ba1131070cf0ff0427daecd3aec7d348d2393dd406bb57a7",
+      "bytes": 454899
     },
     {
       "locale": "da",
       "fileName": "LocalizationResources.da.resx",
-      "sha256": "f54218c4f4801462e874e5c963ae695227dbd8c61acdea7bac1e377a587d0eef",
-      "bytes": 439956
+      "sha256": "c962cdcff7ff2d09a4d0d64145ffc12ca6e0ecff7d1c11f62269a093573a3718",
+      "bytes": 440212
     },
     {
       "locale": "en",
       "fileName": "LocalizationResources.en.resx",
-      "sha256": "1eef3dfdfecc0b068f9ba28f68605a34efc77b6151d7eea2516e01607d19024f",
-      "bytes": 438589
+      "sha256": "f1f26e194f956d40c188f40a70ff010e70ea497540389d4be0991d403ebbea97",
+      "bytes": 438852
     },
     {
       "locale": "es",
       "fileName": "LocalizationResources.es.resx",
-      "sha256": "5943f31c7e064fbcc8c1fc4dd62b41044d35e8065dd27a95d53adeec39d0a1bf",
-      "bytes": 439762
+      "sha256": "df47d09b07ec3bc3d12bd57885e07b59169c628fbf62da0cd298217c1c066340",
+      "bytes": 440023
     },
     {
       "locale": "fi",
       "fileName": "LocalizationResources.fi.resx",
-      "sha256": "dcd3757a8cd79ccaa5ecc7666b32e6ed38ab1c3d6b3cf799af08d1eedffc2f64",
-      "bytes": 445487
+      "sha256": "db8e2d513c23579fcb24e07bc2bdb78f83c749b3ae485e9500b68a2691d8f7c2",
+      "bytes": 445739
     },
     {
       "locale": "fr",
       "fileName": "LocalizationResources.fr.resx",
-      "sha256": "07366a76b64194eebe5bb80d0ca8d3440182a2c17fab04a6a68b10550a0e2f1d",
-      "bytes": 442603
+      "sha256": "2f3eb1b606346cb77d70b54b346934fb3cf1b7300b3ce81c06d2d1510a219326",
+      "bytes": 442870
     },
     {
       "locale": "gsw-CH",
       "fileName": "LocalizationResources.gsw-CH.resx",
-      "sha256": "02f61bede0de0f6a07eede254826737363f984ec623e53d4cc81997ec6e41af6",
-      "bytes": 448098
+      "sha256": "cd7ab0fb4587ae74f8e5d71965aaff2e2f2c3cba54a34b9afdf46b4d033e8b52",
+      "bytes": 448356
     },
     {
       "locale": "it",
       "fileName": "LocalizationResources.it.resx",
-      "sha256": "443b1a8fd65792e42bd21d90c9f3365ec5df1e1700561c0a79f5374abc05fa44",
-      "bytes": 454652
+      "sha256": "0ee26ae028d5fd1618a92f149bc2a9aa3c494800b995b1c8bf999ee79a36057a",
+      "bytes": 454911
     },
     {
       "locale": "ja",
       "fileName": "LocalizationResources.ja.resx",
-      "sha256": "e97252da2b2c06149e75993ff659aece618506cb1d079c1c54e9936bd435b598",
-      "bytes": 467730
+      "sha256": "d4dd200baf431cf0d92077e7e220b62fe30204ca653d650fbc7aafefb79e6330",
+      "bytes": 468012
     },
     {
       "locale": "nb",
       "fileName": "LocalizationResources.nb.resx",
-      "sha256": "cae59c9f84950174c205192870bc101b29f9d2497e24af8c4b74f9efd55e1c30",
-      "bytes": 441173
+      "sha256": "62fe2a3d511910535d807e153883ce1d7c269b5104594d80c32b7d6dbdec0cf7",
+      "bytes": 441429
     },
     {
       "locale": "nl",
       "fileName": "LocalizationResources.nl.resx",
-      "sha256": "4874abb827d0b0d1c5624aa4c09099173e5c34e39ea9bd52a16a8155cf0bf8fc",
-      "bytes": 450877
+      "sha256": "a6b3b8e911fe4c5443af49cd08e475e1745bfc2c1cc2a2a43b8063569d84d1b0",
+      "bytes": 451126
     },
     {
       "locale": "pl",
       "fileName": "LocalizationResources.pl.resx",
-      "sha256": "ecb93a2e59bb4136142cb732af3c5e1e75a68adef2b4b76f67b49a550024c9de",
-      "bytes": 453850
+      "sha256": "33d64fdf593776115b04f00e78c85c75e23ff1aacf3960d04f08b5ac4fa7610a",
+      "bytes": 454112
     },
     {
       "locale": "pt-BR",
       "fileName": "LocalizationResources.pt-BR.resx",
-      "sha256": "ad2a3e1b4e5089293f8df0ef2144a49581ae3822269a21ad46d6105ea20c9e88",
-      "bytes": 454313
+      "sha256": "f8d478d6eb913e80c8dbe5a53229d8da737fea7d3ebe555fc23d02252052cf4a",
+      "bytes": 454583
     },
     {
       "locale": "ru",
       "fileName": "LocalizationResources.ru.resx",
-      "sha256": "5c4f4806c506db2faac659c04fc171a8a94a04514d76ae49604cd319b9f94461",
-      "bytes": 502202
+      "sha256": "d8a83130354e0dea7548704cbb4064411ca7661d21903b48cf4841a5f0be7259",
+      "bytes": 502517
     },
     {
       "locale": "sv",
       "fileName": "LocalizationResources.sv.resx",
-      "sha256": "f1ccad8687f4c76360ed6958859d495f550f76c96d31cda3bf5985097d2cc5b9",
-      "bytes": 447403
+      "sha256": "57acfd0fa75f8734078da33f4355b20d8623147ec573949bd0a1dac640e7a004",
+      "bytes": 447658
     },
     {
       "locale": "tr",
       "fileName": "LocalizationResources.tr.resx",
-      "sha256": "c779330e2bc9e72a4042433188e4b07e24c3e836818de383bf0c74418e03d773",
-      "bytes": 452184
+      "sha256": "3884a37bb69fb9e87520f745cc7cce2b26f133268e27bf8ef648fb7ed6392eb5",
+      "bytes": 452444
     },
     {
       "locale": "vi",
       "fileName": "LocalizationResources.vi.resx",
-      "sha256": "83f2488986e8d29d50daea6cae1d634aa1b875e188601fc20521f84438530d15",
-      "bytes": 466172
+      "sha256": "afc64be26486838f8485067f33610c437709adec6b79275deb1e42ef9d204089",
+      "bytes": 466452
     },
     {
       "locale": "zh-CN",
       "fileName": "LocalizationResources.zh-CN.resx",
-      "sha256": "a474065a5fb2f1aba2e5e263197fae04c2e6523828b7241d8e3874017df0cdc3",
-      "bytes": 437125
+      "sha256": "4b41bd61efe11bfaa58a89b46cf335988a29bacd29c9db226c4d715522fe4dfd",
+      "bytes": 437372
     },
     {
       "locale": "zh-HK",
       "fileName": "LocalizationResources.zh-HK.resx",
-      "sha256": "a5cdeb25e1ce6ee7b48a539e9bf9804defff1cc0f7949c4a4f835646b9eb21e8",
-      "bytes": 438206
+      "sha256": "bb681c35ae839e0b54375517d6a846eec634c03b7a5aed0284a2fac1ea3d8a3a",
+      "bytes": 438453
     }
   ],
   "validation": {

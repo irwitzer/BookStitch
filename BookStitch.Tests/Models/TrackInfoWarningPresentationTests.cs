@@ -217,7 +217,7 @@ public sealed class TrackInfoWarningPresentationTests
     }
 
     [Fact]
-    public void RawTagWarnings_AreChapterWarnings()
+    public void LegacyMissingTagTitle_IsNotPresentedAsAChapterWarning()
     {
         var track = new TrackInfo
         {
@@ -225,7 +225,8 @@ public sealed class TrackInfoWarningPresentationTests
         };
 
         Assert.Equal(string.Empty, track.DisplayFileWarning);
-        Assert.Equal("Kein Tag-Titel", track.DisplayChapterWarning);
+        Assert.Equal(string.Empty, track.DisplayChapterWarning);
+        Assert.False(track.HasChapterWarning);
         Assert.Equal(string.Empty, track.DisplayHintWarning);
     }
 
@@ -234,12 +235,12 @@ public sealed class TrackInfoWarningPresentationTests
     {
         var track = new TrackInfo
         {
-            ChapterWarningText = "Kein Tag-Titel · Tags konnten nicht gelesen werden"
+            ChapterWarningText = "Sortierung prüfen · Tags konnten nicht gelesen werden"
         };
 
-        Assert.Equal("Kein Tag-Titel · Tags konnten nicht gelesen werden", track.DisplayChapterWarning);
+        Assert.Equal("Sortierung prüfen · Tags konnten nicht gelesen werden", track.DisplayChapterWarning);
         Assert.Equal(
-            new[] { "Kein Tag-Titel", "Tags konnten nicht gelesen werden" },
+            new[] { "Sortierung prüfen", "Tags konnten nicht gelesen werden" },
             TrackInfo.SplitWarningMessages(track.DisplayChapterWarning));
         Assert.True(track.HasChapterWarning);
     }
