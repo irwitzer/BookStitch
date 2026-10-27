@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-bitmap-plus-url",
+  "description": "Synthetic drop containing both a WPF bitmap fallback and a plausible web image URL; the URL must win.",
+  "formats": [
+    {
+      "name": "HTML Format",
+      "value": "<img src=\"https://cdn.example.test/preferred-cover.png\">"
+    }
+  ],
+  "bitmap": {
+    "width": 32,
+    "height": 32,
+    "argb": "#FF336699"
+  },
+  "expected": {
+    "sourceKind": "Unknown",
+    "sourceConfidence": "Medium",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://cdn.example.test/preferred-cover.png",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

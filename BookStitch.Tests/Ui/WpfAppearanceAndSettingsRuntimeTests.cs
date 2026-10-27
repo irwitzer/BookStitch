@@ -30,6 +30,38 @@ namespace BookStitch.Tests.Ui;
 
 public sealed partial class WpfDialogRuntimeTests
 {
+    [Theory]
+    [InlineData("de", "invalid")]
+    [InlineData("en", "Black")]
+    [InlineData("ja", "White")]
+    public void Cover_transparency_setting_selects_persists_and_exposes_localized_help(string locale, string stored)
+    {
+        RunOnStaThread(() => WithSettingsCulture(locale, () =>
+        {
+            var settings = new AppSettings { CoverTransparencyMode = stored, LastSettingsTab = "Metadata" };
+            RunWithSettingsWindow(settings, dialog =>
+            {
+                var owner = Assert.IsType<SettingsTagsChaptersControl>(dialog.FindName("TagsChaptersSettingsControl"));
+                owner.ShowSection(SettingsTagsChaptersSection.Metadata);
+                var combo = Assert.IsType<ComboBox>(owner.FindName("CoverTransparencyComboBox"));
+                Assert.Equal(3, combo.Items.Count);
+                Assert.Equal(CoverTransparencySettingsService.NormalizeMode(stored), ((ComboBoxItem)combo.SelectedItem).Tag);
+                var info = Assert.IsType<InfoPoint>(owner.FindName("CoverTransparencyInfoPoint"));
+                Assert.Equal(LocalizationText.Get("Cover.Transparency.Heading"), info.Title);
+                Assert.Equal(LocalizationText.Get("Cover.Transparency.Info"), info.Body);
+                Assert.Equal(LocalizationText.Get("Cover.Transparency.Heading"), System.Windows.Automation.AutomationProperties.GetName(combo));
+                foreach (var mode in stored == "White" ? new[] { "Black", "White", "Auto" } : new[] { "White", "Black", "Auto" })
+                {
+                    combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, mode));
+                    Assert.Equal(mode, settings.CoverTransparencyMode);
+                    var persisted = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+                        File.ReadAllText(SettingsService.GetSettingsFilePath(settings.WorkingFolder!)));
+                    Assert.Equal(mode, persisted!.CoverTransparencyMode);
+                }
+            });
+        }));
+    }
+
     [Fact]
     public void Header_branding_uses_distinct_embedded_theme_images_and_reuses_frozen_decodes()
     {

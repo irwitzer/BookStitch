@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-firefox-html-moz",
+  "description": "Synthetic Firefox-like drop with a Mozilla marker plus HTML image data.",
+  "formats": [
+    {
+      "name": "application/x-moz-file-promise-url",
+      "value": "https://images.example.test/firefox-cover.jpg"
+    },
+    {
+      "name": "HTML Format",
+      "value": "<img src=\"https://images.example.test/firefox-cover.jpg\">"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Firefox",
+    "sourceConfidence": "High",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://images.example.test/firefox-cover.jpg",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

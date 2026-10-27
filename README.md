@@ -13,7 +13,7 @@ BookStitch is an open-source Windows desktop application built with C# and WPF. 
 - **Create chapters:** detect existing embedded chapters, generate chapter suggestions from names and tags, edit titles and review chapter timelines. New exports write QuickTime chapters.
 - **Edit rich metadata:** draft and confirm values, inspect source-derived suggestions, and manage supported multi-value fields such as authors, narrators, genres and series. A localized 74-genre catalogue is available.
 - **Improve player compatibility:** configurable metadata output, including Narrator-to-Composer and Title-to-Album mappings and compatible descriptive information.
-- **Manage cover art:** import JPEG, PNG and WebP artwork, preview it and embed it into the finished audiobook.
+- **Manage cover art:** import images from files or drag them from supported browsers, choose automatic/white/black transparency backgrounds, preview artwork and embed it into the finished audiobook. WebP decoding is bundled.
 - **Prepare and export:** select AAC mono/stereo presets up to 256 kbps, reuse qualifying AAC without unnecessary transcoding, review before merge or enable Auto Merge, and export M4A or M4B.
 - **Resume projects:** pause or continue supported workflows, reopen projects, add sources, reconvert and export again with protected project state.
 - **Drive Circle:** coordinate up to five optical drives in configurable order with automatic disc changeover for multi-disc projects. Drive Circle is a standard BookStitch feature.
@@ -61,6 +61,8 @@ dotnet publish ./BookStitch/BookStitch.csproj -c Release -p:PublishProfile=EndUs
 Distribute the full published directory and its dependencies. See [build and packaging notes](docs-public/release-build-notes.md).
 
 ## Documentation
+
+- [Release notes 2.1.0](docs-public/Release-Notes-2.1.0-EN.md)
 
 - [Changelog (English)](Changelog-EN.md)
 - [Localization guide](docs-public/localization-guide.md) · [Localization rules](BookStitch/Resources/LOCALIZATION_RULES.md)

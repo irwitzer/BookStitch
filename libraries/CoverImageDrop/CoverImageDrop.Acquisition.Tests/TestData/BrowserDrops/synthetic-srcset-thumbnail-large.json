@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-srcset-thumbnail-large",
+  "description": "Synthetic srcset containing thumbnail and larger resources; the largest width must be preferred among srcset candidates.",
+  "formats": [
+    {
+      "name": "HTML Format",
+      "value": "SourceURL:https://example.test/books/page.html\r\n<img srcset=\"/thumb.jpg 320w, /large.jpg 1600w, /medium.jpg 800w\">"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Unknown",
+    "sourceConfidence": "Medium",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://example.test/large.jpg",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

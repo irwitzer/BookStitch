@@ -56,6 +56,8 @@ public class AppSettings
 
     public string? LastUserSelectedCoverFolder { get; set; }
 
+    public string CoverTransparencyMode { get; set; } = Services.CoverTransparencySettingsService.DefaultMode;
+
     public int CoverWarningThresholdPixels { get; set; } = Services.CoverWarningSettingsService.DefaultThresholdPixels;
 
     // Export and workspace preferences.

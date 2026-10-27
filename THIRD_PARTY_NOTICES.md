@@ -9,9 +9,21 @@ The following versions are declared in `BookStitch/BookStitch.csproj` in the rev
 | Component | Declared version | Use | License information |
 | --- | --- | --- | --- |
 | [TagLibSharp](https://www.nuget.org/packages/TagLibSharp) | `2.3.0` | Audio metadata reading and writing | See NuGet package and upstream license; verify applicable LGPL terms and bundled notices. |
-| [SixLabors.ImageSharp](https://www.nuget.org/packages/SixLabors.ImageSharp) | `3.1.12` | Cover image handling | [Six Labors licensing](https://sixlabors.com/pricing/); verify applicable split-license rights for your distribution. |
 
-**BookStitch 2 release decision:** ImageSharp remains pinned to `3.1.12`, with its known security advisories acknowledged. The maintainer has decided against a package update for this release because of licensing constraints. Replacement or revision of this dependency is deferred to BookStitch 3. This decision does not resolve the advisories or change the applicable license obligations.
+
+Cover image handling uses the first-party CoverImageDrop libraries and Windows WPF/WIC imaging APIs.
+
+## Bundled WebP decoder
+
+`CoverCodecs/cover-webp-worker.exe` statically links the decoding portion of
+[libwebp 1.6.0](https://developers.google.com/speed/webp/) under its BSD-style license
+and accompanying patent grant. It also includes MinGW-w64 startup/runtime code
+(ZPL 2.1 and component notices) and Zig compiler runtime code (MIT).
+The required notices are shipped in `CoverCodecs/`: `libwebp-COPYING.txt`,
+`libwebp-PATENTS.txt`, `MINGW-COPYING.txt`, and `ZIG-RUNTIME-LICENSE.txt`.
+The worker source, exact upstream source archive, build script and SHA-256 provenance
+are retained under `libraries/CoverImageDrop/native/`. No system-wide codec registration
+or FFmpeg installation is required for cover decoding. This binary targets Windows x64.
 
 ## External audio tools
 

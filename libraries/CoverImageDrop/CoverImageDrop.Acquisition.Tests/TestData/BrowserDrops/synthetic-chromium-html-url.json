@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-chromium-html-url",
+  "description": "Synthetic Chromium-like drop with Chromium markers, Mozilla compatibility data, and HTML image URL.",
+  "formats": [
+    {
+      "name": "Chromium Web Custom MIME Data Format",
+      "value": "image payload metadata"
+    },
+    {
+      "name": "chromium/x-renderer-taint",
+      "value": "renderer metadata"
+    },
+    {
+      "name": "text/x-moz-url",
+      "value": "https://images.example.test/chromium-cover.jpg"
+    },
+    {
+      "name": "HTML Format",
+      "value": "<img src=\"https://images.example.test/chromium-cover.jpg\">"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Chromium",
+    "sourceConfidence": "High",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://images.example.test/chromium-cover.jpg",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

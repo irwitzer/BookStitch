@@ -9,7 +9,7 @@ dotnet build ./BookStitch/BookStitch.csproj -c Release
 dotnet test ./BookStitch.Tests/BookStitch.Tests.csproj -c Release
 ```
 
-Some tests require Windows/WPF, optical drives, external tools, or test media. Consult their requirements before running broader suites. All application tests are maintained in the Windows test project shown above. Report only tests that actually ran.
+Some tests require Windows/WPF, optical drives, external tools, or test media. Consult their requirements before running broader suites. Application tests are maintained in the Windows test project shown above; library regression tests are under `libraries/CoverImageDrop/`. `dotnet test BookStitch.slnx -c Release` runs all five test projects. Report only tests that actually ran.
 
 ## Windows release builder (recommended)
 
@@ -31,7 +31,7 @@ The `EndUser` publish profile specifies a **self-contained, non-trimmed `win-x64
 dotnet publish ./BookStitch/BookStitch.csproj -c Release -p:PublishProfile=EndUser -o ./artifacts/BookStitch
 ```
 
-Use a **fresh, empty publish destination**. The publish output, not ordinary `bin/` build output, is the basis for both distributable formats. Package the **entire** directory, not just `BookStitch.exe`. In particular, verify `TagLibSharp.dll`, `BookStitch.runtimeconfig.json`, and the .NET/Windows Desktop runtime files. Do not remove dependencies to reduce package size. Check portable startup on a compatible clean Windows machine without a separately installed .NET runtime.
+Use a **fresh, empty publish destination**. The publish output, not ordinary `bin/` build output, is the basis for both distributable formats. Package the **entire** directory, not just `BookStitch.exe`. In particular, verify `TagLibSharp.dll`, `BookStitch.runtimeconfig.json`, and the .NET/Windows Desktop runtime files. The CoverImageDrop assemblies and complete `CoverCodecs/` folder (WebP worker and license notices) are also required. Do not remove dependencies to reduce package size. Check portable startup on a compatible clean Windows machine without a separately installed .NET runtime.
 
 The product version comes from `BookStitch/BookStitch.csproj`; release filenames and descriptions must match that version. A filename suffix such as `RC1` does not by itself change the version embedded in the executable.
 

@@ -4824,12 +4824,12 @@ Currently supported: {0}.</value>
     <comment>SourceHash: 9c3e089c8a9b21a50d786d174767a76a9f5cad7486a3b65bc0b1ae4d75c72ad6</comment>
   </data>
   <data name="Cover.QualityWarning" xml:space="preserve">
-    <value>The cover was accepted and upscaled to 2000 × 2000 pixels.
+    <value>The cover was accepted. Output size: {2} × {2} pixels.
 
 • Original size: {0} × {1} pixels
 
 Upscaling does not add image detail. The cover may therefore look blurry in the player. You can replace it at any time before merging.</value>
-    <comment>SourceHash: 7aed526f72d7d955770652000528d896254094fe319207c194341630b668fef0</comment>
+    <comment>SourceHash: 490c56014c5d6328e90cce444fbb8714a134413cfbfe7ca3053d20fe6f531827</comment>
   </data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve">
     <value>Project cleanup failed: {0}</value>
@@ -7181,6 +7181,44 @@ TranslationNote: Genre catalog localization; DE/EN/ES catalogue supplied by the 
   <data name="Settings.Faq.NavigationTitle" xml:space="preserve">
     <value>FAQ</value>
     <comment>SourceHash: dbc468a14b601d5d9240aeb72b9fcd2f8aed2f4e30932876edf8d16ec313846b</comment>
+  </data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>The cover must be at least 200 × 200 pixels.</value>
+    <comment>SourceHash: 59ab6e03ef49e7a53e0723cb139fb71434de259e3326dc2fe759c1a861e37b95</comment>
+  </data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>The image is damaged or its format is not supported.</value>
+    <comment>SourceHash: b14d82dd2ecbf60fca68e32adec4882b9bbb65d3e885f06e1328340883861436</comment>
+  </data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Image files (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|All files (*.*)|*.*</value>
+    <comment>SourceHash: d39da68e2ad33a689ac670ed88c4dc1703c55012c30d1cc8717479880a4b019e</comment>
+  </data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Transparency background</value>
+    <comment>SourceHash: 4d882e63fc50277cfef258b14c9c09bb95b2bf1686d42b5c05236be48a48ff84</comment>
+  </data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automatic</value>
+    <comment>SourceHash: 4c2a3993c15df5918ed140a3ea63cf8f45fb449cfe32254767dea894675c2cf4</comment>
+  </data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>White</value>
+    <comment>SourceHash: 0afe9e60c478644425d91d4d80f381a8bce1af4fe7a4201213bee1504b1534fa</comment>
+  </data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Black</value>
+    <comment>SourceHash: 25e5d3fea1eb6e4ad4bec36bed978639d36a068dd3c73d2797e2bd50d43ae998</comment>
+  </data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>When converting transparent covers to JPEG:
+
+Automatic: Chooses black for light image content at transparent areas; otherwise white.
+White: Uses a white background.
+Black: Uses a black background.
+
+Applies to covers imported from now on.</value>
+    <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
   <data name="Settings.ChapterSample.Tag4" xml:space="preserve">
     <value>04 - A Dream of Escape</value>

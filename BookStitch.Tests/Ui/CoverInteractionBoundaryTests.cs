@@ -148,7 +148,7 @@ public sealed class CoverInteractionBoundaryTests
             SourceContract.ExtractMember(mainWindow, "public string BookTitle"),
             StringComparison.Ordinal);
 
-        var setupProcessing = SourceContract.ExtractMember(setup, "private void ProcessSelectedCover(string sourcePath)");
+        var setupProcessing = SourceContract.ExtractMember(setup, "private async Task ProcessSelectedCover(string sourcePath)");
         Assert.Contains("_metadataState.BookTitle.Trim()", setupProcessing, StringComparison.Ordinal);
 
         var setupAlignment = SourceContract.ExtractMember(setup, "private void AlignManagedCoverWithCommittedTitle()");

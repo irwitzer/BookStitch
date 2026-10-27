@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-google-imgurl",
+  "description": "Synthetic Google Images style imgurl query parameter.",
+  "formats": [
+    {
+      "name": "HTML Format",
+      "value": "<a href=\"https://www.google.com/imgres?imgurl=https%3A%2F%2Fcdn.example.test%2Fgoogle-cover.jpg&source=images\">image</a>"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Unknown",
+    "sourceConfidence": "Medium",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://cdn.example.test/google-cover.jpg",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

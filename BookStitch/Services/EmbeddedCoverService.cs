@@ -1,6 +1,8 @@
 using System.IO;
 using System.Security.Cryptography;
-using SixLabors.ImageSharp;
+using CoverImageDrop.Acquisition;
+using CoverImageDrop.Pipeline;
+using CoverImageDrop.Core.Policy;
 using BookStitch.Models;
 
 namespace BookStitch.Services;
@@ -29,6 +31,12 @@ public sealed class EmbeddedCoverService
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
+    private static readonly CoverImagePipelineService CoverPipeline = new(new CoverImagePipelineOptions
+    {
+        Policy = new StandardCoverPolicy { MinUsableSquarePixels = CoverInputSafety.MinUsableSquarePixels,
+            MaxInputBytes = CoverInputSafety.MaxEncodedBytes,
+            MaxTotalPixels = CoverInputSafety.MaxPixels, MaxDimension = CoverInputSafety.MaxDimension }
+    });
     private const int MaxDistinctInvalidCoverCandidates = 5;
     private readonly TagMetadataReader _tagMetadataReader;
 
@@ -87,14 +95,16 @@ public sealed class EmbeddedCoverService
 
                 using var input = new MemoryStream(cover.Bytes, writable: false);
                 CoverInputSafety.Validate(input);
-                using var image = Image.Load(CoverInputSafety.DecoderOptions, input);
-                if (image.Width <= 0 || image.Height <= 0)
+                using var payload = DropImageData.FromBytes(cover.Bytes, "embedded-cover");
+                var loaded = CoverPipeline.LoadAsync(payload).GetAwaiter().GetResult();
+                if (!loaded.IsSuccess || loaded.Session is null)
                 {
-                    if (ShouldStopAfterInvalidCandidate(candidate, invalidCandidateKeys))
-                        break;
-
+                    if (ShouldStopAfterInvalidCandidate(candidate, invalidCandidateKeys)) break;
                     continue;
                 }
+                using var session = loaded.Session;
+                // Force actual first-frame decoding, not merely header inspection.
+                session.CreatePreviewAsync(32).GetAwaiter().GetResult();
 
                 var extension = ResolveExtension(cover.MimeType);
                 var hash = Convert.ToHexString(SHA256.HashData(cover.Bytes))[..12].ToLowerInvariant();

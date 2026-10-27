@@ -9,7 +9,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\Icons\icon\BookStitch-Icon-OpenBook.ico</ApplicationIcon>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
@@ -47,7 +47,7 @@
   <ItemGroup>
     <!-- Updates require the NeroChplPreservationGuard tests; see AGENTS.md. -->
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <ProjectReference Include="../libraries/CoverImageDrop/CoverImageDrop.Pipeline/CoverImageDrop.Pipeline.csproj" />
   </ItemGroup>
 
   <ItemGroup>

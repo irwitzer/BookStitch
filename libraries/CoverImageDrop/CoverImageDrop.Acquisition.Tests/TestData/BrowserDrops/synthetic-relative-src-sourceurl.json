@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "origin": "synthetic",
+  "id": "synthetic-relative-src-sourceurl",
+  "description": "Synthetic CF_HTML-like SourceURL plus relative image src.",
+  "formats": [
+    {
+      "name": "HTML Format",
+      "value": "Version:1.0\r\nSourceURL:https://example.test/books/page.html\r\n<html><img src=\"../images/relative-cover.jpg\"></html>"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Unknown",
+    "sourceConfidence": "Medium",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://example.test/images/relative-cover.jpg",
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}

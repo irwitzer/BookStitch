@@ -1,7 +1,9 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Processing;
+using CoverImageDrop.Acquisition;
+using CoverImageDrop.Core.Inspection;
+using CoverImageDrop.Core.Issues;
+using CoverImageDrop.Core.Policy;
+using CoverImageDrop.Pipeline;
+using CoverImageDrop.Pipeline.Persistence;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,103 +12,133 @@ namespace BookStitch.Services;
 
 public sealed class CoverImageService
 {
-    public const int DefaultCoverSize = 2000;
-    private const int JpegQuality = 88;
+    private readonly Func<string?> _getTransparencyMode;
 
-    public CoverProcessResult CreateProcessedCover(
-        string sourcePath,
-        string outputFolder,
-        int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels) =>
-        CreateProcessedCover(sourcePath, outputFolder, titleHint: null, warningThresholdPixels);
-
-    public CoverProcessResult CreateProcessedCover(
-        string sourcePath,
-        string outputFolder,
-        string? titleHint,
-        int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels)
+    public CoverImageService(Func<string?>? getTransparencyMode = null)
     {
-        if (string.IsNullOrWhiteSpace(sourcePath))
-            throw new ArgumentException("Es wurde kein Coverpfad übergeben.", nameof(sourcePath));
-
-        if (!File.Exists(sourcePath))
-            throw new FileNotFoundException("Die Coverdatei wurde nicht gefunden.", sourcePath);
-
-        Directory.CreateDirectory(outputFolder);
-
-        using var input = File.OpenRead(sourcePath);
-        CoverInputSafety.Validate(input);
-        using var image = Image.Load(CoverInputSafety.DecoderOptions, input);
-        var originalWidth = image.Width;
-        var originalHeight = image.Height;
-
-        image.Mutate(context => context.AutoOrient());
-
-        var cropSide = Math.Min(image.Width, image.Height);
-        var cropX = (image.Width - cropSide) / 2;
-        var cropY = (image.Height - cropSide) / 2;
-
-        image.Mutate(context => context
-            .Crop(new Rectangle(cropX, cropY, cropSide, cropSide))
-            .Resize(new ResizeOptions
-            {
-                Size = new Size(DefaultCoverSize, DefaultCoverSize),
-                Mode = ResizeMode.Stretch,
-                Sampler = KnownResamplers.Lanczos3
-            }));
-
-        var sourceHash = BuildShortHash(sourcePath);
-        var targetPath = Path.Combine(outputFolder, CoverFileNamePolicy.BuildManagedFileName(sourceHash, titleHint));
-
-        targetPath = SaveProcessedCover(image, targetPath);
-
-        var warning = BuildQualityWarning(originalWidth, originalHeight, warningThresholdPixels);
-
-        return new CoverProcessResult(
-            SourcePath: sourcePath,
-            ProcessedJpegPath: targetPath,
-            OriginalWidth: originalWidth,
-            OriginalHeight: originalHeight,
-            TargetSize: DefaultCoverSize,
-            Warning: warning);
+        _getTransparencyMode = getTransparencyMode ?? (() => CoverTransparencySettingsService.DefaultMode);
     }
 
-
-    private static string SaveProcessedCover(Image image, string preferredTargetPath)
+    private static readonly SemaphoreSlim ProcessingGate = new(1, 1);
+    private readonly CoverImagePipelineService _pipeline = new(new CoverImagePipelineOptions
     {
-        var encoder = new JpegEncoder
+        Policy = new StandardCoverPolicy
         {
-            Quality = JpegQuality
-        };
+            MinUsableSquarePixels = CoverInputSafety.MinUsableSquarePixels,
+            MaxInputBytes = CoverInputSafety.MaxEncodedBytes,
+            MaxTotalPixels = CoverInputSafety.MaxPixels,
+            MaxDimension = CoverInputSafety.MaxDimension
+        },
+        AcquisitionSafetyLimits = new DropImageAcquisitionSafetyLimits
+        {
+            MaxRemoteDownloadBytes = CoverInputSafety.MaxEncodedBytes,
+            MaxEmbeddedDataUrlBytes = CoverInputSafety.MaxEncodedBytes,
+            MaxTextArtifactBytes = 8 * 1024 * 1024,
+            MaxBitmapPixels = CoverInputSafety.MaxPixels
+        }
+    });
+    private readonly CoverImagePersistenceService _persistence = new();
+    private readonly DropImageDataReader _dropReader = new(new DropImageAcquisitionSafetyLimits
+    {
+        MaxRemoteDownloadBytes = CoverInputSafety.MaxEncodedBytes,
+        MaxEmbeddedDataUrlBytes = CoverInputSafety.MaxEncodedBytes,
+        MaxTextArtifactBytes = 8 * 1024 * 1024,
+        MaxBitmapPixels = CoverInputSafety.MaxPixels
+    });
 
+    public bool CanReadDrop(System.Windows.IDataObject data) => _dropReader.CanRead(data);
+
+    // Compatibility entry for synchronous project recovery; interactive hosts await the API below.
+    public CoverProcessResult CreateProcessedCover(string sourcePath, string outputFolder,
+        int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels) =>
+        CreateProcessedCover(sourcePath, outputFolder, null, warningThresholdPixels);
+
+    public CoverProcessResult CreateProcessedCover(string sourcePath, string outputFolder, string? titleHint,
+        int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels) =>
+        CreateProcessedCoverAsync(sourcePath, outputFolder, titleHint, warningThresholdPixels).GetAwaiter().GetResult();
+
+    public async Task<CoverProcessResult> CreateProcessedCoverAsync(string sourcePath, string outputFolder,
+        string? titleHint = null, int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels,
+        CancellationToken cancellationToken = default)
+    {
+        await ProcessingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            image.SaveAsJpeg(preferredTargetPath, encoder);
-            return preferredTargetPath;
+            var load = await _pipeline.LoadFileAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+            return await FinishAsync(load, sourcePath, outputFolder, titleHint, warningThresholdPixels,
+                saveSource: false, cancellationToken).ConfigureAwait(false);
         }
-        catch (IOException)
+        finally { ProcessingGate.Release(); }
+    }
+
+    public async Task<CoverProcessResult> CreateDroppedCoverAsync(System.Windows.IDataObject data,
+        string outputFolder, string? titleHint = null,
+        int warningThresholdPixels = CoverWarningSettingsService.DefaultThresholdPixels,
+        CancellationToken cancellationToken = default)
+    {
+        // Capture OLE/clipboard data on the caller's UI thread, before awaiting the processing gate.
+        var analysisTask = _dropReader.AnalyzeAsync(data, cancellationToken);
+        var analysis = await analysisTask.ConfigureAwait(false);
+        await ProcessingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            var folder = Path.GetDirectoryName(preferredTargetPath) ?? string.Empty;
-            var stem = Path.GetFileNameWithoutExtension(preferredTargetPath);
-            var extension = Path.GetExtension(preferredTargetPath);
-
-            for (var suffix = 2; suffix <= 100; suffix++)
-            {
-                var alternativePath = Path.Combine(folder, $"{stem}_{suffix}{extension}");
-                if (File.Exists(alternativePath))
-                    continue;
-
-                image.SaveAsJpeg(alternativePath, encoder);
-                return alternativePath;
-            }
-
-            throw;
+            var load = await _pipeline.LoadStandardCoverAsync(analysis, cancellationToken).ConfigureAwait(false);
+            return await FinishAsync(load, null, outputFolder, titleHint, warningThresholdPixels,
+                saveSource: true, cancellationToken).ConfigureAwait(false);
         }
+        finally { ProcessingGate.Release(); }
+    }
+
+    private async Task<CoverProcessResult> FinishAsync(CoverImagePipelineLoadResult load, string? sourcePath,
+        string outputFolder, string? titleHint, int warningThresholdPixels, bool saveSource,
+        CancellationToken cancellationToken)
+    {
+        if (!load.IsSuccess || load.Session is null)
+            throw CreateInputException(load.Issues);
+        await using var session = load.Session;
+        session.OutputOptions = session.OutputOptions with
+        { Transparency = CoverTransparencySettingsService.ResolveMode(_getTransparencyMode()) };
+        var final = await session.FinalizeAsync(cancellationToken).ConfigureAwait(false);
+        if (!final.IsSuccess || final.Output is null)
+            throw CreateInputException(final.Issues);
+        cancellationToken.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(outputFolder);
+        if (saveSource)
+        {
+            // Browser temporary leases must never become persistent project source references.
+            using var input = await session.ImageData.OpenReadAsync(cancellationToken).ConfigureAwait(false);
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(input, cancellationToken).ConfigureAwait(false))[..12].ToLowerInvariant();
+            var extension = session.Inspection.SignatureFormat.ToString().ToLowerInvariant();
+            if (extension == "jpeg") extension = "jpg";
+            if (extension == "unknown") extension = "img";
+            var savedSource = await _persistence.SaveSourceToPathAsync(session.ImageData,
+                Path.Combine(outputFolder, $"source_{hash}.{extension}"),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (!savedSource.IsSuccess) throw new IOException(LocalizationText.Get("Disc.Setup.CoverFailed.Message"));
+            sourcePath = savedSource.FilePath;
+        }
+        var target = Path.Combine(outputFolder, CoverFileNamePolicy.BuildManagedFileName(BuildShortHash(sourcePath!), titleHint));
+        var saved = await _persistence.SaveOutputToPathAsync(final.Output, target,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!saved.IsSuccess) throw new IOException(LocalizationText.Get("Disc.Setup.CoverFailed.Message"));
+        return new CoverProcessResult(sourcePath!, saved.FilePath!, session.Inspection.PixelWidth,
+            session.Inspection.PixelHeight, final.Output.Width,
+            BuildQualityWarning(session.Inspection.PixelWidth, session.Inspection.PixelHeight, warningThresholdPixels, final.Output.Width))
+        { Issues = final.Issues };
+    }
+
+    private static Exception CreateInputException(IReadOnlyList<CoverImageIssue> issues)
+    {
+        var key = issues.Any(i => i.Code == CoverImageIssueCode.ImageTooSmall) ? "Cover.InputTooSmall"
+            : issues.Any(i => i.Code is CoverImageIssueCode.InputTooLarge or CoverImageIssueCode.TooManyPixels)
+                ? "Cover.InputTooLarge" : "Cover.InputInvalid";
+        return new InvalidDataException(LocalizationText.Get(key));
     }
 
     private static string BuildQualityWarning(
         int originalWidth,
         int originalHeight,
-        int warningThresholdPixels)
+        int warningThresholdPixels, int targetSize)
     {
         var threshold = CoverWarningSettingsService.NormalizeThresholdPixels(warningThresholdPixels);
         if (threshold == CoverWarningSettingsService.Disabled)
@@ -117,7 +149,7 @@ public sealed class CoverImageService
         if (shortestSide >= threshold)
             return "";
 
-        return LocalizationText.Format("Cover.QualityWarning", originalWidth, originalHeight);
+        return LocalizationText.Format("Cover.QualityWarning", originalWidth, originalHeight, targetSize);
     }
 
     private static string BuildShortHash(string sourcePath)
@@ -136,17 +168,11 @@ public sealed class CoverImageService
         try
         {
             CoverInputSafety.ValidateFile(processedPath);
-            var info = Image.Identify(CoverInputSafety.DecoderOptions, processedPath);
-            var format = Image.DetectFormat(processedPath);
-            if (info is null || format is null)
-                return null;
-
-            return new CoverProcessedAssetInfo(
-                Path.GetFileName(processedPath),
-                NormalizeFormatName(format),
-                info.Width,
-                info.Height,
-                new FileInfo(processedPath).Length);
+            var info = new CoverImageInspector().InspectFileAsync(processedPath).GetAwaiter().GetResult();
+            if (!info.IsSuccess) return null;
+            return new CoverProcessedAssetInfo(Path.GetFileName(processedPath),
+                info.SignatureFormat == DetectedImageFormat.Jpeg ? "JPEG" : info.SignatureFormat.ToString().ToUpperInvariant(),
+                info.PixelWidth, info.PixelHeight, new FileInfo(processedPath).Length);
         }
         catch (Exception)
         {
@@ -207,10 +233,6 @@ public sealed class CoverImageService
         return SHA256.HashData(leftStream).AsSpan().SequenceEqual(SHA256.HashData(rightStream));
     }
 
-    private static string NormalizeFormatName(IImageFormat format) =>
-        format.Name.Equals("JPG", StringComparison.OrdinalIgnoreCase) || format.Name.Equals("JPEG", StringComparison.OrdinalIgnoreCase)
-            ? "JPEG"
-            : format.Name.ToUpperInvariant();
 
 }
 
@@ -227,4 +249,7 @@ public sealed record CoverProcessResult(
     int OriginalWidth,
     int OriginalHeight,
     int TargetSize,
-    string Warning);
+    string Warning)
+{
+    public IReadOnlyList<CoverImageIssue> Issues { get; init; } = [];
+}

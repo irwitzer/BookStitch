@@ -1,0 +1,7 @@
+{
+  "libwebpVersion": "1.6.0",
+  "source": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+  "sourceSha256": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564",
+  "compiler": "Zig 0.13.0 (zig cc, x86_64-windows-gnu, -O2 -s -DNDEBUG -DWEBP_STATIC)",
+  "workerSha256": "ed94eed63fff9e233b1eee5d493717b606c42398ec084db284270d79b679ea44"
+}

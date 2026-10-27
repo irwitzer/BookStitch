@@ -50,5 +50,6 @@ public static class AppSettingsNormalizationService
             SoundSettingsService.NormalizeVolumePercent(settings.SoundVolumePercent);
         AppearanceSettingsService.Normalize(settings);
         CoverWarningSettingsService.Normalize(settings);
+        settings.CoverTransparencyMode = CoverTransparencySettingsService.NormalizeMode(settings.CoverTransparencyMode);
     }
 }

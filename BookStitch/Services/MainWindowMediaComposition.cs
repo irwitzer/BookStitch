@@ -2,7 +2,7 @@ namespace BookStitch.Services;
 
 public sealed class MainWindowMediaComposition
 {
-    private MainWindowMediaComposition()
+    private MainWindowMediaComposition(Func<string?>? getCoverTransparencyMode)
     {
         TagMetadataReader = new TagMetadataReader();
         FileSystemMetadataReader = new FileSystemMetadataReader();
@@ -29,7 +29,7 @@ public sealed class MainWindowMediaComposition
         ProjectMetadataAggregationPersistenceService = new ProjectMetadataAggregationPersistenceService(
             SourceMetadataSnapshotStore,
             ProjectMetadataInitializationService);
-        CoverImageService = new CoverImageService();
+        CoverImageService = new CoverImageService(getCoverTransparencyMode);
     }
 
     public TagMetadataReader TagMetadataReader { get; }
@@ -51,5 +51,5 @@ public sealed class MainWindowMediaComposition
     public FfprobeConcurrencyPolicy FfprobeConcurrencyPolicy { get; }
     public FfprobeCoordinator FfprobeCoordinator { get; }
 
-    public static MainWindowMediaComposition Create() => new();
+    public static MainWindowMediaComposition Create(Func<string?>? getCoverTransparencyMode = null) => new(getCoverTransparencyMode);
 }

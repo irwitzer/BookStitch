@@ -5301,12 +5301,12 @@ Momenteel ondersteund: {0}.</value>
     <comment>SourceHash: 9c3e089c8a9b21a50d786d174767a76a9f5cad7486a3b65bc0b1ae4d75c72ad6</comment>
   </data>
   <data name="Cover.QualityWarning" xml:space="preserve">
-    <value>De omslag is toegevoegd en vergroot naar 2000 × 2000 pixels.
+    <value>De omslag is toegevoegd. Uitvoerafmetingen: {2} × {2} pixels.
 
 • Oorspronkelijke afmetingen: {0} × {1} pixels
 
 Vergroten voegt geen beelddetails toe. De omslag kan er daardoor onscherp uitzien in de speler. Je kunt deze op elk moment vóór het samenvoegen vervangen.</value>
-    <comment>SourceHash: 7aed526f72d7d955770652000528d896254094fe319207c194341630b668fef0</comment>
+    <comment>SourceHash: 490c56014c5d6328e90cce444fbb8714a134413cfbfe7ca3053d20fe6f531827</comment>
   </data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve">
     <value>Opschonen van project mislukt: {0}</value>
@@ -5657,6 +5657,44 @@ Een ★ markeert de waarde die BookStitch op basis van de aanwezige metagegevens
   <data name="Export.FinalValidationFailed" xml:space="preserve">
     <value>Het uiteindelijke uitvoerbestand komt niet overeen met de verwachte metagegevens, hoofdstukken of berekende duur.</value>
     <comment>SourceHash: a913ebf0ca0003855f187756aacf3d2d5db0b0778fa947ef2a14c13e115ae72b</comment>
+  </data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>De omslag moet minimaal 200 × 200 pixels groot zijn.</value>
+    <comment>SourceHash: 59ab6e03ef49e7a53e0723cb139fb71434de259e3326dc2fe759c1a861e37b95</comment>
+  </data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>De afbeelding is beschadigd of de indeling wordt niet ondersteund.</value>
+    <comment>SourceHash: b14d82dd2ecbf60fca68e32adec4882b9bbb65d3e885f06e1328340883861436</comment>
+  </data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Afbeeldingsbestanden (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|Alle bestanden (*.*)|*.*</value>
+    <comment>SourceHash: d39da68e2ad33a689ac670ed88c4dc1703c55012c30d1cc8717479880a4b019e</comment>
+  </data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Achtergrond bij transparantie</value>
+    <comment>SourceHash: 4d882e63fc50277cfef258b14c9c09bb95b2bf1686d42b5c05236be48a48ff84</comment>
+  </data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automatisch</value>
+    <comment>SourceHash: 4c2a3993c15df5918ed140a3ea63cf8f45fb449cfe32254767dea894675c2cf4</comment>
+  </data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>Wit</value>
+    <comment>SourceHash: 0afe9e60c478644425d91d4d80f381a8bce1af4fe7a4201213bee1504b1534fa</comment>
+  </data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Zwart</value>
+    <comment>SourceHash: 25e5d3fea1eb6e4ad4bec36bed978639d36a068dd3c73d2797e2bd50d43ae998</comment>
+  </data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>Bij het omzetten van transparante omslagen naar JPEG:
+
+Automatisch: Kiest zwart bij lichte beeldinhoud in transparante gebieden, anders wit.
+Wit: Gebruikt een witte achtergrond.
+Zwart: Gebruikt een zwarte achtergrond.
+
+Geldt voor omslagen die vanaf nu worden geïmporteerd.</value>
+    <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
   <data name="Cover.InputTooLarge" xml:space="preserve">
     <value>De omslag overschrijdt de toegestane bestands- of afbeeldingsgrootte.</value>

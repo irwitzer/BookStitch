@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "origin": "captured",
+  "id": "captured-openlibrary-small-variants",
+  "description": "Sanitized RC2 Chromium drop from Open Library: both the medium cover and its protocol-relative larger variant remain below the StandardCover usable-square minimum.",
+  "formats": [
+    {
+      "name": "Chromium Web Custom MIME Data Format",
+      "value": "{}"
+    },
+    {
+      "name": "HTML Format",
+      "value": "Version:0.9\r\nSourceURL:about:blank#blocked\r\n<html><body><img src=\"https://covers.example.test/b/id/15178517-M.jpg\" srcset=\"//covers.example.test/b/id/15178517-L.jpg 2x\" alt=\"Sanitized book cover\"></body></html>"
+    },
+    {
+      "name": "Text",
+      "value": "https://covers.example.test/b/id/15178517-L.jpg"
+    }
+  ],
+  "httpResponses": [
+    {
+      "url": "https://covers.example.test/b/id/15178517-M.jpg",
+      "kind": "Image",
+      "width": 180,
+      "height": 292
+    },
+    {
+      "url": "https://covers.example.test/b/id/15178517-L.jpg",
+      "kind": "Image",
+      "width": 307,
+      "height": 500
+    }
+  ],
+  "expected": {
+    "sourceKind": "Chromium",
+    "sourceConfidence": "High",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://covers.example.test/b/id/15178517-M.jpg",
+    "preferredMaterializationResult": "Success",
+    "requiredStandardCoverRequestUrls": [
+      "https://covers.example.test/b/id/15178517-L.jpg"
+    ],
+    "passThroughResult": "Success",
+    "standardCoverResult": "ImageTooSmall"
+  }
+}

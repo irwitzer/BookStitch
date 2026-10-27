@@ -1473,6 +1473,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        CancelCoverImport();
         _ = _maintenanceCoordinator?.StopAsync();
         PipelineUiTransition? transitionOwner = null;
         try
@@ -1697,6 +1698,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
+        CancelCoverImport();
         DeveloperToolsCommands.AccessState.PropertyChanged -= DeveloperAccessState_PropertyChanged;
         DeveloperToolsCommands.AppearancePreview.Changed -= DeveloperAppearancePreview_Changed;
         RunCloseCleanupStep(() => { CompleteWindowCloseCleanup(); });
@@ -2671,6 +2673,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 MeasureResumePhase("resume.metadata", () =>
                 {
                     _projectMetadataSession.Discard();
+                    CancelCoverImport();
                     _projectMetadata.Clear("");
                     if (loadResult.CanonicalMetadata is not null)
                     {
@@ -3203,7 +3206,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             chapterSettingsChanged: ApplySharedChapterSettingsEditorChange,
             chapterGridColumnLayoutState: _chapterGridColumnLayoutState,
             coverImageService: _services.Media.CoverImageService,
-            coverPickerService: _coverPickerService)
+            coverPickerService: _coverPickerService,
+            dropCover: (data, owner) => ImportCoverAsync(null, data, owner))
         {
             Owner = ResolveDevelopmentMetadataDialogOwner(owner)
         };
@@ -4517,6 +4521,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetProjectSourceModeStateForNewSource()
     {
+        CancelCoverImport();
         SetOriginalAudioColumnsVisible(true);
         _folderRatePreview = new();
         _sessionProject.Clear();
@@ -7718,6 +7723,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetMetadataForNewDiscProject()
     {
+        CancelCoverImport();
         _resumeDiscPreview.Clear();
         _mp3DiscChapterSourceCatalog.Clear();
         _transientMp3DiscChapterPreview = null;
@@ -7737,6 +7743,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Even a completely untagged source gets an empty revision-0 metadata model;
         // cross-project exceptions are explicitly locked global metadata preferences.
         _projectMetadataSession.Discard();
+        CancelCoverImport();
         _projectMetadata.Clear("");
         CoverPreviewSource = CoverPreviewPresentationService.GetPlaceholderSource(
             AppearanceSettingsService.GetEffectiveMode(_settings));
@@ -7824,7 +7831,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ChooseCover(this);
     }
 
-    private void ChooseCover(Window owner)
+    private async void ChooseCover(Window owner)
     {
         if (!CanChangeBookMetadata || _isCoverDialogOpen)
             return;
@@ -7845,11 +7852,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (string.IsNullOrWhiteSpace(selectedFile))
                 return;
 
-            SetCoverFromFile(selectedFile, owner);
+            await ImportCoverAsync(selectedFile, null, owner);
         }
         finally
         {
-            Dispatcher.BeginInvoke(
+            _ = Dispatcher.BeginInvoke(
                 DispatcherPriority.ApplicationIdle,
                 new Action(() => _isCoverDialogOpen = false));
         }
@@ -7865,6 +7872,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!CanChangeBookMetadata || string.IsNullOrWhiteSpace(_projectMetadata.ProcessedCoverPath))
             return;
 
+        CancelCoverImport();
         var sourcePath = _projectMetadata.CoverSourcePath;
         if (!string.IsNullOrWhiteSpace(sourcePath) && File.Exists(sourcePath))
         {
@@ -7887,34 +7895,64 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnExportPreviewChanged();
     }
 
+    private CancellationTokenSource? _coverImportCancellation;
+    private long _coverImportGeneration;
+
+    private void CancelCoverImport()
+    {
+        ++_coverImportGeneration;
+        _coverImportCancellation?.Cancel();
+    }
+
     private void Cover_DragOver(object sender, DragEventArgs e)
     {
-        if (!CanChangeBookMetadata || !TryGetFirstDroppedCoverFile(e, out _))
-        {
-            e.Effects = DragDropEffects.None;
-            e.Handled = true;
-            return;
-        }
-
-        e.Effects = DragDropEffects.Copy;
+        e.Effects = CanChangeBookMetadata && _services.Media.CoverImageService.CanReadDrop(e.Data)
+            ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
-    private void Cover_Drop(object sender, DragEventArgs e)
+    private async void Cover_Drop(object sender, DragEventArgs e)
     {
-        if (!CanChangeBookMetadata)
-            return;
+        e.Handled = true;
+        if (!CanChangeBookMetadata) return;
+        await ImportCoverAsync(null, e.Data, this);
+    }
 
-        if (!TryGetFirstDroppedCoverFile(e, out var filePath))
+    private async Task ImportCoverAsync(string? filePath, IDataObject? data, Window owner)
+    {
+        if (!CanChangeBookMetadata) return;
+        CancelCoverImport();
+        using var cancellation = new CancellationTokenSource();
+        _coverImportCancellation = cancellation;
+        var generation = _coverImportGeneration;
+        var metadata = _projectMetadata.CanonicalMetadata;
+        var projectFolder = _currentProjectWorkFolder;
+        try
         {
-            AppDialogService.Warning(
-                this,
-                LocalizationText.Get("MainWindow.Cover.NotAccepted.Title"),
-                LocalizationText.Get("MainWindow.Cover.DropUnsupported.Message"));
-            return;
+            var coverFolder = GetProjectFolderStructure().CoversFolder;
+            var service = _services.Media.CoverImageService;
+            var result = data is not null
+                ? await service.CreateDroppedCoverAsync(data, coverFolder, BookTitle,
+                    _settings.CoverWarningThresholdPixels, cancellation.Token)
+                : await service.CreateProcessedCoverAsync(filePath!, coverFolder, BookTitle,
+                    _settings.CoverWarningThresholdPixels, cancellation.Token);
+            if (cancellation.IsCancellationRequested || generation != _coverImportGeneration ||
+                !ReferenceEquals(metadata, _projectMetadata.CanonicalMetadata) ||
+                !string.Equals(projectFolder, _currentProjectWorkFolder, StringComparison.OrdinalIgnoreCase) ||
+                !CanChangeBookMetadata || !owner.IsVisible) return;
+            ApplyProcessedCover(result, owner);
         }
-
-        SetCoverFromFile(filePath);
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (generation == _coverImportGeneration && owner.IsVisible)
+                AppDialogService.Error(owner, LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                    LocalizationText.Get("Disc.Setup.CoverFailed.Message"), new[] { ex.Message });
+        }
+        finally
+        {
+            if (ReferenceEquals(_coverImportCancellation, cancellation)) _coverImportCancellation = null;
+        }
     }
 
     private bool TryGetFirstDroppedCoverFile(DragEventArgs e, out string filePath)
@@ -7937,7 +7975,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return false;
 
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        return extension is ".jpg" or ".jpeg" or ".png" or ".webp";
+        return extension is ".jpg" or ".jpeg" or ".png" or ".webp" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".ico";
     }
 
     private string GetCoverSourcePathForProjectSetup()
@@ -8096,6 +8134,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 BookTitle,
                 _settings.CoverWarningThresholdPixels);
 
+            CancelCoverImport();
+            ApplyProcessedCover(result, owner ?? this);
+        }
+        catch (Exception ex)
+        {
+            AppDialogService.Error(
+                this,
+                LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
+                LocalizationText.Get("Disc.Setup.CoverFailed.Message"),
+                new[] { ex.Message });
+        }
+    }
+
+    private void ApplyProcessedCover(CoverProcessResult result, Window owner)
+    {
             EmbeddedCoverService.RecordUserSelection(_projectMetadata.CanonicalMetadata, result.SourcePath);
             _projectMetadata.ApplyCoverMetadata(result.SourcePath, result.ProcessedJpegPath, MetadataOrigin.User);
             CoverPreviewSource = result.ProcessedJpegPath;
@@ -8111,7 +8164,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!string.IsNullOrWhiteSpace(result.Warning))
             {
                 AppDialogService.CoverWarning(
-                    owner ?? this,
+                    owner,
                     LocalizationText.Get("MainWindow.Cover.Accepted"),
                     result.Warning,
                     _settings.CoverWarningThresholdPixels,
@@ -8121,15 +8174,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 StatusText = LocalizationText.Get("MainWindow.Cover.Prepared");
             }
-        }
-        catch (Exception ex)
-        {
-            AppDialogService.Error(
-                this,
-                LocalizationText.Get("Disc.Setup.CoverFailed.Title"),
-                LocalizationText.Get("Disc.Setup.CoverFailed.Message"),
-                new[] { ex.Message });
-        }
     }
 
     private void MetadataHeader_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

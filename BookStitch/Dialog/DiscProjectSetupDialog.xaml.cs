@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Controls;
 using BookStitch.Services;
 using Microsoft.Win32;
@@ -69,7 +69,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
     private bool _isInitializing;
     private string _lastAcceptedPreset = "";
     private string _outputFolder = "";
-    private readonly CoverImageService _coverImageService = new();
+    private readonly CoverImageService _coverImageService;
     private readonly CoverPickerService _coverPickerService;
     private readonly string _coverWorkFolder;
     private string _selectedCoverSourcePath = "";
@@ -141,6 +141,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
 
         _request = request;
         _settingsManager=settingsManager;
+        _coverImageService = new CoverImageService(() => _settingsManager?.Current.CoverTransparencyMode);
         _setCoverWarningThresholdPixels = setCoverWarningThresholdPixels ?? (_ => { });
         _shouldWarnDiscCount = shouldWarnDiscCount ?? (() => true);
         _setAlwaysWarnDiscCount = setAlwaysWarnDiscCount;
@@ -546,6 +547,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
 
     private bool CaptureResult(bool validateForStart)
     {
+        if (validateForStart && _isCoverDialogOpen) return false;
         var discCount = 1;
         if (_modeProfile.ShowsDiscCount &&
             !DiscCountState.TryGetValue(out discCount))
@@ -1023,6 +1025,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
                 LocalizationText.Get("Disc.Setup.CoverFailed.Message"), new[] { ex.Message });
             return;
         }
+        ++_coverSelectionGeneration;
         _selectedCoverSourcePath = "";
         _processedCoverPath = "";
         _metadataState.ApplyCoverMetadata("", "", MetadataOrigin.User);
@@ -1035,7 +1038,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         ChooseCover();
     }
 
-    private void ChooseCover()
+    private async void ChooseCover()
     {
         if (_isCoverDialogOpen)
             return;
@@ -1057,25 +1060,29 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
             if (!string.IsNullOrWhiteSpace(selectedFolder) && Directory.Exists(selectedFolder))
                 _setLastCoverFolder?.Invoke(selectedFolder);
 
-            ProcessSelectedCover(selectedFile);
+            await ProcessSelectedCover(selectedFile);
         }
         finally
         {
-            Dispatcher.BeginInvoke(
+            _ = Dispatcher.BeginInvoke(
                 System.Windows.Threading.DispatcherPriority.ApplicationIdle,
                 new System.Action(() => _isCoverDialogOpen = false));
         }
     }
 
-    private void ProcessSelectedCover(string sourcePath)
+    private long _coverSelectionGeneration;
+
+    private async Task ProcessSelectedCover(string sourcePath)
     {
+        var generation = ++_coverSelectionGeneration;
         try
         {
-            var result = _coverImageService.CreateProcessedCover(
+            var result = await _coverImageService.CreateProcessedCoverAsync(
                 sourcePath,
                 _coverWorkFolder,
                 _metadataState.BookTitle.Trim(),
                 _getCoverWarningThresholdPixels());
+            if (!IsVisible || generation != _coverSelectionGeneration) return;
             EmbeddedCoverService.RecordUserSelection(_metadataState.CanonicalMetadata, result.SourcePath);
             _selectedCoverSourcePath = result.SourcePath;
             _processedCoverPath = result.ProcessedJpegPath;

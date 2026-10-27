@@ -5303,12 +5303,12 @@ Formatos atualmente compatíveis: {0}.</value>
     <comment>SourceHash: 9c3e089c8a9b21a50d786d174767a76a9f5cad7486a3b65bc0b1ae4d75c72ad6</comment>
   </data>
   <data name="Cover.QualityWarning" xml:space="preserve">
-    <value>A capa foi adicionada e ampliada para 2000 × 2000 pixels.
+    <value>A capa foi adicionada. Tamanho de saída: {2} × {2} pixels.
 
 • Tamanho original: {0} × {1} pixels
 
 A ampliação não acrescenta detalhes à imagem. Por isso, a capa pode parecer desfocada no reprodutor. Você pode substituí-la a qualquer momento antes da junção.</value>
-    <comment>SourceHash: 7aed526f72d7d955770652000528d896254094fe319207c194341630b668fef0</comment>
+    <comment>SourceHash: 490c56014c5d6328e90cce444fbb8714a134413cfbfe7ca3053d20fe6f531827</comment>
   </data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve">
     <value>Falha na limpeza de projetos: {0}</value>
@@ -5659,6 +5659,44 @@ O símbolo ★ identifica o valor que o BookStitch considerou automaticamente o 
   <data name="Export.FinalValidationFailed" xml:space="preserve">
     <value>A saída final não corresponde aos metadados, capítulos ou à duração calculada esperados.</value>
     <comment>SourceHash: a913ebf0ca0003855f187756aacf3d2d5db0b0778fa947ef2a14c13e115ae72b</comment>
+  </data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>A capa deve ter pelo menos 200 × 200 pixels.</value>
+    <comment>SourceHash: 59ab6e03ef49e7a53e0723cb139fb71434de259e3326dc2fe759c1a861e37b95</comment>
+  </data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>A imagem está danificada ou seu formato não é compatível.</value>
+    <comment>SourceHash: b14d82dd2ecbf60fca68e32adec4882b9bbb65d3e885f06e1328340883861436</comment>
+  </data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Arquivos de imagem (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|Todos os arquivos (*.*)|*.*</value>
+    <comment>SourceHash: d39da68e2ad33a689ac670ed88c4dc1703c55012c30d1cc8717479880a4b019e</comment>
+  </data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Fundo das transparências</value>
+    <comment>SourceHash: 4d882e63fc50277cfef258b14c9c09bb95b2bf1686d42b5c05236be48a48ff84</comment>
+  </data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automático</value>
+    <comment>SourceHash: 4c2a3993c15df5918ed140a3ea63cf8f45fb449cfe32254767dea894675c2cf4</comment>
+  </data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>Branco</value>
+    <comment>SourceHash: 0afe9e60c478644425d91d4d80f381a8bce1af4fe7a4201213bee1504b1534fa</comment>
+  </data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Preto</value>
+    <comment>SourceHash: 25e5d3fea1eb6e4ad4bec36bed978639d36a068dd3c73d2797e2bd50d43ae998</comment>
+  </data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>Ao converter capas transparentes para JPEG:
+
+Automático: escolhe preto quando o conteúdo da imagem nas áreas transparentes é claro; caso contrário, branco.
+Branco: usa um fundo branco.
+Preto: usa um fundo preto.
+
+Aplica-se às capas importadas a partir de agora.</value>
+    <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
   <data name="Cover.InputTooLarge" xml:space="preserve">
     <value>A capa excede o tamanho máximo permitido de arquivo ou imagem.</value>

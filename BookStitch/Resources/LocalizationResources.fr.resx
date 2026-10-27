@@ -1315,11 +1315,11 @@ Formats actuellement pris en charge : {0}.</value><comment>SourceHash: bcd444be0
   <data name="MainWindow.Cover.NotAccepted.Title" xml:space="preserve"><value>Pochette non appliquée</value><comment>SourceHash: 67dffad98cd85015318b1c87de6f082eda3f2760959c23a3c242187ecb6e2bf4</comment></data>
   <data name="MainWindow.Cover.DropUnsupported.Message" xml:space="preserve"><value>Dépose un fichier image. Les formats JPG, PNG et WebP sont pris en charge.</value><comment>SourceHash: 310c5712e5b0315b262793e12fa330a432932842888d2ff376ee4b229ef9b406</comment></data>
   <data name="MainWindow.Cover.FormatUnsupported.Message" xml:space="preserve"><value>Ce format d’image n’est pas pris en charge. Utilise JPG, PNG ou WebP.</value><comment>SourceHash: 9c3e089c8a9b21a50d786d174767a76a9f5cad7486a3b65bc0b1ae4d75c72ad6</comment></data>
-  <data name="Cover.QualityWarning" xml:space="preserve"><value>La couverture a été ajoutée et agrandie à 2000 × 2000 pixels.
+  <data name="Cover.QualityWarning" xml:space="preserve"><value>La couverture a été ajoutée. Dimensions de sortie : {2} × {2} pixels.
 
 • Dimensions d’origine : {0} × {1} pixels
 
-L’agrandissement n’ajoute aucun détail à l’image. La couverture peut donc paraître floue dans le lecteur. Tu peux la remplacer à tout moment avant la fusion.</value><comment>SourceHash: 7aed526f72d7d955770652000528d896254094fe319207c194341630b668fef0</comment></data>
+L’agrandissement n’ajoute aucun détail à l’image. La couverture peut donc paraître floue dans le lecteur. Tu peux la remplacer à tout moment avant la fusion.</value><comment>SourceHash: 490c56014c5d6328e90cce444fbb8714a134413cfbfe7ca3053d20fe6f531827</comment></data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve"><value>Échec du nettoyage des projets : {0}</value><comment>SourceHash: 1cba361088346573a93a1e634ef63f09761d877695a3a1964ee27739063f499b</comment></data>
   <data name="MainWindow.Cleanup.Deleted.One" xml:space="preserve"><value>{0} ancien projet a été supprimé.</value><comment>SourceHash: d0910f541b4b1d3ebe96c60a63e3c995653441a1933fb9df0b9606cfb42b3f9a</comment></data>
   <data name="MainWindow.Cleanup.Deleted.Many" xml:space="preserve"><value>{0} anciens projets ont été supprimés.</value><comment>SourceHash: 0b815b1d386cd757e6ce9f235aa2e037181be2f54024d2f445f02f9b20488494</comment></data>
@@ -2376,6 +2376,44 @@ TranslationNote: Genre catalog localization; DE/EN/ES catalogue supplied by the 
   <data name="Settings.Faq.NavigationTitle" xml:space="preserve">
     <value>FAQ</value>
     <comment>SourceHash: dbc468a14b601d5d9240aeb72b9fcd2f8aed2f4e30932876edf8d16ec313846b</comment>
+  </data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>La couverture doit mesurer au moins 200 × 200 pixels.</value>
+    <comment>SourceHash: 59ab6e03ef49e7a53e0723cb139fb71434de259e3326dc2fe759c1a861e37b95</comment>
+  </data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>L’image est endommagée ou son format n’est pas pris en charge.</value>
+    <comment>SourceHash: b14d82dd2ecbf60fca68e32adec4882b9bbb65d3e885f06e1328340883861436</comment>
+  </data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Fichiers image (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|Tous les fichiers (*.*)|*.*</value>
+    <comment>SourceHash: d39da68e2ad33a689ac670ed88c4dc1703c55012c30d1cc8717479880a4b019e</comment>
+  </data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Fond des zones transparentes</value>
+    <comment>SourceHash: 4d882e63fc50277cfef258b14c9c09bb95b2bf1686d42b5c05236be48a48ff84</comment>
+  </data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automatique</value>
+    <comment>SourceHash: 4c2a3993c15df5918ed140a3ea63cf8f45fb449cfe32254767dea894675c2cf4</comment>
+  </data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>Blanc</value>
+    <comment>SourceHash: 0afe9e60c478644425d91d4d80f381a8bce1af4fe7a4201213bee1504b1534fa</comment>
+  </data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Noir</value>
+    <comment>SourceHash: 25e5d3fea1eb6e4ad4bec36bed978639d36a068dd3c73d2797e2bd50d43ae998</comment>
+  </data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>Lors de la conversion des couvertures transparentes en JPEG :
+
+Automatique : choisit le noir si le contenu de l’image dans les zones transparentes est clair, sinon le blanc.
+Blanc : utilise un fond blanc.
+Noir : utilise un fond noir.
+
+S’applique aux couvertures importées à partir de maintenant.</value>
+    <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
   <data name="Settings.ChapterSample.Tag4" xml:space="preserve">
     <value>04 - Les chemins du rêve</value>

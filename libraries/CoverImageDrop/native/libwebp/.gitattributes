@@ -1,0 +1,2 @@
+# Preserve upstream archives and license files byte-for-byte.
+* -text -whitespace

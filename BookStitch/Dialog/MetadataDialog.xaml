@@ -1542,6 +1542,9 @@
                                     VerticalAlignment="Top"
                                     Style="{StaticResource CoverPickerBorderStyle}"
                                     MouseLeftButtonUp="ConceptCover_MouseLeftButtonUp"
+                                      AllowDrop="True"
+                                      DragOver="ConceptCover_DragOver"
+                                      Drop="ConceptCover_Drop"
                                     AutomationProperties.Name="{services:LocalizedText Key=Metadata.Automation.SelectCover}">
                                 <Border.ContextMenu>
                                     <ContextMenu Style="{StaticResource BookStitchContextMenuStyle}"

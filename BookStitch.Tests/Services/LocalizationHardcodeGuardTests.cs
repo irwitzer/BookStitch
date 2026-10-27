@@ -110,7 +110,7 @@ public sealed class LocalizationHardcodeGuardTests
             "private void MarkMp3DiscImportFailed(",
             "private async Task<bool> PrepareCompletedMp3DiscProjectForCurrentPresetAsync(",
             "private void ShowUnsupportedDiscSourceMessage(DiscSourceAnalysis analysis)",
-            "private void Cover_Drop(object sender, DragEventArgs e)",
+            "private async void Cover_Drop(object sender, DragEventArgs e)",
             "private void SetCoverFromFile(string filePath, Window? owner = null)",
             "private ProjectCleanupResult DeleteOldProjects(int olderThanDays, bool showUserMessage)",
             "private IReadOnlyList<string> DeleteOldUnreferencedCoverFiles(DateTime nowUtc, int olderThanDays)",

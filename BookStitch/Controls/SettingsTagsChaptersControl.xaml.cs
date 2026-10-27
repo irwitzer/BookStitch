@@ -54,6 +54,7 @@ public partial class SettingsTagsChaptersControl : UserControl
         SelectOutputFolderLayout();
         OverwriteWithoutAskingCheckBox.IsChecked = Settings.OverwriteFinalOutputWithoutAsking;
         SelectCoverWarningThreshold();
+        SelectCoverTransparency();
         RememberLastCoverPickerFolderCheckBox.IsChecked =
             _coverPickerService?.RememberLastCoverPickerFolder ?? Settings.RememberLastCoverPickerFolder;
         SelectChapterControls();
@@ -74,7 +75,7 @@ public partial class SettingsTagsChaptersControl : UserControl
     {
         var wasLoading = _isLoading;
         _isLoading = true;
-        try { SelectCoverWarningThreshold(); }
+        try { SelectCoverWarningThreshold(); SelectCoverTransparency(); }
         finally { _isLoading = wasLoading; }
         MetadataSettingsSection.Visibility = section == SettingsTagsChaptersSection.Metadata
             ? Visibility.Visible
@@ -276,6 +277,21 @@ public partial class SettingsTagsChaptersControl : UserControl
             legacyUseLeadingZeros: false,
             _chapterPreviewProjectDataProvider!(),
             maxItems: 5);
+    }
+
+    private void SelectCoverTransparency()
+    {
+        var mode = CoverTransparencySettingsService.NormalizeMode(Settings.CoverTransparencyMode);
+        CoverTransparencyComboBox.SelectedItem = CoverTransparencyComboBox.Items.OfType<ComboBoxItem>()
+            .First(item => string.Equals(item.Tag as string, mode, StringComparison.Ordinal));
+    }
+
+    private void CoverTransparencyComboBox_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoading || _settingsManager is null) return;
+        var selected = CoverTransparencyComboBox.SelectedItem as ComboBoxItem;
+        Settings.CoverTransparencyMode = CoverTransparencySettingsService.NormalizeMode(selected?.Tag as string);
+        _settingsManager.SaveImmediate();
     }
 
     private void ConfigureCoverWarningControls()

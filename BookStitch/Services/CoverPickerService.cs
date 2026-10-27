@@ -10,7 +10,7 @@ namespace BookStitch.Services;
 
 public sealed class CoverPickerService : INotifyPropertyChanged
 {
-    public const string ImageFileFilter = "Bilddateien (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp|Alle Dateien (*.*)|*.*";
+    public static string ImageFileFilter => LocalizationText.Get("CoverPicker.ImageFilter");
 
     private readonly AppSettings _settings;
     private readonly Action _saveSettings;

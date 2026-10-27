@@ -7,6 +7,21 @@ namespace BookStitch.Tests.Services;
 public sealed class EmbeddedCoverServiceTests
 {
     [Fact]
+    public void Tiny_embedded_cover_is_skipped_and_next_eligible_cover_is_used()
+    {
+        using var folder = new TemporaryFolder();
+        var tiny = folder.CreateFile("tiny.mp3");
+        var valid = folder.CreateFile("valid.mp3");
+        var reader = new RecordingCoverReader();
+        reader.Covers[tiny] = new EmbeddedCoverData(CoverTestImages.Create(199, 300, jpeg: true), "image/jpeg");
+        reader.Covers[valid] = new EmbeddedCoverData(ValidJpegBytes(), "image/jpeg");
+        var result = new EmbeddedCoverService(reader).ExtractFirstValidCover([tiny, valid], folder.Path);
+        Assert.NotNull(result);
+        Assert.Equal(reader.Covers[valid]!.Bytes, File.ReadAllBytes(result!));
+        Assert.Equal(new[] { tiny, valid }, reader.ReadFiles);
+    }
+
+    [Fact]
     public void Oversized_embedded_payload_is_skipped_and_next_valid_cover_is_used()
     {
         using var folder = new TemporaryFolder();
@@ -131,8 +146,7 @@ public sealed class EmbeddedCoverServiceTests
 
     private static byte[] ValidJpegBytes()
     {
-        return Convert.FromBase64String(
-            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Al//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EFBQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EFBQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EFBABAQAAAAAAAAAAAAAAAAAAARD/2gAIAQEAAT8QH//Z");
+        return CoverTestImages.Create(600, 600, jpeg: true);
     }
 
     private sealed class RecordingCoverReader : TagMetadataReader

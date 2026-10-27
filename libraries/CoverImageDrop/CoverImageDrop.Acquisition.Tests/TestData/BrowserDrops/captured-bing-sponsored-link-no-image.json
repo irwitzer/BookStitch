@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "origin": "captured",
+  "id": "captured-bing-sponsored-link-no-image",
+  "description": "Sanitized RC2 Chromium/Bing sponsored-result drop that contains only a page/ad click URL and no credible image URL.",
+  "formats": [
+    {
+      "name": "Chromium Web Custom MIME Data Format",
+      "value": "{}"
+    },
+    {
+      "name": "HTML Format",
+      "value": "Version:0.9\r\nSourceURL:https://search.example.test/aclick?id=sponsored\r\n<html><body><a target=\"_blank\" href=\"https://search.example.test/aclick?id=sponsored\">Sponsored book result</a></body></html>"
+    },
+    {
+      "name": "Text",
+      "value": "https://search.example.test/aclick?id=sponsored"
+    }
+  ],
+  "httpResponses": [
+    {
+      "url": "https://search.example.test/aclick?id=sponsored",
+      "kind": "HtmlNoImage"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Chromium",
+    "sourceConfidence": "High",
+    "preferredCandidateKind": "DirectUrl",
+    "preferredCandidateUrl": "https://search.example.test/aclick?id=sponsored",
+    "preferredMaterializationResult": "Failure",
+    "requiredStandardCoverRequestUrls": [
+      "https://search.example.test/aclick?id=sponsored"
+    ],
+    "passThroughResult": "AcquisitionFailure",
+    "standardCoverResult": "NoImagePayloadFound"
+  }
+}

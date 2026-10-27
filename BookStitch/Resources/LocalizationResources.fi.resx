@@ -4034,12 +4034,12 @@ Tällä hetkellä tuetaan: {0}.</value>
     <value>Tätä kuvamuotoa ei tueta. Käytä JPG-, PNG- tai WebP-muotoa.</value>
     <comment>SourceHash: 9c3e089c8a9b21a50d786d174767a76a9f5cad7486a3b65bc0b1ae4d75c72ad6</comment></data>
   <data name="Cover.QualityWarning" xml:space="preserve">
-    <value>Kansikuva on lisätty ja suurennettu kokoon 2000 × 2000 pikseliä.
+    <value>Kansikuva on lisätty. Tulostuskoko: {2} × {2} pikseliä.
 
 • Alkuperäinen koko: {0} × {1} pikseliä
 
 Suurentaminen ei lisää kuvaan yksityiskohtia. Kansikuva voi siksi näyttää sumealta soittimessa. Voit vaihtaa sen milloin tahansa ennen yhdistämistä.</value>
-    <comment>SourceHash: 7aed526f72d7d955770652000528d896254094fe319207c194341630b668fef0</comment></data>
+    <comment>SourceHash: 490c56014c5d6328e90cce444fbb8714a134413cfbfe7ca3053d20fe6f531827</comment></data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve">
     <value>Projektien siivous epäonnistui: {0}</value>
     <comment>SourceHash: 1cba361088346573a93a1e634ef63f09761d877695a3a1964ee27739063f499b</comment></data>
@@ -4304,6 +4304,36 @@ Tähti ★ merkitsee arvoa, jonka BookStitch on valinnut käytettävissä olevie
   <data name="Export.FinalValidationFailed" xml:space="preserve">
     <value>Lopullinen tuloste ei vastaa odotettuja metatietoja, lukuja tai laskettua kestoa.</value>
     <comment>SourceHash: a913ebf0ca0003855f187756aacf3d2d5db0b0778fa947ef2a14c13e115ae72b</comment></data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>Kansikuvan on oltava vähintään 200 × 200 pikseliä.</value>
+    <comment>SourceHash: 59ab6e03ef49e7a53e0723cb139fb71434de259e3326dc2fe759c1a861e37b95</comment></data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>Kuva on vioittunut tai sen muotoa ei tueta.</value>
+    <comment>SourceHash: b14d82dd2ecbf60fca68e32adec4882b9bbb65d3e885f06e1328340883861436</comment></data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Kuvatiedostot (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|Kaikki tiedostot (*.*)|*.*</value>
+    <comment>SourceHash: d39da68e2ad33a689ac670ed88c4dc1703c55012c30d1cc8717479880a4b019e</comment></data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Läpinäkyvien alueiden tausta</value>
+    <comment>SourceHash: 4d882e63fc50277cfef258b14c9c09bb95b2bf1686d42b5c05236be48a48ff84</comment></data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automaattinen</value>
+    <comment>SourceHash: 4c2a3993c15df5918ed140a3ea63cf8f45fb449cfe32254767dea894675c2cf4</comment></data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>Valkoinen</value>
+    <comment>SourceHash: 0afe9e60c478644425d91d4d80f381a8bce1af4fe7a4201213bee1504b1534fa</comment></data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Musta</value>
+    <comment>SourceHash: 25e5d3fea1eb6e4ad4bec36bed978639d36a068dd3c73d2797e2bd50d43ae998</comment></data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>Kun läpinäkyvä kansikuva muunnetaan JPEG-muotoon:
+
+Automaattinen: Valitsee mustan, kun läpinäkyvien alueiden kuvasisältö on vaalea, muuten valkoisen.
+Valkoinen: Käyttää valkoista taustaa.
+Musta: Käyttää mustaa taustaa.
+
+Koskee jatkossa tuotavia kansikuvia.</value>
+    <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment></data>
   <data name="Cover.InputTooLarge" xml:space="preserve">
     <value>Kansikuva ylittää sallitun tiedostokoon tai kuvan mitat.</value>
     <comment>SourceHash: a527e4de667e6114b8ea3df7b061f8edf692ae1df71001594dbbb50b30cde1ae</comment></data>
@@ -5058,28 +5088,36 @@ Uudelleenrakennus tarvitaan: {11}</value>
     <comment>SourceHash: 4ef9751dac49d5b971f1da8b828f63f9dae4f4e16d8a54b04189503dd0065b3e</comment></data>
   <data name="Developer.OpensTheRealWaitingDialogWithSimulated" xml:space="preserve">
     <value>Avaa varsinaisen CD:n odotusikkunan ohjatuilla testitiloilla. Asemia, projekteja ja tiedostoja ei muuteta. Päätä odotustila Peruuta-painikkeella.</value>
-    <comment>SourceHash: 631065f5daa2b9f8153bf6672046d913a9b670c3db56b794f7c89117393fea42</comment></data>
+    <comment>SourceHash: 631065f5daa2b9f8153bf6672046d913a9b670c3db56b794f7c89117393fea42</comment>
+  </data>
   <data name="Developer.HybridHardwareTest" xml:space="preserve">
     <value>Yhdistetty laitteistotesti</value>
-    <comment>SourceHash: a4b2232b232d856d7994b4045bd830310da55a4f38cf92c5582751b463853e28</comment></data>
+    <comment>SourceHash: a4b2232b232d856d7994b4045bd830310da55a4f38cf92c5582751b463853e28</comment>
+  </data>
   <data name="Developer.UsesARealDriveEjectionPollingAnd" xml:space="preserve">
     <value>Käyttää oikeaa optista asemaa, levyn poistamista, toistuvaa tarkistusta ja tuotantokäytön levyntunnistusta. Tunnistus ei käynnistä tuontia, rippausta, muuntamista eikä yhdistämistä. Kaksoiskappaleen testissä kyseisen levyn on oltava asemassa jo testin alkaessa.</value>
-    <comment>SourceHash: dd7ddf472a80a5f55043d1eb0e6d292528b23dca4425d76cc6b7a70907c5a547</comment></data>
+    <comment>SourceHash: dd7ddf472a80a5f55043d1eb0e6d292528b23dca4425d76cc6b7a70907c5a547</comment>
+  </data>
   <data name="Developer.NoProjectDataIsChanged" xml:space="preserve">
     <value>Projektitietoja ei muuteta.</value>
-    <comment>SourceHash: 3c7be320714799bc611b25b759bea0a2991d9796d4ef9db0178a1290398db3ad</comment></data>
+    <comment>SourceHash: 3c7be320714799bc611b25b759bea0a2991d9796d4ef9db0178a1290398db3ad</comment>
+  </data>
   <data name="Developer.NumberInput" xml:space="preserve">
     <value>Numerosyöte</value>
-    <comment>SourceHash: 206de30ca1c377ed2175cbc32ce2115f863bdd0bf0c5cd9a04453a538a277a63</comment></data>
+    <comment>SourceHash: 206de30ca1c377ed2175cbc32ce2115f863bdd0bf0c5cd9a04453a538a277a63</comment>
+  </data>
   <data name="Developer.TestTheWaitingDialogAboveWithSimulation" xml:space="preserve">
     <value>Yllä olevaa CD:n odotusikkunaa voi testata simuloimalla tai oikealla laitteistolla. Windowsin omat tiedosto- ja kansiovalintaikkunat eivät sisälly esikatseluun.</value>
-    <comment>SourceHash: 7f97c790f9fc0db91867d0b36c81ace25da599d9b89aa414f72a88eba20f4dd2</comment></data>
+    <comment>SourceHash: 7f97c790f9fc0db91867d0b36c81ace25da599d9b89aa414f72a88eba20f4dd2</comment>
+  </data>
   <data name="Tools.Ffmpeg.NotConfigured" xml:space="preserve">
     <value>FFmpeg-ohjelmaa ei ole määritetty.</value>
-    <comment>SourceHash: 97b223ffe3a6322b9adc1f0e1e03b9ac86b2d1e3b75e3069eda2a29678856fc6</comment></data>
+    <comment>SourceHash: 97b223ffe3a6322b9adc1f0e1e03b9ac86b2d1e3b75e3069eda2a29678856fc6</comment>
+  </data>
   <data name="Tools.Ffmpeg.NoErrorOutput" xml:space="preserve">
     <value>FFmpeg ei antanut virheilmoitusta.</value>
-    <comment>SourceHash: 4037c0598b19dc00a4ac386c99a4fb356eeba9fbc199879996747dcf301714ee</comment></data>
+    <comment>SourceHash: 4037c0598b19dc00a4ac386c99a4fb356eeba9fbc199879996747dcf301714ee</comment>
+  </data>
   <data name="Tools.Ffprobe.NotConfigured" xml:space="preserve">
     <value>FFprobe-ohjelmaa ei ole määritetty.</value>
     <comment>SourceHash: 424a83c2e6ea77e3aacc7639b339b609d2f6b7d916034e7d96b07a3d2c4711d6</comment>

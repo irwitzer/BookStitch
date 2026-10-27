@@ -128,16 +128,48 @@
                                Foreground="{DynamicResource MainTextBrush}"
                                Margin="0,22,0,14"/>
 
-                    <StackPanel HorizontalAlignment="Left" Margin="110,0,0,0">
+                    <Grid HorizontalAlignment="Left" Margin="110,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="28"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <TextBlock x:Name="CoverWarningThresholdHeadingTextBlock"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,6"/>
-                        <ComboBox x:Name="CoverWarningThresholdComboBox"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   MaxWidth="260" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="CoverWarningThresholdComboBox" Grid.Row="1"
                                   HorizontalAlignment="Left"
                                   Style="{StaticResource AppearanceCompactComboBoxStyle}"
                                   controls:ComboBoxContentWidth.IsEnabled="True"
                                   SelectionChanged="CoverWarningThresholdComboBox_Changed"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,0,6">
+                            <Label x:Name="CoverTransparencyLabel" Padding="0" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MainTextBrush}"
+                                   VerticalAlignment="Center" Target="{Binding ElementName=CoverTransparencyComboBox}">
+                                <TextBlock Text="{services:LocalizedText Key=Cover.Transparency.Heading}"
+                                           MaxWidth="230" TextWrapping="Wrap"/>
+                            </Label>
+                            <controls:InfoPoint x:Name="CoverTransparencyInfoPoint" Margin="6,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Title="{DynamicResource Cover.Transparency.Heading}"
+                                                Body="{DynamicResource Cover.Transparency.Info}"/>
+                        </StackPanel>
+                        <ComboBox x:Name="CoverTransparencyComboBox" Grid.Column="2" Grid.Row="1"
+                                  HorizontalAlignment="Left"
+                                  Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                  controls:ComboBoxContentWidth.IsEnabled="True"
+                                  AutomationProperties.Name="{services:LocalizedText Key=Cover.Transparency.Heading}"
+                                  SelectionChanged="CoverTransparencyComboBox_Changed">
+                            <ComboBoxItem Tag="Auto" Content="{services:LocalizedText Key=Cover.Transparency.Auto}"/>
+                            <ComboBoxItem Tag="White" Content="{services:LocalizedText Key=Cover.Transparency.White}"/>
+                            <ComboBoxItem Tag="Black" Content="{services:LocalizedText Key=Cover.Transparency.Black}"/>
+                        </ComboBox>
+                        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
                             <CheckBox x:Name="RememberLastCoverPickerFolderCheckBox"
                                       Content="{services:LocalizedText Key=UiCoverOrdnerMerken}"
                                       Style="{StaticResource SettingsToggleStyle}"
@@ -149,7 +181,7 @@
                                                 Title="{DynamicResource InfoRememberCoverFolderTitle}"
                                                 Body="{DynamicResource InfoRememberCoverFolderBody}"/>
                         </StackPanel>
-                    </StackPanel>
+                    </Grid>
                 </StackPanel>
 
                 <StackPanel x:Name="ChaptersSettingsSection" Visibility="Collapsed">

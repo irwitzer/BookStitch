@@ -7200,13 +7200,13 @@ Length: flexible</comment>
 Length: flexible</comment>
   </data>
   <data name="Cover.QualityWarning" xml:space="preserve">
-    <value>Das Cover wurde übernommen und auf 2000 × 2000 Pixel hochskaliert.
+    <value>Das Cover wurde übernommen. Ausgabegröße: {2} × {2} Pixel.
 
 • Originalgröße: {0} × {1} Pixel
 
 Durch das Hochskalieren entstehen keine zusätzlichen Bilddetails. Das Cover kann deshalb im Player unscharf wirken. Du kannst es bis zum Zusammenfügen jederzeit ersetzen.</value>
-    <comment>Context: Warnung nach der Cover-Übernahme in Hauptfenster und Projektvorbereitung. Meaning: Das bereits verarbeitete Cover wurde auf 2000 × 2000 Pixel hochskaliert; zusätzliche Details entstehen dadurch nicht, daher mögliche Unschärfe. Originalgröße ist die Quelldateigröße vor dem quadratischen Zuschnitt. Austausch bis zum Zusammenfügen möglich. Length: flexible
-Placeholders: {0}=ursprüngliche Breite in Pixeln; {1}=ursprüngliche Höhe in Pixeln.</comment>
+    <comment>Context: Warnung nach der Cover-Übernahme in Hauptfenster und Projektvorbereitung. Meaning: Niedrige Quellauflösung gemäß Warnschwelle; tatsächliche automatische Ausgabegröße anzeigen. Hochskalieren erzeugt keine zusätzlichen Details. Austausch bis zum Zusammenfügen möglich. Length: flexible
+Placeholders: {0}=ursprüngliche Breite; {1}=ursprüngliche Höhe; {2}=tatsächliche quadratische Ausgabegröße in Pixeln.</comment>
   </data>
   <data name="MainWindow.Cleanup.ProjectFailed" xml:space="preserve">
     <value>Projektbereinigung fehlgeschlagen: {0}</value>
@@ -7712,6 +7712,44 @@ Length: moderate</comment>
     <comment>Context: Export validation; failure message (referenced by FinalizationSnapshot)
 Meaning: Failure/error message; preserve whether the action failed or is simply unavailable.
 Length: moderate</comment>
+  </data>
+  <data name="Cover.InputTooSmall" xml:space="preserve">
+    <value>Das Cover muss mindestens 200 × 200 Pixel groß sein.</value>
+    <comment>Context: Cover-Import über CoverImageDrop; Fehler bei der Eingabeprüfung. Length: moderate</comment>
+  </data>
+  <data name="Cover.InputInvalid" xml:space="preserve">
+    <value>Die Bilddatei ist beschädigt oder ihr Format wird nicht unterstützt.</value>
+    <comment>Context: Cover-Import über CoverImageDrop; Fehler bei der Eingabeprüfung. Length: moderate</comment>
+  </data>
+  <data name="CoverPicker.ImageFilter" xml:space="preserve">
+    <value>Bilddateien (*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico)|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.ico|Alle Dateien (*.*)|*.*</value>
+    <comment>Context: Cover-Dateiauswahl; Dateitypfilter. Meaning: Filterbeschreibung übersetzen; Dateimuster und Trennzeichen unverändert erhalten.</comment>
+  </data>
+  <data name="Cover.Transparency.Heading" xml:space="preserve">
+    <value>Hintergrund bei Transparenz</value>
+    <comment>Context: Globale Einstellungen &gt; Metadaten &gt; Cover; Beschriftung neben der Warnschwelle, außerdem Titel des InfoPoint. Meaning: Hintergrundfarbe für transparente Cover bei der JPEG-Ausgabe. Length: short; Textumbruch erlaubt.</comment>
+  </data>
+  <data name="Cover.Transparency.Auto" xml:space="preserve">
+    <value>Automatisch</value>
+    <comment>Context: Auswahl für den Transparenzhintergrund bei JPEG-Covern. Meaning: Automatische Wahl durch die vorhandene Bildanalyse; Standard und Fallback. Length: short.</comment>
+  </data>
+  <data name="Cover.Transparency.White" xml:space="preserve">
+    <value>Weiß</value>
+    <comment>Context: Auswahl für den Transparenzhintergrund bei JPEG-Covern. Meaning: Weiß als feste Hintergrundfarbe. Length: short.</comment>
+  </data>
+  <data name="Cover.Transparency.Black" xml:space="preserve">
+    <value>Schwarz</value>
+    <comment>Context: Auswahl für den Transparenzhintergrund bei JPEG-Covern. Meaning: Schwarz als feste Hintergrundfarbe. Length: short.</comment>
+  </data>
+  <data name="Cover.Transparency.Info" xml:space="preserve">
+    <value>Bei der Umwandlung transparenter Cover in JPEG:
+
+Automatisch: Wählt Schwarz bei hellen Bildanteilen an transparenten Stellen, sonst Weiß.
+Weiß: Verwendet einen weißen Hintergrund.
+Schwarz: Verwendet einen schwarzen Hintergrund.
+
+Gilt für künftig übernommene Cover.</value>
+    <comment>Context: InfoPoint neben der Transparenzauswahl in den globalen Cover-Einstellungen. Meaning: Beschreibt Automatisch, Weiß und Schwarz. Die Automatik untersucht halbtransparente Bildanteile und sichtbare Nachbarn transparenter Pixel, nicht nur den äußeren Bildrand; helle Anteile führen zu Schwarz, sonst einschließlich fehlender verwertbarer Anteile zu Weiß. Nur neue Übernahmen, keine nachträgliche Änderung gespeicherter JPEGs. FixedTerm: JPEG. Length: flexible.</comment>
   </data>
   <data name="Cover.InputTooLarge" xml:space="preserve">
     <value>Das Cover überschreitet die zulässige Datei- oder Bildgröße.</value>

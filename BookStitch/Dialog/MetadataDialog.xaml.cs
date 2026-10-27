@@ -58,6 +58,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     private readonly Func<IReadOnlyList<MetadataFieldDecisionDiagnostic>> _metadataFieldDecisionsProvider;
     private readonly bool _canChooseCover;
     private readonly Action<Window> _chooseCover;
+    private readonly Func<IDataObject, Window, Task>? _dropCover;
     private readonly Action _removeCover;
     private string _conceptSearchText = string.Empty;
     private string _preSearchFamilyKey = ConceptMetadataGroupIds.QuickAccess;
@@ -109,7 +110,8 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         ChapterGridColumnLayoutState? chapterGridColumnLayoutState = null,
         CoverImageService? coverImageService = null,
         CoverPickerService? coverPickerService = null,
-        GlobalSettingsManager? genreSettingsManager = null)
+        GlobalSettingsManager? genreSettingsManager = null,
+        Func<IDataObject, Window, Task>? dropCover = null)
     {
         ArgumentNullException.ThrowIfNull(openSettings);
         ArgumentNullException.ThrowIfNull(metadataState);
@@ -192,6 +194,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         _isTrackCountLocked = _metadataPreferences.OutputTrackTotalPreferenceLocked;
         _canChooseCover = canChooseCover;
         _chooseCover = chooseCover;
+        _dropCover = dropCover;
         _removeCover = removeCover;
         // Read the shared settings when composing choices; never rewrite existing metadata.
         DataContext = this;
@@ -2349,6 +2352,19 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         ConceptFamilyList.SelectedItem = ConceptCoverFamilyItem;
         ConceptUtilityFamilyList.SelectedIndex = -1;
         UpdateConceptFamilyPanelVisibility();
+    }
+
+    private void ConceptCover_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = _dropCover is not null && _canChooseCover && _coverImageService.CanReadDrop(e.Data)
+            ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void ConceptCover_Drop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (_dropCover is not null && _canChooseCover) await _dropCover(e.Data, this);
     }
 
     private void ConceptCover_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

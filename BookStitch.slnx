@@ -1,4 +1,12 @@
 <Solution>
   <Project Path="BookStitch/BookStitch.csproj" />
   <Project Path="BookStitch.Tests/BookStitch.Tests.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Core/CoverImageDrop.Core.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Core.Tests/CoverImageDrop.Core.Tests.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Acquisition/CoverImageDrop.Acquisition.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Acquisition.Tests/CoverImageDrop.Acquisition.Tests.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Diagnostics/CoverImageDrop.Diagnostics.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Diagnostics.Tests/CoverImageDrop.Diagnostics.Tests.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Pipeline/CoverImageDrop.Pipeline.csproj" />
+  <Project Path="libraries/CoverImageDrop/CoverImageDrop.Pipeline.Tests/CoverImageDrop.Pipeline.Tests.csproj" />
 </Solution>

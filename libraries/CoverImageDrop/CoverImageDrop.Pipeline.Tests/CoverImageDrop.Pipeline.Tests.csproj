@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" Version="4.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoverImageDrop.Acquisition\CoverImageDrop.Acquisition.csproj" />
+    <ProjectReference Include="..\CoverImageDrop.Core\CoverImageDrop.Core.csproj" />
+    <ProjectReference Include="..\CoverImageDrop.Pipeline\CoverImageDrop.Pipeline.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CoverImageDrop.Acquisition.Tests\BrowserDropFixtureSupport.cs"
+             Link="BrowserDropFixtureSupport.cs" />
+    <Compile Include="..\CoverImageDrop.Acquisition.Tests\StaTestRunner.cs"
+             Link="StaTestRunner.cs" />
+    <Content Include="..\CoverImageDrop.Acquisition.Tests\TestData\BrowserDrops\*.json"
+             Link="TestData\BrowserDrops\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

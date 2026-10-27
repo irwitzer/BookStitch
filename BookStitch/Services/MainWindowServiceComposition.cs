@@ -38,7 +38,7 @@ public sealed class MainWindowServiceComposition
         ArgumentNullException.ThrowIfNull(useBoxedDiscWaitDialog);
 
         var foundation = MainWindowFoundationComposition.Create(environmentContext);
-        var media = MainWindowMediaComposition.Create();
+        var media = MainWindowMediaComposition.Create(() => foundation.GlobalSettingsManager.Current.CoverTransparencyMode);
         var tracks = MainWindowTrackComposition.Create();
         var discs = MainWindowDiscComposition.Create();
         var status = MainWindowStatusComposition.Create();

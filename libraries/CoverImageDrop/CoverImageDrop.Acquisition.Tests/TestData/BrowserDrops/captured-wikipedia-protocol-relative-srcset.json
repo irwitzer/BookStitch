@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "origin": "captured",
+  "id": "captured-wikipedia-protocol-relative-srcset",
+  "description": "Sanitized RC2 Chromium drop from a Wikipedia image: a 330px thumbnail plus a protocol-relative 960px srcset variant of the same image.",
+  "formats": [
+    {
+      "name": "Chromium Web Custom MIME Data Format",
+      "value": "{}"
+    },
+    {
+      "name": "HTML Format",
+      "value": "Version:0.9\r\nSourceURL:about:blank#blocked\r\n<html><body><img resource=\"https://site.example.test/wiki/File:NASA-Apollo8-Dec24-Earthrise.jpg\" src=\"https://cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/330px-NASA-Apollo8-Dec24-Earthrise.jpg\" width=\"300\" height=\"300\" srcset=\"//cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/960px-NASA-Apollo8-Dec24-Earthrise.jpg 2x\"></body></html>"
+    },
+    {
+      "name": "Text",
+      "value": "https://site.example.test/wiki/File:NASA-Apollo8-Dec24-Earthrise.jpg"
+    }
+  ],
+  "httpResponses": [
+    {
+      "url": "https://cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/330px-NASA-Apollo8-Dec24-Earthrise.jpg",
+      "kind": "Image",
+      "width": 330,
+      "height": 330
+    },
+    {
+      "url": "https://cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/960px-NASA-Apollo8-Dec24-Earthrise.jpg",
+      "kind": "Image",
+      "width": 960,
+      "height": 960
+    },
+    {
+      "url": "https://site.example.test/wiki/File:NASA-Apollo8-Dec24-Earthrise.jpg",
+      "kind": "HtmlNoImage"
+    }
+  ],
+  "expected": {
+    "sourceKind": "Chromium",
+    "sourceConfidence": "High",
+    "preferredCandidateKind": "HtmlDerivedUrl",
+    "preferredCandidateUrl": "https://cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/330px-NASA-Apollo8-Dec24-Earthrise.jpg",
+    "preferredMaterializationResult": "Success",
+    "requiredStandardCoverRequestUrls": [
+      "https://cdn.example.test/wikipedia/commons/thumb/a/a8/NASA-Apollo8-Dec24-Earthrise.jpg/960px-NASA-Apollo8-Dec24-Earthrise.jpg"
+    ],
+    "passThroughResult": "Success",
+    "standardCoverResult": "Success"
+  }
+}
