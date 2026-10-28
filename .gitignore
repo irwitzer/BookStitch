@@ -409,3 +409,6 @@ FodyWeavers.xsd
 /dev-support-public/**/reports/
 /dev-support-public/**/backups/
 /dev-support-public/**/work/
+
+# Windows Explorer folder customization files (do not publish)
+desktop.ini
