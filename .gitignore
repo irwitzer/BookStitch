@@ -382,3 +382,30 @@ FodyWeavers.xsd
 /dev-support-public/LocalizationExporter/backups/
 /dev-support-public/LocalizationExporter/reports/
 /dev-support-public/LocalizationExporter/work/
+
+# BookStitch Public: keep private development files out of accidental Git adds
+/AGENTS.md
+/dev-support/
+
+# The legacy public website redirect and build-notes link are intentional.
+# Ignore other untracked content in the public-only docs/ directory.
+/docs/*
+!/docs/index.html
+!/docs/release-build-notes.md
+
+# Local release-builder configuration (contains machine-specific paths)
+**/builder-settings.json
+
+# Environment files and private key / signing material
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+
+# Generated output of the public localization tooling
+/dev-support-public/**/reports/
+/dev-support-public/**/backups/
+/dev-support-public/**/work/
