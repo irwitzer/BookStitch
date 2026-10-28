@@ -31,6 +31,19 @@ public sealed class TrackListWarningService
         }
 
         var sequenceNumbers = tracks.ToDictionary(track => track, ExtractSequenceNumber);
+        // A complete consecutive filename inventory is independent evidence of the
+        // sequence. A mistyped tag must not invent gaps or move an existing track.
+        foreach (var scope in tracks.GroupBy(GetDiscWarningScope))
+        {
+            var rows = scope.ToList();
+            var names = rows.Select(t => LeadingNumberRegex.Match(t.FileName ?? string.Empty))
+                .Select(m => m.Success && int.TryParse(m.Groups[1].Value, out var n) && n > 0 ? (int?)n : null).ToList();
+            var ordered = names.Where(n => n.HasValue).Select(n => n!.Value).Order().ToList();
+            if (rows.Count >= 3 && ordered.Count == rows.Count &&
+                rows.Select((row, i) => row.TrackNumber == names[i]).Count(matches => matches) >= rows.Count - 1 &&
+                ordered.Zip(ordered.Skip(1), (a, b) => (long)b - a).All(delta => delta == 1))
+                for (var i = 0; i < rows.Count; i++) sequenceNumbers[rows[i]] = names[i];
+        }
         var tracksByDisc = tracks.GroupBy(GetDiscWarningScope);
 
         foreach (var discTracks in tracksByDisc)

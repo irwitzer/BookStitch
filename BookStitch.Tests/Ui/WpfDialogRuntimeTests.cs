@@ -486,6 +486,10 @@ public sealed partial class WpfDialogRuntimeTests
             try
             {
                 EnsureApplicationResources();
+                // STA alone does not keep awaited UI work on this thread. Model the
+                // context installed by a running WPF dispatcher before creating controls.
+                SynchronizationContext.SetSynchronizationContext(
+                    new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 action();
             }
             catch (Exception exception)

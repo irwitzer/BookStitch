@@ -1,6 +1,8 @@
-# BookStitch 2.1.0 – Release Notes
+# BookStitch 2.1.7 – Release Notes
 
-BookStitch 2.1.0 is a major update for creating and managing complete audiobooks. It introduces a much more capable metadata workflow, substantially better chapter handling, more reliable CD and project processing, faster analysis of large audiobook collections, and a new cover-processing pipeline with direct browser drag-and-drop. Existing audiobook projects remain compatible.
+Track reordering now updates existing rows while preserving selection. Paused runs keep order controls locked, language suggestions commit correctly with Enter, chapter proposals handle trailing ordinals across disc and digit boundaries, and interrupted MP3-CD live conversions are scheduled again on resume. Final completeness checks remain enabled.
+
+BookStitch 2.1.7 is a major update for creating and managing complete audiobooks. It introduces a much more capable metadata workflow, substantially better chapter handling, more reliable CD and project processing, faster analysis of large audiobook collections, and a new cover-processing pipeline with direct browser drag-and-drop. Existing audiobook projects remain compatible.
 
 ## What's new and improved
 

@@ -559,11 +559,3 @@ public class CoverImageDiagnosticWriter
 
     private sealed record DiagnosticTextArtifact(int Length, string? File);
 }
-
-public sealed class SmokeTestLogger : CoverImageDiagnosticWriter
-{
-    public SmokeTestLogger(string rootFolder)
-        : base(rootFolder)
-    {
-    }
-}

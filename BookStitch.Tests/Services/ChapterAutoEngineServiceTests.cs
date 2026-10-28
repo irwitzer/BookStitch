@@ -59,6 +59,32 @@ public sealed class ChapterAutoEngineServiceTests
         Assert.Equal(Enumerable.Range(1, count), tracks.Select(track => track.Index));
     }
 
+    [Theory]
+    [InlineData(194, 100, 3)]
+    [InlineData(1094, 1000, 4)]
+    public void Trailing_filename_ordinals_restart_disc_scope_after_digit_boundary(int count, int split, int width)
+    {
+        var tracks = Enumerable.Range(1, count).Select(n => Track(
+            $"Die_Verlorenen_{n.ToString("D" + width)}.mp3", "", Guid.NewGuid())).ToArray();
+        var manifest = new Mp3DiscProjectManifest { ImportedDiscs = tracks.Select((t,i) => (t, disc:i<split?1:2))
+            .GroupBy(x=>x.disc).Select(g=>new Mp3DiscProjectManifestDisc { DiscNumber=g.Key, Signature="disc"+g.Key,
+                SourceFiles=g.Select(x=>new Mp3DiscProjectManifestSourceFile { SourceId=x.t.SourceId,
+                    SourceFileName=x.t.FileName,RelativePath=x.t.FileName }).ToList() }).ToList() };
+        var request = Request(tracks, Canonical(1, "Die Verlorenen"),
+            new ChapterSettings { Mode="Auto", NumberingStyle="Plain" },
+            projectType:ProjectManifestTypes.Mp3DiscProject,mp3Manifest:manifest);
+        var result = _service.Apply(request);
+        Assert.All(result.ResolveResult.Chapters, c=>Assert.Equal("Die Verlorenen",c.Text));
+        Assert.Equal($"{split+1} Die Verlorenen",tracks[split].ChapterTitle);
+        var original=tracks.Select(t=>t.FileName).ToArray();
+        (tracks[split],tracks[split+1])=(tracks[split+1],tracks[split]);
+        result=_service.Apply(request);
+        Assert.All(result.ResolveResult.Chapters,c=>Assert.Equal("Die Verlorenen",c.Text));
+        Assert.Equal($"{split+1} Die Verlorenen",tracks[split].ChapterTitle);
+        Assert.Equal(original.Order(),tracks.Select(t=>t.FileName).Order());
+        Assert.Contains($"title={split+1} Die Verlorenen",new ExportChapterService().BuildFfmpegChapterMetadataFromTimeline(result.RenderedTimeline));
+    }
+
     private readonly ChapterAutoEngineService _service = new();
 
     [Theory]

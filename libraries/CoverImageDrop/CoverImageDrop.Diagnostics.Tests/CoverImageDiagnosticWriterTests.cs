@@ -10,7 +10,7 @@ using CoverImageDrop.Core.Validation;
 namespace CoverImageDrop.Diagnostics.Tests;
 
 [TestClass]
-public sealed class SmokeTestLoggerTests
+public sealed class CoverImageDiagnosticWriterTests
 {
     [TestMethod]
     public async Task SaveAsync_WritesRichResultJsonPngArtifactAndDebugReport()
@@ -18,7 +18,7 @@ public sealed class SmokeTestLoggerTests
         var root = CreateTempRoot();
         try
         {
-            var logger = new SmokeTestLogger(root);
+            var logger = new CoverImageDiagnosticWriter(root);
             var readResult = CreateReadResult();
             var inspection = CreateInspection();
             var validation = new StandardCoverValidationResult(1000, 1_200_000, []);
@@ -202,13 +202,13 @@ public sealed class SmokeTestLoggerTests
             var firstReadResult = CreateReadResult();
             var secondReadResult = CreateReadResult();
 
-            var first = await new SmokeTestLogger(root).SaveAsync(
+            var first = await new CoverImageDiagnosticWriter(root).SaveAsync(
                 "Auto",
                 firstReadResult,
                 inspection: null,
                 output: null,
                 error: null);
-            var second = await new SmokeTestLogger(root).SaveAsync(
+            var second = await new CoverImageDiagnosticWriter(root).SaveAsync(
                 "Auto",
                 secondReadResult,
                 inspection: null,

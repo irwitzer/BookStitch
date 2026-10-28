@@ -112,7 +112,14 @@ public sealed class Mp3DiscProjectService
     }
 
 
-    public Mp3DiscProjectManifest? TryLoad(string projectFolder)
+    public Mp3DiscProjectManifest? TryLoad(string projectFolder) => TryLoadCore(projectFolder, validateSources: true);
+
+    // Display projection reads persisted evidence; it must never hash media or
+    // reconcile acquisition status. Resume and integrity operations use TryLoad.
+    internal Mp3DiscProjectManifest? ReadForChapterProjection(string projectFolder) =>
+        TryLoadCore(projectFolder, validateSources: false);
+
+    private Mp3DiscProjectManifest? TryLoadCore(string projectFolder, bool validateSources)
     {
         try
         {
@@ -131,7 +138,7 @@ public sealed class Mp3DiscProjectService
             if (manifest is null) throw new PersistentJsonSchemaException(LocalizationText.Get("Persistence.Manifest.Invalid"));
             if (manifest is not null)
             {
-                var normalized = NormalizeLoadedManifest(manifest, projectFolder);
+                var normalized = NormalizeLoadedManifest(manifest, projectFolder, validateSources);
             }
 
             return manifest;

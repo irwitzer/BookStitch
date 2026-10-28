@@ -351,14 +351,14 @@ public sealed class ChapterAutoEngineService
     {
         return string.IsNullOrWhiteSpace(projectFolder)
             ? null
-            : _mp3DiscProjectService.TryLoad(projectFolder);
+            : _mp3DiscProjectService.ReadForChapterProjection(projectFolder);
     }
 
     private AudioDiscProjectManifest? TryLoadAudioManifest(string projectFolder)
     {
         return string.IsNullOrWhiteSpace(projectFolder)
             ? null
-            : _audioDiscProjectService.TryLoad(projectFolder);
+            : _audioDiscProjectService.ReadForChapterProjection(projectFolder);
     }
 
     private static void EnsureCoherentMapping(

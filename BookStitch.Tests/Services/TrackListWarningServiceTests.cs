@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using Xunit;
 
@@ -7,6 +7,19 @@ namespace BookStitch.Tests.Services;
 public class TrackListWarningServiceTests
 {
     private readonly TrackListWarningService _service = new();
+
+    [Fact]
+    public void Complete_filename_inventory_does_not_invent_gaps_from_a_mistyped_tag()
+    {
+        var rows = Enumerable.Range(170, 169).Select(n => new TrackInfo
+        { DiscNumber = 2, TrackNumber = n == 213 ? 123 : n, FileName = $"{n}_book_CD02.mp3" }).ToList();
+        _service.Apply(rows);
+        Assert.All(rows, row => Assert.False(row.HasChapterWarning));
+        Assert.Equal(123, rows[43].TrackNumber);
+        (rows[0], rows[1]) = (rows[1], rows[0]);
+        _service.Apply(rows);
+        Assert.True(rows[1].HasChapterWarning);
+    }
 
     [Theory]
     [InlineData("de-DE")]

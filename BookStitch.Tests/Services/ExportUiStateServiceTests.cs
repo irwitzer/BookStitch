@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using System.Windows;
 using Xunit;
@@ -100,7 +100,7 @@ public class ExportUiStateServiceTests
         var state = _service.Create(input);
         Assert.True(state.CanChangeBookMetadata);
         Assert.True(state.CanOpenSettings);
-        Assert.True(state.CanEditTrackOrder);
+        Assert.False(state.CanEditTrackOrder);
         Assert.False(state.CanRefreshResumeProjects);
         Assert.False(state.CanChangeExportPreset);
         Assert.False(state.CanSelectFolder);
@@ -168,13 +168,13 @@ public class ExportUiStateServiceTests
     }
 
     [Theory]
-    [InlineData(true, false, false, true, false, true)]
-    [InlineData(false, true, false, true, false, true)]
+    [InlineData(true, false, false, true, false, false)]
+    [InlineData(false, true, false, true, false, false)]
     [InlineData(true, false, true, true, false, false)]
     [InlineData(true, false, false, false, false, false)]
     [InlineData(true, false, false, true, true, false)]
     [InlineData(false, false, false, true, false, false)]
-    public void Only_validated_idle_disc_resume_preview_is_editable_while_acquisition_is_paused(
+    public void Disc_resume_preview_never_allows_reordering_while_paused(
         bool mp3, bool audio, bool busy, bool preparedPreview, bool failed, bool expected)
     {
         var input = Input(ProjectPipelineState.AcquiringSources, isRunPaused: true,

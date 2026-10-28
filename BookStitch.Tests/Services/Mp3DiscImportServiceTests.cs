@@ -1,4 +1,4 @@
-﻿using BookStitch.Services;
+using BookStitch.Services;
 using BookStitch.Tests.TestHelpers;
 using Xunit;
 
@@ -264,6 +264,54 @@ public sealed class Mp3DiscImportServiceTests
         Assert.Equal("001.mp3", Path.GetFileName(copiedFile.ImportedFile));
         Assert.NotNull(copiedFile.SourceIdentity);
         Assert.Equal(copiedFile.SourceIdentity!.SourceLastWriteUtcTicks, result.ImportedFiles!.Single().SourceLastWriteUtcTicks);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task Resume_reports_verified_existing_sources_before_new_copies_for_live_conversion(int interruptedCount)
+    {
+        using var source = new TemporaryFolder();
+        using var project = new TemporaryFolder();
+        var total = interruptedCount + 3;
+        for (var i = 1; i <= total; i++) CreateFile(source.Path, $"{i:000}.mp3", $"audio {i}");
+        var service = new Mp3DiscImportService();
+        using var pause = new CancellationTokenSource();
+        var first = new List<DiscCopiedFile>();
+        var paused = await service.CopyDiscAsync(source.Path, project.Path, 1, 1, null,
+            new CollectingProgress<DiscCopiedFile>(file =>
+            {
+                first.Add(file);
+                if (first.Count == interruptedCount + 1) pause.Cancel();
+            }), pause.Token);
+        Assert.True(paused.WasCanceled);
+        // One successful AAC and N interrupted jobs. No finished AAC is created
+        // for the interrupted jobs; the production pause cleanup has removed .part files.
+        var preset = BookStitch.Models.ExportPreset.Parse("AAC Stereo 128 kbps");
+        var converted = Path.Combine(project.Path, "converted-test");Directory.CreateDirectory(converted);
+        var preparation = new Mp3DiscPreparationService();
+        var completePath = ConvertedTrackPathService.GetConvertedTrackPath(converted,
+            first[0].ImportedFile, preparation.BuildLiveConversionTrack(first[0]));
+        await File.WriteAllTextAsync(completePath, "completed AAC stays unchanged");
+        var ready = new List<DiscCopiedFile>();var newCopies = new List<DiscCopiedFile>();
+        var retryQueue = new LiveConversionQueueService();
+        void Schedule(DiscCopiedFile file)
+        {
+            var target = ConvertedTrackPathService.GetConvertedTrackPath(converted,
+                file.ImportedFile, preparation.BuildLiveConversionTrack(file));
+            if (retryQueue.TryEnqueue(new(file.ImportedFile,target,preset.DisplayName,1,file.CopiedFiles))) ready.Add(file);
+        }
+        var resumed = await service.CopyDiscAsync(source.Path, project.Path, 1, 1, null,
+            new CollectingProgress<DiscCopiedFile>(file => {newCopies.Add(file);Schedule(file);}),
+            CancellationToken.None, reusedFileProgress: new CollectingProgress<DiscCopiedFile>(Schedule));
+        Assert.False(resumed.WasCanceled);
+        Assert.Equal(Enumerable.Range(2,total-1),ready.Select(f=>f.CopiedFiles));
+        Assert.Equal(Enumerable.Range(interruptedCount+2,2),newCopies.Select(f=>f.CopiedFiles));
+        Assert.Equal(first.Skip(1).Select(f=>f.SourceIdentity!.SourceId),
+            ready.Take(interruptedCount).Select(f=>f.SourceIdentity!.SourceId));
+        Assert.Equal("completed AAC stays unchanged", await File.ReadAllTextAsync(completePath));
+        Assert.Equal(total,Directory.GetFiles(source.Path,"*.mp3").Length);
     }
 
     private sealed class CollectingProgress<T>(Action<T> handler) : IProgress<T>

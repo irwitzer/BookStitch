@@ -487,7 +487,8 @@ public partial class ConceptMetadataFieldControl : UserControl, IConceptMinimalP
         var wasAutomaticSelection = CandidateComboBoxInteraction.IsAutomaticSelection(EditorComboBox);
 
         EditorComboBox.IsDropDownOpen = false;
-        if (selectedCandidate is not null && !wasAutomaticSelection)
+        if (selectedCandidate is not null && (!wasAutomaticSelection ||
+            field.Field is ProjectMetadataField.Languages or ProjectMetadataField.OriginalLanguages or ProjectMetadataField.TargetLanguages))
             field.ApplyCandidate(selectedCandidate);
         else
             field.CommitDraft();

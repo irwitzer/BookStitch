@@ -70,7 +70,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Present(); DrainDispatcher();
                 Assert.True(metadata.IsEnabled);
                 Assert.True(settings.IsEnabled);
-                Assert.True(track.IsEnabled);
+                Assert.False(track.IsEnabled);
                 Assert.True(Assert.IsType<ComboBox>(chapter.Children[0]).IsEnabled);
                 Assert.False(projects.IsEnabled);
                 Invoke(metadata); Invoke(settings); DrainDispatcher();

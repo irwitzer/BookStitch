@@ -1322,6 +1322,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Tracks_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_isReorderingTracks) return; // Membership and processing state are unchanged.
         OnPropertyChanged(nameof(HasProjectTracks));
         OnPropertyChanged(nameof(SelectedSourceDisplayText));
         OnPropertyChanged(nameof(SelectedSourceOpenPath));
@@ -6506,8 +6507,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             discNumber,
                             clearExistingTracks: false,
                             refreshChapterProjection: false);
-                        // Reused copies do not emit live-conversion callbacks. Restore
-                        // their paths and presentation before rendering the full preview.
+                        // Restore reused paths and presentation before rendering the full
+                        // preview and considering missing live conversions.
                         RefreshExistingMp3DiscTrackStateBeforeImport(
                             projectFolder, sourceFolder, totalDiscs, publishStatus: false);
                         UpdateIndexes();
@@ -6538,7 +6539,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     token,
                     acceptDuplicateForCurrentDisc,
                     preparedDisc: _resumeDiscPreview.Mp3Disc,
-                    sourceReadStarted: source => PublishDiscReadSource(source, projectFolder, token));
+                    sourceReadStarted: source => PublishDiscReadSource(source, projectFolder, token),
+                    reusedFileProgress: new InlineProgress<DiscCopiedFile>(file =>
+                    {
+                        var track = _services.Discs.Mp3DiscPreparationService.BuildLiveConversionTrack(file);
+                        var target = ConvertedTrackPathService.GetConvertedTrackPath(liveConvertedFolder, file.ImportedFile, track);
+                        // Finished AAC stays untouched. Missing/canceled output re-enters
+                        // the same live scheduler before the copier reaches new sources.
+                        if (!File.Exists(target) || new FileInfo(target).Length == 0)
+                            copiedFileProgress.Report(file);
+                    }));
 
                 progress.Flush();
 
@@ -15621,7 +15631,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void MoveSelectedToBottom_Click(object sender, RoutedEventArgs e)
     {
-        if (IsBusy)
+        if (!CanEditTrackOrder)
             return;
 
         var visibleTracks = GetVisibleTracks();
@@ -15659,13 +15669,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .ToList();
     }
 
+    private bool _isReorderingTracks;
+
     private void ReplaceTrackList(List<TrackInfo> newOrder)
     {
-        Tracks.ReplaceAll(newOrder);
-
-        UpdateIndexes();
+        _isReorderingTracks = true;
+        try
+        {
+            if (!Tracks.Reorder(newOrder)) return;
+            UpdateIndexes();
+        }
+        finally { _isReorderingTracks = false; }
         PersistTrackListState();
-        AutoFitTrackColumnsAfterRender();
+        // Reordering changes positions, not the column contents inventory.
+        // Keep existing widths instead of forcing two full layout passes per click.
     }
 
     private void PersistTrackListState()
@@ -15708,13 +15725,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RestoreSelection(List<TrackInfo> selected)
     {
-        TracksGrid.SelectedItems.Clear();
-
+        var selectedSet = selected.ToHashSet();
+        foreach (var old in TracksGrid.SelectedItems.OfType<TrackInfo>().Where(t => !selectedSet.Contains(t)).ToList())
+            TracksGrid.SelectedItems.Remove(old);
         foreach (var track in selected)
-            TracksGrid.SelectedItems.Add(track);
+            if (!TracksGrid.SelectedItems.Contains(track)) TracksGrid.SelectedItems.Add(track);
 
-        if (selected.Count > 0)
-            TracksGrid.ScrollIntoView(selected[0]);
+        // Preserve scrolling at viewport boundaries. With Move notifications the
+        // existing visible row no longer needs to be recreated for this request.
+        if (selected.Count > 0) TracksGrid.ScrollIntoView(selected[0]);
 
         TracksGrid.Focus();
         Keyboard.Focus(TracksGrid);
@@ -15723,10 +15742,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void ClearGridSorting()
     {
         var view = CollectionViewSource.GetDefaultView(Tracks);
-        view.SortDescriptions.Clear();
+        if (view.SortDescriptions.Count > 0) view.SortDescriptions.Clear();
 
         foreach (var column in TracksGrid.Columns)
-            column.SortDirection = null;
+            if (column.SortDirection.HasValue) column.SortDirection = null;
     }
 
     private void UpdateIndexes()
@@ -15741,7 +15760,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _services.Tracks.TrackListWarningService.Apply(Tracks);
         RefreshChapterTimelinePresentation();
 
-        RefreshTrackPresentationViews();
+        if (_isReorderingTracks)
+        {
+            foreach (var track in Tracks) track.NotifyOrderPresentationChanged();
+            _developmentMetadataDialog?.RefreshChapterPresentationView();
+        }
+        else RefreshTrackPresentationViews();
         OnExportPreviewChanged();
     }
 

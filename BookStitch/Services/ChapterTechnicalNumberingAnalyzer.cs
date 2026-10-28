@@ -41,6 +41,7 @@ public sealed class ChapterTechnicalNumberingAnalyzer
                 .OrderBy(candidate => candidate.Provenance.ScopeOrder)
                 .ToArray();
             ApplyFamily(ordered, results);
+            ApplyTrailingFamily(ordered, results, scope.Candidates);
             ApplyLongNumericIdentifierCandidates(ordered, results);
             ApplyStructuredNumericIdentifierFamily(ordered, results);
         }
@@ -111,6 +112,47 @@ public sealed class ChapterTechnicalNumberingAnalyzer
                 isUsable,
                 evidence);
         }
+    }
+
+    private static readonly Regex TrailingOrdinalRegex = new(
+        @"^(?<text>.+?)\s+(?<number>[1-9]\d*)$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static void ApplyTrailingFamily(IReadOnlyList<ProjectedChapterCandidate> candidates,
+        IDictionary<string, ChapterTechnicalNumberingProjection> results,
+        IReadOnlyList<ProjectedChapterCandidate> context)
+    {
+        if (candidates.Count < 3 || candidates[0].Source is not
+            (ChapterCandidateSource.Filename or ChapterCandidateSource.TrackTitle)) return;
+        var parsed = new List<(ProjectedChapterCandidate Candidate, int Number, string Text)>();
+        foreach (var candidate in candidates)
+        {
+            var removed = candidate.Normalization.AppliedTransforms.FirstOrDefault(t =>
+                t.Kind == ChapterNormalizationTransformKind.RemovedNumericSuffix);
+            var text = candidate.Normalization.NormalizedText;
+            if (removed is not null && int.TryParse(removed.Value, out var n))
+                parsed.Add((candidate, n, text));
+            else
+            {
+                var match = TrailingOrdinalRegex.Match(text);
+                if (!match.Success || !int.TryParse(match.Groups["number"].Value, out n)) return;
+                parsed.Add((candidate, n, match.Groups["text"].Value.Trim()));
+            }
+        }
+        // Only a repeated base title with a complete ordinal inventory is technical
+        // numbering. Preserve years, differing chapter names and genuine number gaps.
+        if (parsed.Any(p => p.Text.Length == 0) ||
+            parsed.Select(p => p.Text).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1 ||
+            parsed.All(p => p.Number is >= 1800 and <= 2199)) return;
+        if (!context.Any(c => c.Source is ChapterCandidateSource.CanonicalTitle or ChapterCandidateSource.CanonicalAlbum &&
+            string.Equals(c.Normalization.NormalizedText, parsed[0].Text, StringComparison.OrdinalIgnoreCase))) return;
+        var numbers = parsed.Select(p => p.Number).Order().ToArray();
+        if (numbers.Zip(numbers.Skip(1), (a, b) => (long)b - a).Any(d => d != 1)) return;
+        foreach (var item in parsed)
+            results[CandidateKey(item.Candidate)] = new ChapterTechnicalNumberingProjection(
+                item.Candidate, item.Text, item.Text, true,
+                new ChapterTechnicalNumberingEvidence(ChapterTechnicalNumberingKind.TrailingNumber,
+                    true, item.Number, "trailing-space", false,
+                    "Repeated title with a complete consecutive trailing ordinal family."));
     }
 
     private const int LongNumericIdentifierMinimumDigits = 8;

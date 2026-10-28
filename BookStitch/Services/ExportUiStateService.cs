@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using System.Windows;
 
 namespace BookStitch.Services;
@@ -91,7 +91,7 @@ public sealed class ExportUiStateService
             Phase: phase,
             CanSelectFolder: !input.IsBusy && isRestingProject,
             CanConfigureFfmpeg: !input.IsBusy && (isPreparing || isCompleted),
-            CanEditTrackOrder: (canInteract || canEditResumePreview) && input.TrackCount > 0,
+            CanEditTrackOrder: canInteract && !input.IsRunPaused && input.TrackCount > 0,
             CanStartExport: canStartExport,
             ExportButtonText: exportButtonText,
             ExportButtonVisibility: !input.CanCancelTrackAnalysis && (isRunningPausablePhase || isPaused || hasExportableContent)

@@ -529,6 +529,14 @@ public sealed class TrackInfo : INotifyPropertyChanged
         messages.Add(normalized);
     }
 
+    public void NotifyOrderPresentationChanged()
+    {
+        foreach (var property in new[] { nameof(Index), nameof(DisplayIndex), nameof(ChapterTitle),
+            nameof(DisplayChapterProposal), nameof(DisplayChapterStart), nameof(DisplayChapterWarning),
+            nameof(DisplayFileWarning), nameof(HasChapterWarning), nameof(HasFileWarning), nameof(HasBlockingFileWarning) })
+            OnPropertyChanged(property);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

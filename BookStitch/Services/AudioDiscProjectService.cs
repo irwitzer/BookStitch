@@ -679,7 +679,14 @@ public sealed class AudioDiscProjectService
         }
     }
 
-    public AudioDiscProjectManifest? TryLoad(string projectFolder)
+    public AudioDiscProjectManifest? TryLoad(string projectFolder) => TryLoadCore(projectFolder, validateSources: true);
+
+    // Display projection reads persisted evidence; it must never hash media or
+    // reconcile acquisition status. Resume and integrity operations use TryLoad.
+    internal AudioDiscProjectManifest? ReadForChapterProjection(string projectFolder) =>
+        TryLoadCore(projectFolder, validateSources: false);
+
+    private AudioDiscProjectManifest? TryLoadCore(string projectFolder, bool validateSources)
     {
         if (string.IsNullOrWhiteSpace(projectFolder))
             return null;
@@ -704,7 +711,7 @@ public sealed class AudioDiscProjectService
             var before = JsonSerializer.Serialize(manifest, JsonOptions);
             manifest.ProjectFolder = Path.GetFullPath(projectFolder);
             var normalized = NormalizeManifest(manifest);
-            ProjectSourceIntegrityService.Reconcile(manifest);
+            if (validateSources) ProjectSourceIntegrityService.Reconcile(manifest);
             RefreshProgressState(manifest);
 
             return manifest;

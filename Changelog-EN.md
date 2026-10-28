@@ -2,7 +2,13 @@
 
 BookStitch for Windows version history, newest release first.
 
-## [2.1.0] – October 2026
+## [2.1.7] – October 2026
+
+- Faster track reordering preserves existing rows and selection; chapter suggestions and timelines remain synchronized.
+- Fix automatic chapter proposals with trailing file numbers across 100/1000 and disc boundaries.
+- Resume missing live AAC conversions from verified existing MP3-CD copies after pause; retain final completeness checks.
+
+- Disable track reordering throughout pause; commit language autocomplete values with Enter; avoid repeated column autosizing on reorder and use complete filename inventories for sequence warnings.
 
 ### Added
 

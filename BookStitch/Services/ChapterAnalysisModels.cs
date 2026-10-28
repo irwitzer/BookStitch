@@ -30,7 +30,8 @@ public enum ChapterTechnicalNumberingKind
     LeadingNumber,
     PureNumber,
     LongNumericIdentifier,
-    StructuredNumericIdentifier
+    StructuredNumericIdentifier,
+    TrailingNumber
 }
 
 public sealed record ChapterCandidateProvenance(
@@ -135,7 +136,7 @@ public sealed record ChapterScopeAnalysisResult(
 
 public sealed record ChapterAnalysisRules(int Revision = ChapterAnalysisRules.CurrentRevision)
 {
-    public const int CurrentRevision = 6;
+    public const int CurrentRevision = 7;
 
     public static bool HasIndividualSignal(int deviationCount, int validCount) =>
         HasAtLeastPercent(deviationCount, validCount, 40);

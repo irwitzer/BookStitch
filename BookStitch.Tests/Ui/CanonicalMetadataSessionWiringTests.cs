@@ -16,8 +16,10 @@ public sealed class CanonicalMetadataSessionWiringTests
         Assert.DoesNotContain("PersistTrackListState", subscriber);
         Assert.DoesNotContain("UpdateIndexes", subscriber);
         var reorder = SourceContract.ExtractMember(MainWindowSource, "private void ReplaceTrackList(");
-        SourceContract.AssertInOrder(reorder, "Tracks.ReplaceAll(newOrder);", "UpdateIndexes();", "PersistTrackListState();");
+        SourceContract.AssertInOrder(reorder, "Tracks.Reorder(newOrder)", "UpdateIndexes();", "PersistTrackListState();");
         Assert.DoesNotContain("RequestRefresh", reorder);
+        Assert.DoesNotContain("Tracks.ReplaceAll", reorder);
+        Assert.Contains("if (_isReorderingTracks) return;", subscriber);
     }
 
     [Fact]

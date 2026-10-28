@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Globalization;
@@ -261,7 +261,8 @@ public sealed class Mp3DiscImportService
         IProgress<DiscCopyProgress>? progress,
         IProgress<DiscCopiedFile>? copiedFileProgress,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null)
+        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null,
+        IProgress<DiscCopiedFile>? reusedFileProgress = null)
     {
         return Task.Run(async () =>
         {
@@ -336,20 +337,13 @@ public sealed class Mp3DiscImportService
                         files.Count,
                         Path.GetFileName(sourceFile)));
 
-                    // Live conversion must only be queued for files that were actually copied.
-                    // Existing complete project originals already have their persisted conversion state;
-                    // reporting them here would generate a second hash-based output in a working copy.
-                    if (copiedNow)
-                    {
-                        copiedFileProgress?.Report(new DiscCopiedFile(
-                            discNumber,
-                            totalDiscs,
-                            copiedFiles,
-                            files.Count,
-                            sourceFile,
-                            targetFile,
-                            sourceIdentity));
-                    }
+                    var availableFile = new DiscCopiedFile(discNumber, totalDiscs,
+                        copiedFiles, files.Count, sourceFile, targetFile, sourceIdentity);
+                    // Preserve the copied-only event contract. Resume consumers may
+                    // separately retry conversion of a complete, identity-verified copy.
+                    if (copiedNow) copiedFileProgress?.Report(availableFile);
+                    else reusedFileProgress?.Report(availableFile);
+
                 }
 
                 return new DiscImportResult(

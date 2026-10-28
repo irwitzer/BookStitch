@@ -97,7 +97,8 @@ public sealed class Mp3DiscImportWorkflowService
         IProgress<DiscCopyProgress>? progress,
         IProgress<DiscCopiedFile>? copiedFileProgress,
         CancellationToken token,
-        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null)
+        IReadOnlyDictionary<string, Guid>? plannedSourceIdsByRelativePath = null, Action<string>? sourceReadStarted = null,
+        IProgress<DiscCopiedFile>? reusedFileProgress = null)
     {
         return _mp3DiscImportService.CopyDiscAsync(
             sourceFolder,
@@ -107,7 +108,7 @@ public sealed class Mp3DiscImportWorkflowService
             progress,
             copiedFileProgress,
             token,
-            plannedSourceIdsByRelativePath, sourceReadStarted);
+            plannedSourceIdsByRelativePath, sourceReadStarted, reusedFileProgress);
     }
 
 
@@ -123,7 +124,8 @@ public sealed class Mp3DiscImportWorkflowService
         Action<Mp3DiscImportPrecheckResult>? onReadyToCopy,
         CancellationToken token,
         bool acceptDuplicate = false,
-        Mp3DiscPendingChapterDisc? preparedDisc = null, Action<string>? sourceReadStarted = null)
+        Mp3DiscPendingChapterDisc? preparedDisc = null, Action<string>? sourceReadStarted = null,
+        IProgress<DiscCopiedFile>? reusedFileProgress = null)
     {
         var precheck = await Task.Run(
             () => AnalyzeDiscForImport(sourceFolder, importedDiscSignatures, token), token);
@@ -161,7 +163,7 @@ public sealed class Mp3DiscImportWorkflowService
             progress,
             copiedFileProgress,
             token,
-            plannedSourceIdsByRelativePath, sourceReadStarted);
+            plannedSourceIdsByRelativePath, sourceReadStarted, reusedFileProgress);
 
         if (!importResult.WasCanceled)
         {

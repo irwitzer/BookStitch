@@ -7,6 +7,31 @@ namespace BookStitch.Tests.Services;
 
 public sealed class BulkObservableCollectionTests
 {
+    [Fact]
+    public void In_place_reorder_emits_moves_without_reset_and_rejects_invalid_inventory()
+    {
+        var a=new TrackInfo();var b=new TrackInfo();var c=new TrackInfo();
+        var collection=new BulkObservableCollection<TrackInfo>();collection.ReplaceAll([a,b,c]);
+        var actions=new List<NotifyCollectionChangedAction>();collection.CollectionChanged+=(_,e)=>actions.Add(e.Action);
+        Assert.True(collection.Reorder([c,a,b]));
+        Assert.Equal(new[]{c,a,b},collection);
+        Assert.All(actions,x=>Assert.Equal(NotifyCollectionChangedAction.Move,x));
+        Assert.False(collection.Reorder([c,a,b]));
+        Assert.Throws<ArgumentException>(()=>collection.Reorder([a,a,b]));
+        Assert.Equal(new[]{c,a,b},collection);
+    }
+
+    [Fact]
+    public void Sending_first_item_to_bottom_emits_only_one_move()
+    {
+        var rows=Enumerable.Range(1,1000).ToArray();
+        var collection=new BulkObservableCollection<int>();collection.ReplaceAll(rows);
+        var actions=new List<NotifyCollectionChangedAction>();collection.CollectionChanged+=(_,e)=>actions.Add(e.Action);
+        collection.Reorder(rows.Skip(1).Append(rows[0]).ToArray());
+        Assert.Equal(NotifyCollectionChangedAction.Move,Assert.Single(actions));
+        Assert.Equal(rows.Skip(1).Append(rows[0]),collection);
+    }
+
     [Theory]
     [InlineData(500)]
     [InlineData(1000)]

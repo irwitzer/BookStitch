@@ -20,12 +20,12 @@ The public tool is supplied without a preconfigured `builder-settings.json`. A l
 
 ## Outputs and safety
 
-Typical filenames for version 2.1.0 with suffix `RC1`:
+Typical filenames for version 2.1.7 with suffix `RC1`:
 
-- `BookStitch-2.1.0-RC1/` – complete portable publish folder.
-- `BookStitch-Portable-2.1.0-RC1.zip` – ZIP containing that top-level folder.
-- `BookStitch-Setup-2.1.0-RC1.exe` – classic installer.
-- `BookStitch-2.1.0-RC1-SHA256SUMS.txt` – hashes of the ZIP and installer.
+- `BookStitch-2.1.7-RC1/` – complete portable publish folder.
+- `BookStitch-Portable-2.1.7-RC1.zip` – ZIP containing that top-level folder.
+- `BookStitch-Setup-2.1.7-RC1.exe` – classic installer.
+- `BookStitch-2.1.7-RC1-SHA256SUMS.txt` – hashes of the ZIP and installer.
 
 The program version is read from `BookStitch/BookStitch.csproj`. The builder publishes the application once and packages both formats from that same output. It does **not** edit source code, delete existing output folders, overwrite existing artifacts, or publish to GitHub. If the selected output names already exist, choose a different destination or suffix/name instead.
 

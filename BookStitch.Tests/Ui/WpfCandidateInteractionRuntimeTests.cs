@@ -30,6 +30,30 @@ namespace BookStitch.Tests.Ui;
 
 public sealed partial class WpfDialogRuntimeTests
 {
+    [Theory]
+    [InlineData(ProjectMetadataField.Languages, "fr", "français — fr", "F")]
+    [InlineData(ProjectMetadataField.OriginalLanguages, "fr", "français — fr", "F")]
+    [InlineData(ProjectMetadataField.Languages, "pt", "portugiesisch — pt", "PO")]
+    [InlineData(ProjectMetadataField.OriginalLanguages, "pt", "portugiesisch — pt", "PO")]
+    public void Language_enter_commits_technical_value_of_automatic_suggestion(
+        ProjectMetadataField key, string code, string display, string input)
+    {
+        RunOnStaThread(() =>
+        {
+            var metadata = new ProjectMetadata();
+            var field = new ConceptMetadataFieldViewModel(() => metadata,
+                new MetadataPreferences { LanguagePreferenceLocked = false }, new MetadataNormalizationService(),
+                key, ConceptMetadataFieldCatalog.Get(key), _ => { }, _ => { });
+            field.SetCandidates([new ConceptMetadataCandidate(key, display, code, 1, MetadataOrigin.SourceAggregation)]);
+            var control = new ConceptMetadataFieldControl { DataContext = field };
+            PrepareControl(control);
+            Assert.True(CandidateComboBoxInteraction.ProcessTextInput(control.EditorComboBox, input));
+            control.EditorComboBox.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+            RaiseConceptFieldEnter(control);
+            Assert.Equal(code, Assert.Single(field.Values).Value);
+        });
+    }
+
     [Fact]
     public void Candidate_combo_interaction_keeps_typed_prefix_and_selects_only_completion()
     {
