@@ -6,6 +6,19 @@ namespace BookStitch.Tests.Ui;
 public sealed class MainWindowLifecycleWiringTests
 {
     [Fact]
+    public void Mp3_next_disc_dialog_pause_cancels_live_producers_before_waiting_for_drain()
+    {
+        var import = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> ImportMp3DiscProjectAsync(");
+        var deferred = SourceContract.ExtractBetween(import,
+            "if (waitOutcome == DiscWaitDialogOutcome.Deferred)",
+            "if (waitOutcome == DiscWaitDialogOutcome.ImportCompleted)");
+        SourceContract.AssertInOrder(deferred, "await RequestPipelinePauseAsync();",
+            "return await HandleImportCancellationAsync(");
+        var request = SourceContract.ExtractMember(MainWindowSource, "private async Task RequestPipelinePauseAsync()");
+        Assert.Contains("await discCancellation!.CancelAsync();", request);
+    }
+
+    [Fact]
     public void Mp3_session_pause_keeps_rows_after_drain_before_any_stop_save_or_extension_rollback()
     {
         var import = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> ImportMp3DiscProjectAsync");

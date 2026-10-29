@@ -6355,7 +6355,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Interlocked.Exchange(ref _mp3DiscBackgroundPresetPreparationActive, 0);
                     if (waitOutcome == DiscWaitDialogOutcome.Deferred)
                     {
-                        ApplyPipelinePauseRequest();
+                        // The next-disc dialog can pause while previous-disc AAC jobs
+                        // are still queued. Cancel them before draining the producers.
+                        await RequestPipelinePauseAsync();
                         return await HandleImportCancellationAsync(
                             $"Projekt pausiert • MP3-CD {discNumber} von {totalDiscs} ausstehend");
                     }
