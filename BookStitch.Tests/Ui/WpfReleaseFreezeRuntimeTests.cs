@@ -56,6 +56,17 @@ public sealed partial class WpfDialogRuntimeTests
             source.SetAttributeValue(System.Xml.Linq.XNamespace.Xmlns + "x", x.NamespaceName);
             source.SetAttributeValue(System.Xml.Linq.XNamespace.Xmlns + "services", "clr-namespace:BookStitch.Services;assembly=BookStitch");
             foreach (var click in source.Descendants().Attributes("Click").ToArray()) click.Remove();
+            // Detached XAML is loaded from the test assembly, so qualify app controls explicitly.
+            System.Xml.Linq.XNamespace appControls = "clr-namespace:BookStitch.Controls;assembly=BookStitch";
+            source.SetAttributeValue("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+            source.SetAttributeValue(System.Xml.Linq.XNamespace.Xmlns + "controls", appControls.NamespaceName);
+            foreach (var attribute in source.Descendants().Attributes().Where(attribute => attribute.Name.NamespaceName == "clr-namespace:BookStitch.Controls").ToArray())
+            {
+                attribute.Parent!.SetAttributeValue(appControls + attribute.Name.LocalName, attribute.Value);
+                attribute.Remove();
+            }
+            foreach (var element in source.Descendants().Where(element => element.Name.NamespaceName == "clr-namespace:BookStitch.Controls"))
+                element.Name = appControls + element.Name.LocalName;
             var bar = (Grid)System.Windows.Markup.XamlReader.Parse(source.ToString());
             var presetRow = document.Descendants().Single(e => (string?)e.Attribute("Click") == "OpenWorkFolder_Click").Parent!;
             var presetMargin = (Thickness)new ThicknessConverter().ConvertFromInvariantString((string)presetRow.Attribute("Margin")!)!;
@@ -98,16 +109,14 @@ public sealed partial class WpfDialogRuntimeTests
                 if (file.EndsWith("Resources.de.resx")) SaveLayoutRepairPreview(bar, $"freeze-actions-{state}-{ivory}");
             }
             var orderButtons = ((StackPanel)bar.FindName("TrackOrderButtons")).Children.OfType<Button>().ToArray();
-            var imageNames = new[] { "01_Nach_oben.png", "02_Nach_unten.png", "03_Ganz_nach_oben.png", "04_Ganz_nach_unten.png" };
+            var directions = new[] { BookStitch.Controls.TrackOrderDirection.Up, BookStitch.Controls.TrackOrderDirection.Down,
+                BookStitch.Controls.TrackOrderDirection.Top, BookStitch.Controls.TrackOrderDirection.Bottom };
+            Assert.Equal(directions.Length, orderButtons.Length);
             for (var i = 0; i < orderButtons.Length; i++)
             {
-                var image = Assert.IsType<Image>(orderButtons[i].Content);
-                Assert.EndsWith(imageNames[i], image.Source.ToString());
-                Assert.Equal(34.125, image.ActualWidth);
-                Assert.Equal(34.125, image.ActualHeight);
-                Assert.True(Assert.IsAssignableFrom<System.Windows.Media.Imaging.BitmapSource>(image.Source).PixelWidth > 0);
-                Assert.Equal(34.5, orderButtons[i].ActualWidth);
-                Assert.Equal(34.125, orderButtons[i].ActualHeight);
+                var icon = Assert.IsType<BookStitch.Controls.TrackOrderIcon>(orderButtons[i].Content);
+                Assert.Equal(directions[i], icon.Direction);
+                Assert.True(icon.ActualWidth > 0 && icon.ActualHeight > 0);
             }
         });
     }

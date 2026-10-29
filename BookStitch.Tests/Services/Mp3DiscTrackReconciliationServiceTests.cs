@@ -11,6 +11,61 @@ public sealed class Mp3DiscTrackReconciliationServiceTests
     private readonly Mp3DiscTrackReconciliationService _service = new();
 
     [Fact]
+    public void Accepted_preview_identity_checkpoint_preserves_edits_when_imported_paths_replace_source_paths()
+    {
+        using var folder = new TemporaryFolder();
+        var sourceFolder = Path.Combine(folder.Path, "source");
+        var projectFolder = Path.Combine(folder.Path, "project");
+        Directory.CreateDirectory(sourceFolder);
+        Directory.CreateDirectory(projectFolder);
+        var files = Enumerable.Range(1, 3).Select(number =>
+        {
+            var path = Path.Combine(sourceFolder, $"{number:000}.mp3");
+            File.WriteAllText(path, "synthetic source");
+            return path;
+        }).ToArray();
+        var previewIds = Mp3DiscSourceIdentityPlanner.Create(sourceFolder, "structure-signature", files);
+        var acceptedIds = Mp3DiscSourceIdentityPlanner.Create(sourceFolder, "full-signature", files);
+        var preview = new[] { 2, 0, 1 }.Select(index => new TrackInfo
+        {
+            FilePath = files[index], FileName = Path.GetFileName(files[index]), DiscNumber = 1,
+            SourceId = previewIds[index].SourceId, AutomaticOrderPosition = index + 1,
+            IsExcluded = index == 0, ExcludedChapterTitle = index == 0 ? "User chapter" : ""
+        }).ToList();
+        var state = new TrackListStateService();
+        state.Save(projectFolder, preview);
+
+        Assert.Equal(3, _service.ApplyPlannedSourceIds(preview, sourceFolder, 1, acceptedIds));
+        Assert.All(preview, track => Assert.DoesNotContain(previewIds, item => item.SourceId == track.SourceId));
+        state.Save(projectFolder, preview);
+
+        var originals = ProjectFolderLayout.GetOriginalsFolder(projectFolder);
+        var imported = files.Select(path => new TrackInfo
+        {
+            FilePath = Path.Combine(ProjectFolderLayout.GetDiscOriginalsFolder(projectFolder, 1), Path.GetFileName(path)),
+            FileName = Path.GetFileName(path)
+        }).ToList();
+        var manifest = new Mp3DiscProjectManifest
+        {
+            ProjectFolder = projectFolder, TotalDiscs = 1,
+            ImportedDiscs = [new Mp3DiscProjectManifestDisc
+            {
+                DiscNumber = 1, Status = Mp3DiscImportStatus.Completed,
+                SourceFiles = imported.Select((track, index) =>
+                    SourceFile(acceptedIds[index].SourceId, originals, track.FilePath)).ToList()
+            }]
+        };
+        _service.ApplyManifestDiscOrder(imported, projectFolder, manifest);
+        var restored = state.Apply(projectFolder, imported, TrackOrderProjectType.Mp3Disc,
+            TrackOrderConfirmedContextFactory.CreateMp3DiscContexts(imported));
+
+        Assert.Equal(new[] { "003.mp3", "001.mp3", "002.mp3" }, restored.Select(track => track.FileName));
+        Assert.Equal(new int?[] { 3, 1, 2 }, restored.Select(track => track.AutomaticOrderPosition));
+        Assert.True(restored[1].IsExcluded);
+        Assert.Equal("User chapter", restored[1].ExcludedChapterTitle);
+    }
+
+    [Fact]
     public void Disc_refresh_with_new_sources_restores_manual_order_exclusion_and_chapter_by_manifest_identity()
     {
         using var folder = new TemporaryFolder();

@@ -436,6 +436,11 @@
                                     <TextBlock Text="{services:LocalizedText Key=Developer.Images.Hint}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                     <Separator Margin="0,8,0,16" Opacity="0.35"/>
                                     <TextBlock Text="{services:LocalizedText Key=Developer.Images.Variants}" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                                    <TextBlock x:Name="TrackOrderVariantLabel" Text="{services:LocalizedText Key=Developer.Images.TrackOrder}" Margin="0,0,0,5"/>
+                                    <ComboBox x:Name="TrackOrderVariantComboBox" MinWidth="320" Margin="0,0,0,14"
+                                              AutomationProperties.LabeledBy="{Binding ElementName=TrackOrderVariantLabel}"
+                                              Style="{StaticResource AppearanceCompactComboBoxStyle}"
+                                              SelectionChanged="TrackOrderVariantComboBox_Changed"/>
                                     <ItemsControl x:Name="ImagePreviewRolesItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>

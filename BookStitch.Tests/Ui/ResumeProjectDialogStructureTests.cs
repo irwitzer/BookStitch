@@ -77,7 +77,8 @@ public sealed class ResumeProjectDialogStructureTests
         SourceContract.AssertInOrder(mp3, "if (waitOutcome == DiscWaitDialogOutcome.ImportCompleted)",
             "DiscardChangedResumeDiscPreview(discNumber);", "CompleteDiscImportEarly(projectManifest)");
         SourceContract.AssertInOrder(mp3, "onReadyToCopy: precheck =>", "MatchesMp3(",
-            "DiscardChangedResumeDiscPreview(", "PersistTrackListState();", "ApplyPlannedSourceIds(");
+            "DiscardChangedResumeDiscPreview(", "ApplyPlannedSourceIds(", "PersistTrackListState();",
+            "CreatePreviewTracksFromKnownFiles(");
         var wait = SourceContract.ExtractMember(source, "private async Task<AudioDiscProjectManifestDisc?> WaitForNextAudioDiscAsync(");
         SourceContract.AssertInOrder(wait, "if (accepted == DiscWaitDialogOutcome.ImportCompleted)",
             "if (previewOnly) return null;", "DiscardChangedResumeDiscPreview(discNumber);", "CompleteDiscImportEarly(manifest)");

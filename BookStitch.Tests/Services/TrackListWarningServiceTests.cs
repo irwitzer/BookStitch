@@ -8,6 +8,76 @@ public class TrackListWarningServiceTests
 {
     private readonly TrackListWarningService _service = new();
 
+    [Theory]
+    [InlineData("019_book.mp3", 99, true)]
+    [InlineData("Track 019.mp3", 99, true)]
+    [InlineData("019_book.mp3", 19, false)]
+    [InlineData("019_book.mp3", null, false)]
+    [InlineData("019_book.mp3", 0, false)]
+    [InlineData("019_book.mp3", -1, false)]
+    [InlineData("book_019.mp3", 99, false)]
+    [InlineData("book.mp3", 99, false)]
+    [InlineData("000_book.mp3", 99, false)]
+    [InlineData("123456789012345_book.mp3", 99, false)]
+    public void Apply_compares_original_track_tag_with_filename_only(string fileName, int? sourceNumber, bool expected)
+    {
+        var row = new TrackInfo { FileName = fileName, SourceTrackNumber = sourceNumber,
+            TrackNumber = 7, Index = 42, TagTitle = "Track 99", IsExcluded = true };
+        _service.Apply([row]);
+        Assert.Equal(expected, row.HasChapterWarning);
+        if (expected)
+            Assert.Equal(LocalizationText.Format("WarningTrackTagFileNumberMismatch", 99, 19), row.ChapterWarningText);
+        Assert.False(row.HasFileWarning);
+        Assert.Equal(sourceNumber, row.SourceTrackNumber);
+        Assert.Equal(7, row.TrackNumber);
+        Assert.Equal(42, row.Index);
+        Assert.Equal(fileName, row.FileName);
+    }
+
+    [Fact]
+    public void Apply_uses_preserved_metadata_without_inventing_a_source_tag_from_working_number()
+    {
+        var row = new TrackInfo { FileName = "019_book.mp3", TrackNumber = 19,
+            SourceMetadataFields = new SourceMetadataCanonicalFields { SourceTrackNumber = 99 } };
+        _service.Apply([row]);
+        Assert.Equal(LocalizationText.Format("WarningTrackTagFileNumberMismatch", 99, 19), row.ChapterWarningText);
+        row.SourceMetadataFields = null;
+        _service.Apply([row]);
+        Assert.False(row.HasChapterWarning);
+    }
+
+    [Fact]
+    public void Apply_combines_metadata_and_order_reasons_without_duplicates_and_clears_resolved_mismatch()
+    {
+        var first = new TrackInfo { TrackNumber = 20, SourceTrackNumber = 20, FileName = "020_book.mp3" };
+        var row = new TrackInfo { TrackNumber = 19, SourceTrackNumber = 99, FileName = "019_book.mp3" };
+        var rows = new List<TrackInfo> { first, row };
+        _service.Apply(rows);
+        Assert.Equal(new[] { LocalizationText.Format("WarningTrackTagFileNumberMismatch", 99, 19),
+            TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder) }, TrackInfo.SplitWarningMessages(row.ChapterWarningText));
+        var warning = row.ChapterWarningText;
+        _service.Apply(rows);
+        Assert.Equal(warning, row.ChapterWarningText);
+        row.SourceTrackNumber = 19;
+        _service.Apply(rows);
+        Assert.Equal(TrackWarningPresentation.Format(TrackWarningCodes.CheckOrder), row.ChapterWarningText);
+        Assert.Same(first, rows[0]);
+        Assert.Same(row, rows[1]);
+    }
+
+    [Fact]
+    public void Complete_filename_inventory_with_mistyped_source_tag_shows_only_metadata_conflict()
+    {
+        var rows = Enumerable.Range(170, 169).Select(n => new TrackInfo
+        { DiscNumber = 2, TrackNumber = n == 213 ? 123 : n, SourceTrackNumber = n == 213 ? 123 : n,
+            FileName = $"{n}_book_CD02.mp3" }).ToList();
+        _service.Apply(rows);
+        Assert.Single(rows, row => row.HasChapterWarning);
+        Assert.Equal(LocalizationText.Format("WarningTrackTagFileNumberMismatch", 123, 213), rows[43].ChapterWarningText);
+        Assert.Equal(123, rows[43].TrackNumber);
+        Assert.Equal(123, rows[43].SourceTrackNumber);
+    }
+
     [Fact]
     public void Complete_filename_inventory_does_not_invent_gaps_from_a_mistyped_tag()
     {

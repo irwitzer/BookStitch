@@ -87,6 +87,14 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.Equal(5, rows.Length);
                 var header = rows.Single(row => row.Role == AppearanceAssetRole.HeaderBrand);
                 header.Refresh(AppearanceMode.Dark);
+                foreach (var variant in AppearanceAssetCatalog.Variants.Where(variant => variant.Role == AppearanceAssetRole.HeaderBrand && !variant.IsText))
+                {
+                    header.SelectedId = variant.Id;
+                    DrainDispatcher();
+                    Assert.Same(AppearanceSettingsService.LoadArtwork(variant.Role, variant.RelativePath),
+                        resources[AppearanceResourceKeys.HeaderBrandImageSource]);
+                    Assert.Equal(Visibility.Visible, resources[AppearanceResourceKeys.HeaderBrandImageVisibility]);
+                }
                 var mismatch = header.Choices.Single(choice => choice.Id == "HeaderBrand.Light");
                 Assert.True(mismatch.Opacity < 1);
                 header.SelectedId = mismatch.Id;

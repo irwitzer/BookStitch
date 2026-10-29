@@ -99,10 +99,10 @@
                     Command="{x:Static services:DeveloperToolsCommands.OpenDeveloperToolsWindow}"
                     AutomationProperties.Name="{services:LocalizedText Key=AutomationOpenDeveloperTools}"
                     VerticalAlignment="Center"
-                    HorizontalAlignment="Left" Margin="304,0,0,0"
+                    HorizontalAlignment="Left" Margin="270,0,0,0"
                     shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     IsTabStop="False"/>
-            <Border Height="0.5" Margin="290,0,8,0" VerticalAlignment="Bottom"
+            <Border Height="0.5" Margin="270,0,8,0" VerticalAlignment="Bottom"
                     UseLayoutRounding="False" SnapsToDevicePixels="False"
                     Background="{DynamicResource HeaderBrandSeparatorBrush}" IsHitTestVisible="False"/>
         </Grid>
@@ -121,7 +121,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Reserve space for the artwork overlay spanning caption and main header. -->
-                <Border Grid.Column="0" Width="282" Height="38" IsHitTestVisible="False"/>
+                <Border Grid.Column="0" Width="262" Height="38" IsHitTestVisible="False"/>
 
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
@@ -673,36 +673,48 @@
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedUp_Click"
                             Margin="0,0,2,0">
-                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/01_Nach_oben.png"
-                               Width="34.125" Height="34.125" Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                        <controls:TrackOrderIcon Width="32" Height="32" Direction="Up"
+                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            VectorMode="{DynamicResource TrackOrderVectorMode}"
+                            Theme="{DynamicResource TrackOrderIconTheme}"
+                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                            RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
                     <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedDown_Click"
                             Margin="0,0,2,0">
-                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/02_Nach_unten.png"
-                               Width="34.125" Height="34.125" Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                        <controls:TrackOrderIcon Width="32" Height="32" Direction="Down"
+                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            VectorMode="{DynamicResource TrackOrderVectorMode}"
+                            Theme="{DynamicResource TrackOrderIconTheme}"
+                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                            RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
                     <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedToTop_Click"
                             Margin="0,0,2,0">
-                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/03_Ganz_nach_oben.png"
-                               Width="34.125" Height="34.125" Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                        <controls:TrackOrderIcon Width="32" Height="32" Direction="Top"
+                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            VectorMode="{DynamicResource TrackOrderVectorMode}"
+                            Theme="{DynamicResource TrackOrderIconTheme}"
+                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                            RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
                     <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedToBottom_Click"
                             Margin="0,0,16,0">
-                        <Image Source="/BookStitch;component/Assets/Icons/TrackOrder/04_Ganz_nach_unten.png"
-                               Width="34.125" Height="34.125" Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
+                        <controls:TrackOrderIcon Width="32" Height="32" Direction="Bottom"
+                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            VectorMode="{DynamicResource TrackOrderVectorMode}"
+                            Theme="{DynamicResource TrackOrderIconTheme}"
+                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                            RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
                     </StackPanel>

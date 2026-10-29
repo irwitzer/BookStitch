@@ -29,6 +29,25 @@ public sealed class ChapterTechnicalNumberingAnalyzerTests
         });
     }
 
+    [Theory]
+    [InlineData(125, 126, 127, true)]
+    [InlineData(null, null, null, false)]
+    [InlineData(1, 2, 3, false)]
+    [InlineData(125, 126, 128, false)]
+    public void Analyze_MixedPureAndNamedOrdinalsRequireMatchingSourceEvidence(
+        int? first, int? second, int? third, bool expectedFamily)
+    {
+        var results = _analyzer.Analyze(ChapterAnalysisTestFactory.Scope(
+            ("125 Zweiter Teil Kapitel 34", first),
+            ("126 Kapitel 34", second),
+            ("127 Kapitel 35", third)));
+
+        Assert.All(results, result => Assert.Equal(expectedFamily, result.Evidence.FamilyDetected));
+        Assert.Equal(expectedFamily ? "Zweiter Teil" : "125 Zweiter Teil", results[0].OutputBaseText);
+        Assert.Equal(!expectedFamily, results[1].IsUsable);
+        Assert.Equal(!expectedFamily, results[2].IsUsable);
+    }
+
     private readonly ChapterTechnicalNumberingAnalyzer _analyzer = new();
 
     [Fact]

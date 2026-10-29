@@ -108,7 +108,19 @@ public sealed class ProjectMetadataInitializationService
         options ??= new ProjectMetadataInitializationOptions();
 
         var diagnostics = DetectStrongIdentityConflicts(snapshots).ToList();
-        var candidates = BuildCandidates(snapshots, options, diagnostics);
+        var candidates = BuildCandidates(snapshots, options, diagnostics).ToList();
+        var recognizer = new TitleNarratorRecognitionService();
+        var currentTitle = metadata.GetValue<string>(ProjectMetadataField.Title);
+        var titleCandidate = candidates.FirstOrDefault(candidate => candidate.Field == ProjectMetadataField.Title);
+        var recognized = recognizer.Recognize(currentTitle.Origin == MetadataOrigin.SourceAggregation
+            ? currentTitle.Value : null) ?? recognizer.Recognize(titleCandidate?.Value as string);
+        if (recognized is not null && (currentTitle.Origin != MetadataOrigin.SourceAggregation ||
+            currentTitle.Value == recognized.Title || recognizer.Recognize(currentTitle.Value) is not null))
+        {
+            candidates.RemoveAll(candidate => candidate.Field is ProjectMetadataField.Title or ProjectMetadataField.Narrators);
+            candidates.Add(new FieldCandidate(ProjectMetadataField.Title, recognized.Title, FromTitleCredit: true));
+            candidates.Add(new FieldCandidate(ProjectMetadataField.Narrators, recognized.Narrators, FromTitleCredit: true));
+        }
         var applied = new List<ProjectMetadataField>();
 
         foreach (var rawCandidate in candidates)
@@ -122,7 +134,8 @@ public sealed class ProjectMetadataInitializationService
             if (state == ProjectMetadataInitializationState.InitialSetOpen)
                 continue;
             var candidate = ApplySuppressedValues(metadata, rawCandidate);
-            if (candidate is null || !CanApply(metadata, candidate.Field, state, options))
+            if (candidate is null || !(CanApply(metadata, candidate.Field, state, options) ||
+                candidate.FromTitleCredit && IsSourceAggregated(metadata, candidate.Field)))
                 continue;
 
             if (SetField(metadata, candidate.Field, candidate.Value, candidate.Origin))
@@ -614,6 +627,13 @@ public sealed class ProjectMetadataInitializationService
         return candidate;
     }
 
+    private static bool IsSourceAggregated(ProjectMetadata metadata, ProjectMetadataField field) => field switch
+    {
+        ProjectMetadataField.Title => metadata.GetValue<string>(field).Origin == MetadataOrigin.SourceAggregation,
+        ProjectMetadataField.Narrators => metadata.GetValue<IReadOnlyList<string>>(field).Origin == MetadataOrigin.SourceAggregation,
+        _ => false
+    };
+
     private static bool CanApply(
         ProjectMetadata metadata,
         ProjectMetadataField field,
@@ -944,7 +964,8 @@ public sealed class ProjectMetadataInitializationService
         ProjectMetadataField Field,
         object Value,
         MetadataOrigin Origin = MetadataOrigin.SourceAggregation,
-        MetadataDecisionCandidateDiagnostic? Evidence = null);
+        MetadataDecisionCandidateDiagnostic? Evidence = null,
+        bool FromTitleCredit = false);
     private sealed record CandidateValue(object Value, string Key, int Index);
     private sealed record CandidateGroup(string Key, int Count, int FirstIndex, object Value);
     private sealed record CandidateSelection(

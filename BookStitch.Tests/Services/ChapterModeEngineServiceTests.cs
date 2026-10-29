@@ -8,6 +8,47 @@ public sealed class ChapterModeEngineServiceTests
 {
     private readonly ChapterModeEngineService _service = new();
 
+    [Theory]
+    [InlineData("Plain")]
+    [InlineData("ZeroPadded")]
+    [InlineData("SpacePadded")]
+    [InlineData("None")]
+    public void Apply_CleanTagModeSwitchPreservesAutomaticExportAndSourceMetadata(string numberingStyle)
+    {
+        var tracks = Enumerable.Range(1, 219).Select(number =>
+        {
+            var title = $"{number:D3} Kapitel {1 + number / 4}";
+            var track = Track(title);
+            track.FileName = $"{number:D3}_source.mp3";
+            track.FilePath = track.FileName;
+            track.SourceTrackNumber = number;
+            track.DiscNumber = number <= 124 ? 1 : 2;
+            track.SourceMetadataFields = track.SourceMetadataFields! with { SourceTrackNumber = number };
+            return track;
+        }).ToArray();
+        var tags = tracks.Select(track => track.TagTitle).ToArray();
+        var request = Request(tracks[0], ChapterSettingsService.ModeAuto) with
+        {
+            Tracks = tracks,
+            ChapterSettings = new ChapterSettings { Mode = "Auto", NumberingStyle = numberingStyle }
+        };
+        var exporter = new ExportChapterService();
+        var before = exporter.BuildFfmpegChapterMetadataFromTimeline(_service.Apply(request).RenderedTimeline);
+        var custom = _service.Apply(request with
+        {
+            ChapterSettings = new ChapterSettings
+            {
+                Mode = "Custom", NumberingStyle = numberingStyle,
+                Slot1 = "Empty", Slot2 = "CleanTagTitle", Slot3 = "Empty"
+            }
+        });
+        Assert.Equal(tracks.Select((track, index) => $"Kapitel {1 + (index + 1) / 4}"),
+            custom.RenderedTimeline.Select(chapter => chapter.Title));
+        Assert.Equal(before, exporter.BuildFfmpegChapterMetadataFromTimeline(_service.Apply(request).RenderedTimeline));
+        Assert.Equal(tags, tracks.Select(track => track.TagTitle));
+        Assert.Equal(Enumerable.Range(1, 219), tracks.Select(track => track.SourceTrackNumber!.Value));
+    }
+
     [Fact]
     public void Apply_AutomatedToUserGeneratedToAutomatedRestoresFreshV4Result()
     {

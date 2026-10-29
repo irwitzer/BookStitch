@@ -149,6 +149,8 @@ public static class AppearanceSettingsService
         var textPreset = GetTextColorPreset(settings.TextColorPreset, mode);
         var modePalette = AppearanceModePalette.Get(mode);
         var brandPalette = BrandAccentPalette.Get(mode);
+        resources["TrackOrderVectorMode"] = DeveloperToolsCommands.AppearancePreview.TrackOrderVectors;
+        resources["TrackOrderIconTheme"] = mode.ToString();
         var buttonPalette = ButtonPalette.Get(mode);
 
         ApplyBrush(resources, AppBackgroundBrushKey, backgroundPreset.BackgroundColor);

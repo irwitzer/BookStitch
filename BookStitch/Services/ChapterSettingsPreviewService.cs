@@ -224,6 +224,9 @@ public sealed class ChapterSettingsPreviewService
             .Select(track => new TrackInfo
             {
                 SourceId = track.SourceId,
+                SourceTrackNumber = track.SourceTrackNumber,
+                SourceDiscNumber = track.SourceDiscNumber,
+                SourceMetadataFields = track.SourceMetadataFields,
                 Index = track.Index,
                 IsExcluded = track.IsExcluded,
                 DiscNumber = track.DiscNumber,

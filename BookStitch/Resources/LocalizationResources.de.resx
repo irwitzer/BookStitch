@@ -10083,4 +10083,20 @@ Meaning: Startet die ausgewaehlte Vorschau erneut bei null; haelt am Ende 100 Pr
     <value>Bitte installiere zuerst FFmpeg über den Button oben rechts.</value>
     <comment>Context: Hauptfenster, Statuszeile beim Start ohne FFmpeg. Meaning: Vor dem Öffnen oder Starten eines Projekts FFmpeg über den sichtbaren Installationsbutton oben rechts installieren. Keine automatische Installation und keine bereits laufende Installation. Placeholders: keine. FixedTerm: FFmpeg unverändert lassen. Length: moderate.</comment>
   </data>
+  <data name="WarningTrackTagFileNumberMismatch" xml:space="preserve">
+    <value>Track-Tag ({0}) weicht von Dateinummer ({1}) ab</value>
+    <comment>Context: Trackliste, zusätzliche nicht blockierende Kapitelwarnung. Meaning: Die ursprüngliche numerische Track-Tag-Nummer unterscheidet sich von der beim Import erkannten Dateinummer. Kein Vergleich mit Tag-Titel, Listenposition oder Arbeitsnummer; keine Aussage, dass die Sortierung falsch ist. Placeholders: {0}=ursprüngliche Track-Tag-Nummer; {1}=Dateinummer. Length: flexible</comment>
+  </data>
+  <data name="Developer.Images.TrackOrder" xml:space="preserve">
+    <value>Sortierpfeile</value>
+    <comment>Context: Developer Tools &gt; Bilder; session-only track-order icon comparison.</comment>
+  </data>
+  <data name="Developer.Images.ClassicPng" xml:space="preserve">
+    <value>Classic PNG</value>
+    <comment>Context: Developer Tools &gt; Bilder; session-only track-order icon comparison. TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Developer.Images.ClassicVectors" xml:space="preserve">
+    <value>Classic WPF-Vektoren</value>
+    <comment>Context: Developer Tools &gt; Bilder; session-only track-order icon comparison. TranslationRule: KeepOriginal</comment>
+  </data>
 </root>

@@ -30,6 +30,28 @@ public sealed class ChapterCustomTitleServiceTests
         Assert.Equal(expected, new ChapterCustomTitleService().Render(track, settings, 2, 1300, null, null));
     }
 
+    [Theory]
+    [InlineData(99, "099 Kapitel 27")]
+    [InlineData(100, "100 Kapitel 27")]
+    [InlineData(125, "125 Kapitel 34")]
+    public void Render_CustomCleanTagKeepsFallbackWithoutChangingNumberOrOriginalSlots(int ordinal, string title)
+    {
+        var track = new TrackInfo
+        {
+            TagTitle = title, SourceTrackNumber = ordinal, TrackNumber = 1,
+            FileName = "unchanged.mp3"
+        };
+        var settings = new ChapterSettings
+        {
+            Mode = "Custom", NumberingStyle = "Plain", Slot1 = "Number", Slot2 = "CleanTagTitle",
+            Slot3 = "OriginalTagTitle", Separator1 = "Space", Separator2 = "Pipe"
+        };
+
+        Assert.Equal("2 Kapitel | " + title, _service.Render(track, settings, 2, 219, null, null));
+        Assert.Equal(title, track.TagTitle);
+        Assert.Equal("unchanged.mp3", track.FileName);
+    }
+
     private readonly ChapterCustomTitleService _service = new();
 
     [Fact]

@@ -5831,4 +5831,20 @@ TranslationNote: Added for the 2026-10-24 complete-target-locale batch; cross-ch
     <value>Installer først FFmpeg via knappen øverst til højre.</value>
     <comment>SourceHash: 96d4468d302dc7bdc06353304006ebf982f37db756b2207c41921cd24b3b39ff</comment>
   </data>
+  <data name="WarningTrackTagFileNumberMismatch" xml:space="preserve">
+    <value>Spornummeret i tagget ({0}) afviger fra nummeret i filnavnet ({1})</value>
+    <comment>SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93</comment>
+  </data>
+  <data name="Developer.Images.TrackOrder" xml:space="preserve">
+    <value>Pile til sporrækkefølge</value>
+    <comment>SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75</comment>
+  </data>
+  <data name="Developer.Images.ClassicPng" xml:space="preserve">
+    <value>Classic PNG</value>
+    <comment>SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295</comment>
+  </data>
+  <data name="Developer.Images.ClassicVectors" xml:space="preserve">
+    <value>Classic WPF-Vektoren</value>
+    <comment>SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347</comment>
+  </data>
 </root>

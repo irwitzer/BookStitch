@@ -15,6 +15,22 @@ public sealed class DeveloperAppearancePreviewTests
     }
 
     [Fact]
+    public void ArrowVariantIsSessionOnlyAndClearsWhenDeveloperAccessEnds()
+    {
+        var (access, preview) = Create();
+        Assert.False(preview.TrackOrderVectors);
+        preview.SetTrackOrderVectors(true);
+        preview.SetBackground("Ivory");
+        Assert.True(preview.TrackOrderVectors);
+        var fresh = new DeveloperAppearancePreview(access);
+        Assert.False(fresh.TrackOrderVectors);
+        access.VisibilityChoice = DeveloperToolsVisibilityChoice.Conceal;
+        Assert.False(preview.TrackOrderVectors);
+        preview.SetTrackOrderVectors(true);
+        Assert.False(preview.TrackOrderVectors);
+    }
+
+    [Fact]
     public void Overrides_never_mutate_regular_settings_hide_keeps_them_and_conceal_discards_them()
     {
         var (access, preview) = Create();

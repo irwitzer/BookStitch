@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets/Icons/TrackOrder/Classic/*.png" />
     <!-- English is the neutral runtime fallback; German remains the editorial source. -->
     <EmbeddedResource Update="Resources/LocalizationResources.en.resx" WithCulture="false" LogicalName="BookStitch.Resources.LocalizationResources.resources" />
     <EmbeddedResource Include="Resources/Faq.en.json" WithCulture="false" />
@@ -23,8 +24,7 @@
     <Resource Include="Assets/Icons/BookStitch-Language-Petrol.png" />
     <Resource Include="Assets/Icons/BookStitch-Heart-Petrol.png" />
     <Resource Include="Assets/Icons/Placeholder/*.png" />
-    <Resource Include="Assets/Banners/HeaderBrand-Ornates.png" />
-    <Resource Include="Assets/Banners/HeaderBrand-Ornates-Ivory.png" />
+    <Resource Include="Assets/Banners/HeaderBrand-IvoryTealGold-*.png" />
     <Resource Include="Assets/Banners/MetadataBanner-*.png" />
     <EmbeddedResource Include="Assets/Faq/audible-timing.json" LogicalName="BookStitch.Faq.AudibleTiming.json" />
     <Content Include="Assets/Faq/audible-narration.mp3" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -8,6 +8,25 @@ public sealed class ChapterCustomEngineServiceTests
 {
     private readonly ChapterCustomEngineService _service = new();
 
+    [Theory]
+    [InlineData(true, "Buchtitel")]
+    [InlineData(false, "Eigenes Album")]
+    public void Apply_AlbumSlotRespectsTitleBindingWithoutChangingRawAutomaticCandidates(bool linked, string expected)
+    {
+        var metadata = new ProjectMetadata();
+        metadata.SetValue(ProjectMetadataField.Title, "Buchtitel", MetadataOrigin.User);
+        metadata.SetValue(ProjectMetadataField.Album, "Eigenes Album", MetadataOrigin.User);
+        var captured = ChapterCanonicalMetadataSnapshot.Capture(metadata,
+            new Dictionary<string, bool> { [ProjectMetadataFieldBindingCatalog.TitleToAlbumId] = linked });
+        var request = Request([new TrackInfo { DurationTicks = TimeSpan.TicksPerSecond }], settings =>
+        {
+            settings.Slot1 = "Album"; settings.Slot2 = "Empty"; settings.Slot3 = "Empty";
+        }) with { CanonicalMetadata = captured };
+        Assert.Equal(expected, Assert.Single(_service.Apply(request).RenderedTimeline).Title);
+        Assert.Equal("Eigenes Album", captured.AlbumValue);
+        Assert.Equal("Eigenes Album", metadata.GetValue<string>(ProjectMetadataField.Album).Value);
+    }
+
     [Fact]
     public void Apply_RendersSyntheticCustomTimelineAndUpdatesActiveTrackTitles()
     {

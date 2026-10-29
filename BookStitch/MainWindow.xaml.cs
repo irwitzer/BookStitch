@@ -6472,7 +6472,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         _resumeDiscPreview.Set(new Mp3DiscPendingChapterDisc(
                             discNumber, precheck.Signature, precheck.PlannedSources), acceptDuplicateForCurrentDisc);
                         _resumeDiscPreview.MarkProcessingStarted();
-                        PersistTrackListState();
                         _resumeDiscStartDriveRoot = sourceFolder;
                         // The disc is now accepted for import. Stage its stable source identities in
                         // the runtime chapter catalog before copy/conversion starts. Nothing is
@@ -6489,6 +6488,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             sourceFolder,
                             discNumber,
                             precheck.PlannedSources);
+
+                        // Initial preview IDs use the structure signature. Checkpoint edits
+                        // with the accepted IDs so the imported-file refresh can match them.
+                        PersistTrackListState();
 
                         var previewTracks = _services.Discs.Mp3DiscTrackReconciliationService.CreatePreviewTracksFromKnownFiles(
                             sourceFolder,
@@ -8873,7 +8876,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         return new ChapterPreviewData(
             BookTitle,
-            Album,
+            new ProjectMetadataFieldBindingProjectionService().ResolveTargetTextValues(
+                _projectMetadata.CanonicalMetadata, ProjectMetadataField.Album,
+                MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences)).FirstOrDefault() ?? string.Empty,
             Tracks.ToList(),
             CreateCurrentResolvedAutoContentsBySourceId(),
             _currentActiveChapterResult?.RenderedTimeline);
@@ -13172,7 +13177,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 LegacyUseLeadingZerosInChapterSuggestions: false,
                 FfprobePath: _ffmpegStatus.FfprobePath ?? string.Empty,
                 CreateFinalTags: (duration, chapterCount) => CreateCurrentFinalAudioTagData(isFinalOutput: true, duration, chapterCount),
-                CanonicalChapterMetadata: ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata),
+                CanonicalChapterMetadata: ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata,
+                    MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences)),
                 ManualMergeRequested: manualMergeRequested);
 
             var callbacks = new ExportWorkflowCallbacks
@@ -15789,7 +15795,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             projectType,
             projectIdentity,
             _currentProjectWorkFolder,
-            ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata),
+            ChapterCanonicalMetadataSnapshot.Capture(_projectMetadata.CanonicalMetadata,
+                MetadataFieldBindingPreferencesService.CreateSnapshot(_settings.MetadataPreferences)),
             _settings.ChapterSettings,
             LegacyUseLeadingZeros: false,
             effectiveActiveChapterCount,

@@ -70,13 +70,21 @@ public sealed class ChapterTechnicalNumberingAnalyzer
         var isMixedBoundaryRepresentationFamily = IsMixedBoundaryRepresentationFamily(
             values,
             isBoundarySpanningFamily);
+        // A disc may start after the padding boundary. Marker-only titles then
+        // become pure ordinals, interspersed with genuine part titles.
+        var isMixedOrdinalFamily = values.All(IsExplicitlyOrdinalCorrelated) &&
+            values.Any(item => item.Kind == ChapterTechnicalNumberingKind.PureNumber) &&
+            values.Any(item => item.Kind == ChapterTechnicalNumberingKind.LeadingNumber) &&
+            values.All(item =>
+                (item.Kind == ChapterTechnicalNumberingKind.PureNumber && item.Format == "pure") ||
+                (item.Kind == ChapterTechnicalNumberingKind.LeadingNumber && item.Format == "leading-space"));
         var hasConsistentKind = values.Select(item => item.Kind).Distinct().Count() == 1;
         var hasConsistentFormat = values
             .Select(item => item.Format)
             .Distinct(StringComparer.Ordinal)
             .Count() == 1;
-        if ((!hasConsistentKind && !isMixedBoundaryRepresentationFamily) ||
-            (!hasConsistentFormat && !isMixedBoundaryRepresentationFamily) ||
+        if ((!hasConsistentKind && !isMixedBoundaryRepresentationFamily && !isMixedOrdinalFamily) ||
+            (!hasConsistentFormat && !isMixedBoundaryRepresentationFamily && !isMixedOrdinalFamily) ||
             values.All(item => IsLeadingPunctuationFormat(item.Format)) ||
             (!isStrictOrderedFamily && !isBoundarySpanningFamily) ||
             IsYearLikeSequence(values))

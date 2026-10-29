@@ -299,7 +299,7 @@ public sealed class FolderScanner
             : Path.Combine(rootName, relativeFolder);
     }
 
-    private static int? TryExtractTrackNumber(string fileNameWithoutExtension)
+    internal static int? TryExtractTrackNumber(string fileNameWithoutExtension)
     {
         var match = ChapterMarkerCatalog.LeadingExplicitTrackNumberRegex.Match(fileNameWithoutExtension);
 

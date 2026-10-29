@@ -47,7 +47,7 @@ public sealed class DeveloperImagePreviewRow : INotifyPropertyChanged
                 AppearanceMode.Light => LocalizationText.Get("Developer.Images.Ivory"),
                 _ => LocalizationText.Get("Developer.Images.Universal")
             };
-            var label = variant.LabelKey is null ? family : $"{LocalizationText.Get(variant.LabelKey)} · {family}";
+            var label = variant.DesignName is not null ? $"{variant.DesignName} · {family}" : variant.LabelKey is null ? family : $"{LocalizationText.Get(variant.LabelKey)} · {family}";
             Choices.Add(new(variant.Id, label, variant.Theme));
         }
     }

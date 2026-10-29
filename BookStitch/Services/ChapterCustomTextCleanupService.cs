@@ -21,8 +21,25 @@ public sealed class ChapterCustomTextCleanupService
         _normalizer = normalizer ?? throw new ArgumentNullException(nameof(normalizer));
     }
 
-    public string CleanTagTitle(string? tagTitle, int? sourceOrdinal = null) =>
-        Clean(ChapterCandidateSource.TrackTitle, tagTitle, sourceOrdinal);
+    public string CleanTagTitle(string? tagTitle, int? sourceOrdinal = null)
+    {
+        // Strip a proven source ordinal before marker cleanup, so marker-only
+        // titles get the same fallback above and below the zero-padding boundary.
+        // Keep this ordering local to the custom tag slot; auto analysis and
+        // filename cleanup retain their existing contracts.
+        if (sourceOrdinal is > 0 && !string.IsNullOrWhiteSpace(tagTitle))
+        {
+            var match = SourceOrdinalPrefix.Match(tagTitle.Replace('_', ' '));
+            if (match.Success && int.TryParse(match.Groups["number"].Value,
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number == sourceOrdinal)
+            {
+                tagTitle = match.Groups["text"].Value;
+                return _normalizer.Normalize(ChapterCandidateSource.TrackTitle, tagTitle).NormalizedText;
+            }
+        }
+
+        return Clean(ChapterCandidateSource.TrackTitle, tagTitle, sourceOrdinal);
+    }
 
     public string CleanFileName(string? fileName, int? sourceOrdinal = null)
     {

@@ -37,6 +37,11 @@ public sealed class ChapterCustomEngineService
             return new ActiveChapterResult(settings.Mode, []);
         }
 
+        IReadOnlyDictionary<TrackInfo, string> preservedTags =
+            new[] { settings.Slot1, settings.Slot2, settings.Slot3 }.Contains("CleanTagTitle", StringComparer.Ordinal)
+                ? new ChapterCustomTagTitlePreservationService().Build(
+                    timeline.Where(chapter => chapter.IsSynthetic).Select(chapter => chapter.SourceTrack))
+                : new Dictionary<TrackInfo, string>();
         var renderedTimeline = timeline
             .Select(chapter => chapter with
             {
@@ -46,7 +51,8 @@ public sealed class ChapterCustomEngineService
                     chapter.OutputChapterIndex,
                     activeChapterCount,
                     request.CanonicalMetadata.TitleValue,
-                    request.CanonicalMetadata.AlbumValue)
+                    request.CanonicalMetadata.CustomAlbumValue,
+                    chapter.IsSynthetic ? preservedTags.GetValueOrDefault(chapter.SourceTrack) : null)
             })
             .ToArray();
 

@@ -27,16 +27,17 @@ public sealed class ChapterCustomTitleService
         int chapterPosition,
         int activeChapterCount,
         string? bookTitle,
-        string? album)
+        string? album,
+        string? preservedCleanTagTitle = null)
     {
         ArgumentNullException.ThrowIfNull(track);
         ArgumentNullException.ThrowIfNull(settings);
 
         var parts = new[]
         {
-            RenderSlot(settings.Slot1, track, settings, chapterPosition, activeChapterCount, bookTitle, album),
-            RenderSlot(settings.Slot2, track, settings, chapterPosition, activeChapterCount, bookTitle, album),
-            RenderSlot(settings.Slot3, track, settings, chapterPosition, activeChapterCount, bookTitle, album)
+            RenderSlot(settings.Slot1, track, settings, chapterPosition, activeChapterCount, bookTitle, album, preservedCleanTagTitle),
+            RenderSlot(settings.Slot2, track, settings, chapterPosition, activeChapterCount, bookTitle, album, preservedCleanTagTitle),
+            RenderSlot(settings.Slot3, track, settings, chapterPosition, activeChapterCount, bookTitle, album, preservedCleanTagTitle)
         };
         var separators = new[]
         {
@@ -70,7 +71,8 @@ public sealed class ChapterCustomTitleService
         int chapterPosition,
         int activeChapterCount,
         string? bookTitle,
-        string? album)
+        string? album,
+        string? preservedCleanTagTitle)
     {
         return ChapterSettingsService.NormalizeSlot(slot) switch
         {
@@ -83,7 +85,7 @@ public sealed class ChapterCustomTitleService
             "BookTitle" => TextPart(bookTitle?.Trim() ?? string.Empty),
             "Album" => TextPart(album?.Trim() ?? string.Empty),
             "OriginalTagTitle" => TextPart(track.TagTitle ?? string.Empty),
-            "CleanTagTitle" => TextPart(_cleanupService.CleanTagTitle(track.TagTitle,
+            "CleanTagTitle" => TextPart(preservedCleanTagTitle ?? _cleanupService.CleanTagTitle(track.TagTitle,
                 track.SourceTrackNumber ?? track.SourceMetadataFields?.SourceTrackNumber)),
             "CleanFileName" => TextPart(_cleanupService.CleanFileName(track.FileName,
                 track.SourceTrackNumber ?? track.SourceMetadataFields?.SourceTrackNumber)),

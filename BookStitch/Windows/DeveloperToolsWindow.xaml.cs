@@ -416,6 +416,10 @@ public partial class DeveloperToolsWindow : Window
 
     private void ConfigureAppearancePresetControls()
     {
+        ConfigureComboBox(TrackOrderVariantComboBox, new[] {
+            ("Png", LocalizationText.Get("Developer.Images.ClassicPng")),
+            ("Vector", LocalizationText.Get("Developer.Images.ClassicVectors")) });
+        SelectComboBoxItemByTag(TrackOrderVariantComboBox, DeveloperToolsCommands.AppearancePreview.TrackOrderVectors ? "Vector" : "Png");
         var effective = AppearanceSettingsService.GetEffectiveSettings(_settings);
         foreach (var combo in new[] { BackgroundPresetComboBox, ImagesBackgroundComboBox })
         {
@@ -437,6 +441,13 @@ public partial class DeveloperToolsWindow : Window
             ImagePreviewRolesItemsControl.ItemsSource = _imageRows;
         }
         foreach (var row in _imageRows) row.Refresh(AppearanceSettingsService.GetEffectiveMode(_settings));
+    }
+
+    private void TrackOrderVariantComboBox_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoading) return;
+        DeveloperToolsCommands.AppearancePreview.SetTrackOrderVectors(
+            (TrackOrderVariantComboBox.SelectedItem as ComboBoxItem)?.Tag as string == "Vector");
     }
 
     private void PreviewAppearanceChanged(object? sender, EventArgs e)

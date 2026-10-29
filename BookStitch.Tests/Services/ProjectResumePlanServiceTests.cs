@@ -11,6 +11,50 @@ public class ProjectResumePlanServiceTests
 {
     private readonly ProjectResumePlanService _service = new();
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Folder_resume_keeps_missing_known_sources_visible_including_excluded_sources(bool excluded)
+    {
+        using var folder = new TemporaryFolder();
+        ProjectFolderLayout.EnsureProjectFolders(folder.Path);
+        var originals = ProjectFolderLayout.GetOriginalsFolder(folder.Path);
+        var paths = new[] { "001.mp3", "002.mp3" }.Select(name => Path.Combine(originals, name)).ToArray();
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var identities = new SourceCopyIdentityStore();
+        for (var index = 0; index < paths.Length; index++)
+        {
+            File.WriteAllText(paths[index], "synthetic source");
+            identities.RecordCopiedFile(folder.Path, paths[index], paths[index], ids[index]);
+        }
+        var tracks = paths.Select((path, index) => new TrackInfo
+        {
+            SourceId = ids[index], FilePath = path, FileName = Path.GetFileName(path),
+            AutomaticOrderPosition = index + 1, IsExcluded = index == 1 && excluded
+        }).ToArray();
+        new TrackListStateService().Save(folder.Path, tracks);
+        new WorkManifestService().Save(ProjectFolderLayout.GetExportManifestPath(folder.Path), new ExportWorkManifest
+        {
+            ProjectWorkFolder = folder.Path, ProjectType = ProjectManifestTypes.FolderProject,
+            SourceFolder = originals, SelectedPreset = "AAC Stereo 96 kbps",
+            State = new() { Status = ProjectManifestStatuses.ReviewBeforeMerge },
+            Tracks = tracks.Where(track => !track.IsExcluded).Select((track, index) => new ExportWorkManifestTrack
+            {
+                SourceId = track.SourceId, SourcePath = track.FilePath, SourceFileName = track.FileName,
+                TrackIndex = index + 1, Preset = "AAC Stereo 96 kbps"
+            }).ToList()
+        });
+        File.Delete(paths[1]);
+
+        var plan = _service.BuildFromProjectFolder(folder.Path)!;
+        Assert.Equal(ids, plan.Tracks.Select(track => track.SourceId));
+        var loaded = new ProjectResumeLoadWorkflowService(new AudioDiscProjectService(), new TrackListStateService()).Prepare(plan);
+        Assert.True(loaded.Success);
+        Assert.Equal(2, loaded.Tracks.Count);
+        Assert.Equal(excluded, loaded.Tracks[1].IsExcluded);
+        Assert.True(loaded.Tracks[1].WarningCodes.HasFlag(TrackWarningCodes.MissingSource));
+    }
+
     [Fact]
     public void Loading_a_project_recovers_an_interrupted_extension_before_deriving_the_resume_state()
     {

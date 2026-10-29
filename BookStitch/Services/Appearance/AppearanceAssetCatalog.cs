@@ -17,7 +17,7 @@ public sealed record AppearanceAssetDefinition(
     string PackUriString);
 
 public sealed record AppearanceAssetVariant(
-    string Id, AppearanceAssetRole Role, AppearanceMode? Theme, string RelativePath, string? LabelKey = null, bool IsText = false)
+    string Id, AppearanceAssetRole Role, AppearanceMode? Theme, string RelativePath, string? LabelKey = null, bool IsText = false, string? DesignName = null)
 {
     public bool Matches(AppearanceMode mode) => Theme is null || Theme == mode;
 }
@@ -47,10 +47,10 @@ public static class AppearanceAssetCatalog
                 "/BookStitch;component/Assets/Faq/BookMachin Press.png", "pack://application:,,,/BookStitch;component/Assets/Faq/BookMachin Press.png"),
             [(AppearanceAssetRole.HeaderBrand, AppearanceMode.Dark)] = new(
                 AppearanceAssetRole.HeaderBrand, AppearanceMode.Dark,
-                "/BookStitch;component/Assets/Banners/HeaderBrand-Ornates.png", "pack://application:,,,/BookStitch;component/Assets/Banners/HeaderBrand-Ornates.png"),
+                "/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Dark.png", "pack://application:,,,/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Dark.png"),
             [(AppearanceAssetRole.HeaderBrand, AppearanceMode.Light)] = new(
                 AppearanceAssetRole.HeaderBrand, AppearanceMode.Light,
-                "/BookStitch;component/Assets/Banners/HeaderBrand-Ornates-Ivory.png", "pack://application:,,,/BookStitch;component/Assets/Banners/HeaderBrand-Ornates-Ivory.png"),
+                "/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Light.png", "pack://application:,,,/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Light.png"),
             [(AppearanceAssetRole.MetadataBanner, AppearanceMode.Dark)] = new(
                 AppearanceAssetRole.MetadataBanner,
                 AppearanceMode.Dark,
@@ -86,9 +86,13 @@ public static class AppearanceAssetCatalog
     // Register new embedded variants here. The generic developer selectors use this one catalog.
     public static IReadOnlyList<AppearanceAssetVariant> Variants { get; } =
         Assets.Values.Where(asset => asset.Role is AppearanceAssetRole.HeaderBrand or AppearanceAssetRole.MetadataBanner or AppearanceAssetRole.CoverPlaceholder)
-            .Select(asset => new AppearanceAssetVariant($"{asset.Role}.{asset.Mode}", asset.Role, asset.Mode, asset.RelativePath, asset.Role switch { AppearanceAssetRole.HeaderBrand => "Developer.Images.Ornates", AppearanceAssetRole.MetadataBanner => "Developer.Images.Celestial", AppearanceAssetRole.CoverPlaceholder => "Developer.Images.CoverOld", _ => null }))
+            .Select(asset => new AppearanceAssetVariant($"{asset.Role}.{asset.Mode}", asset.Role, asset.Mode, asset.RelativePath, asset.Role switch { AppearanceAssetRole.HeaderBrand => null, AppearanceAssetRole.MetadataBanner => "Developer.Images.Celestial", AppearanceAssetRole.CoverPlaceholder => "Developer.Images.CoverOld", _ => null }))
             .Concat(new[]
             {
+                new AppearanceAssetVariant("HeaderBrand.IvoryTealGold.Dark", AppearanceAssetRole.HeaderBrand, AppearanceMode.Dark,
+                    "/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Dark.png", DesignName: "Ivory & Teal Gold"),
+                new AppearanceAssetVariant("HeaderBrand.IvoryTealGold.Light", AppearanceAssetRole.HeaderBrand, AppearanceMode.Light,
+                    "/BookStitch;component/Assets/Banners/HeaderBrand-IvoryTealGold-Light.png", DesignName: "Ivory & Teal Gold"),
                 new AppearanceAssetVariant("HeaderBrand.Text", AppearanceAssetRole.HeaderBrand, null,
                     "", "Developer.Images.Text", IsText: true),
                 new AppearanceAssetVariant("FaqSquare.Blueprint", AppearanceAssetRole.FaqSquare, null,

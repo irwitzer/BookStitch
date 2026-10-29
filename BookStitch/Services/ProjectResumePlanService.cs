@@ -339,8 +339,9 @@ public sealed class ProjectResumePlanService
 
         // Excluded sources have no converted/export entry, but their import identity
         // is still required to restore track-list state and immutable source metadata.
-        var sourceIdentitiesByPath = new SourceCopyIdentityStore().Load(projectFolder)
-            .Where(identity => identity.SourceId != Guid.Empty)
+        var sourceIdentities = new SourceCopyIdentityStore().Load(projectFolder)
+            .Where(identity => identity.SourceId != Guid.Empty).ToList();
+        var sourceIdentitiesByPath = sourceIdentities
             .GroupBy(identity => NormalizePathForComparison(Path.Combine(projectFolder, identity.TargetRelativePath)),
                 StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().SourceId, StringComparer.OrdinalIgnoreCase);
@@ -359,6 +360,11 @@ public sealed class ProjectResumePlanService
                 StringComparer.OrdinalIgnoreCase);
 
         var sourceFiles = EnumerateAudioFiles(exportManifest.SourceFolder)
+            // A missing managed source must remain a track with MissingSource warning,
+            // including excluded sources absent from the active export manifest.
+            .Concat(exportManifest.Tracks.Select(track => track.SourcePath).Where(path => !string.IsNullOrWhiteSpace(path)))
+            .Concat(sourceIdentities.Select(identity => Path.Combine(projectFolder, identity.TargetRelativePath)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => Path.GetRelativePath(exportManifest.SourceFolder, path), new NaturalStringComparer())
             .ToList();
 

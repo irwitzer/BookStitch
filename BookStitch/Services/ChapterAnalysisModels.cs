@@ -136,7 +136,7 @@ public sealed record ChapterScopeAnalysisResult(
 
 public sealed record ChapterAnalysisRules(int Revision = ChapterAnalysisRules.CurrentRevision)
 {
-    public const int CurrentRevision = 7;
+    public const int CurrentRevision = 8;
 
     public static bool HasIndividualSignal(int deviationCount, int validCount) =>
         HasAtLeastPercent(deviationCount, validCount, 40);

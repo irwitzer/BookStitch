@@ -143,6 +143,13 @@ public sealed class TrackListWarningService
         if (codes.HasFlag(TrackWarningCodes.UnreadableTags))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags));
 
+        // Compare immutable source tags with filename evidence, never the working
+        // track number, list position or free-form title. This does not sort tracks.
+        var sourceNumber = track.SourceTrackNumber ?? track.SourceMetadataFields?.SourceTrackNumber;
+        var fileNumber = FolderScanner.TryExtractTrackNumber(System.IO.Path.GetFileNameWithoutExtension(track.FileName ?? string.Empty));
+        if (sourceNumber is > 0 && fileNumber is > 0 && sourceNumber != fileNumber)
+            AddWarningMessage(messages, LocalizationText.Format("WarningTrackTagFileNumberMismatch", sourceNumber.Value, fileNumber.Value));
+
         return JoinWarningMessages(messages);
     }
 

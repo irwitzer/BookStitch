@@ -391900,6 +391900,1230 @@
           "basis": "explicit-translation-review: Nutzerautorisierte KI-Sprachprüfung des neuen FFmpeg-Installationshinweises: Bedeutung, Voraussetzung und Position oben rechts geprüft; keine externe Native- oder Screenshot-Abnahme."
         }
       }
+    },
+    "WarningTrackTagFileNumberMismatch": {
+      "source": {
+        "value": "Track-Tag ({0}) weicht von Dateinummer ({1}) ab",
+        "comment": "Context: Trackliste, zusätzliche nicht blockierende Kapitelwarnung. Meaning: Die ursprüngliche numerische Track-Tag-Nummer unterscheidet sich von der beim Import erkannten Dateinummer. Kein Vergleich mit Tag-Titel, Listenposition oder Arbeitsnummer; keine Aussage, dass die Sortierung falsch ist. Placeholders: {0}=ursprüngliche Track-Tag-Nummer; {1}=Dateinummer. Length: flexible"
+      },
+      "translations": {
+        "en": {
+          "value": "Track tag ({0}) differs from filename number ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "bn-BD": {
+          "value": "ট্র্যাক ট্যাগের নম্বর ({0}) ফাইলের নামের নম্বর ({1}) থেকে আলাদা",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "cs": {
+          "value": "Číslo v tagu stopy ({0}) se liší od čísla v názvu souboru ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "da": {
+          "value": "Spornummeret i tagget ({0}) afviger fra nummeret i filnavnet ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "es": {
+          "value": "El número de pista de la etiqueta ({0}) difiere del número del nombre de archivo ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "fi": {
+          "value": "Raidan tunnisteen numero ({0}) eroaa tiedostonimen numerosta ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "fr": {
+          "value": "Le numéro de piste du tag ({0}) diffère du numéro du nom de fichier ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "gsw-CH": {
+          "value": "Track-Tag ({0}) wiicht vo de Dateinummere ({1}) ab",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "it": {
+          "value": "Il numero di traccia nel tag ({0}) differisce dal numero nel nome del file ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "ja": {
+          "value": "トラックタグの番号（{0}）がファイル名の番号（{1}）と異なります",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "nb": {
+          "value": "Spornummeret i taggen ({0}) avviker fra nummeret i filnavnet ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "nl": {
+          "value": "Het tracknummer in de tag ({0}) wijkt af van het nummer in de bestandsnaam ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "pl": {
+          "value": "Numer ścieżki w tagu ({0}) różni się od numeru w nazwie pliku ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "pt-BR": {
+          "value": "O número da faixa na tag ({0}) difere do número no nome do arquivo ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "ru": {
+          "value": "Номер дорожки в теге ({0}) отличается от номера в имени файла ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "sv": {
+          "value": "Spårnumret i taggen ({0}) skiljer sig från numret i filnamnet ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "tr": {
+          "value": "Etiketteki parça numarası ({0}), dosya adındaki numaradan ({1}) farklı",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "vi": {
+          "value": "Số bản nhạc trong thẻ ({0}) khác với số trong tên tệp ({1})",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "zh-CN": {
+          "value": "曲目标签中的编号（{0}）与文件名中的编号（{1}）不同",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        },
+        "zh-HK": {
+          "value": "曲目標籤中的編號（{0}）與檔案名稱中的編號（{1}）不同",
+          "comment": "SourceHash: 853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93"
+        }
+      },
+      "translationBase": {
+        "en": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "6326f36f49b8784e62323d9267a77d4e5121e3a30b229c1500e9659603bd1b81",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "bn-BD": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "dfc51cfe1348869ffd010a82417c6ec7a67fbd83c66cdc2657466f216a8b2164",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "cs": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "d1b4c66c87034b854bc68f87508aa799779f243f7402066512e8f7ad31bcba20",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "da": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "0fa1ee3cd81e9d227545fdc548c637fbc864dbe4ff5a1c446bddbd726b3aaee4",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "es": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "c5a3c830b463e6b8c667c867987ebd7d050c37559dd77ba4deee5d84da1aab29",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "fi": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "5602645c1a8d314ee9e18a4d29ca3317a1455ddc1f868dcb51c0ff098a95ca33",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "fr": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "eb01635e22e57f9f98f28822d29a5c1c69ab5771f09a7f5c4961af8c68e2f839",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "cab7283c44d44c09faa7954606c46894466b551d5303e24abe60c8bb74652791",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "it": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "8d456b539c55c081987a205924313d7e82b34c9cbfe9af34b541b9fbea21af7d",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "ja": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "38fe6bd292cd92aee076345d6a1f8c915033ab1a5f16dd350376c4a7ef0f5258",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "nb": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "19f491ab021295acaa3b8317a008f80c4a9d268e9de98ad99d8b3b485da27cbc",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "nl": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "6a17b9384a7aa7690cf42067ecf0beb710b7365ab2c4423b3412286d2961d7eb",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "pl": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "a11e542c584243571c4c83cba9bc82a2baaf55ba1ac6fd861e79f69ac4441f57",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "pt-BR": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "f4d79d5bd30c927008bc8ba04b485767f56ec60c27284a8ad2ab7ee492c5332d",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "ru": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "fe06d5b2575286c387a7a7331707be7dc73e4de32bcdcaebb6f93c054bbc242e",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "sv": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "e367e7edd612ab2a6f4abdb2c6a4c50971ead9b139e041edc1f9c328e0e8b5a2",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "tr": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "f03b8561ffe860b60a538cad38ef458fb67365474ba46760414200bc242ea8bd",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "vi": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "65ab0a7c338dc60e3ce3bbe85f6e73c4a5145c26b3dd11495bc39156918f15a3",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "zh-CN": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "1528117c0f5bdd067d0f38e7fe0b8f926628fd3d03decb37dca9d0741e15bf05",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        },
+        "zh-HK": {
+          "sourceValueSha256": "853b2a71602b68df6f80e22218c3d0ee5ca54b2aff628343d51730ae2f4a8d93",
+          "sourceCommentSha256": "69b89c674e59a41aa5beb19ef4703e9ad1dec4a1c3917e79d1a4d17f8bc51bb6",
+          "targetValueSha256": "238b89e5a613652c00f0c7fe401716e5d20cccdddfab46cb2e8e5728abfa73d3",
+          "basis": "new-warning-context-and-placeholder-check; no-independent-native-or-visual-approval"
+        }
+      }
+    },
+    "Developer.Images.TrackOrder": {
+      "source": {
+        "value": "Sortierpfeile",
+        "comment": "Context: Developer Tools > Bilder; session-only track-order icon comparison."
+      },
+      "translations": {
+        "en": {
+          "value": "Track-order arrows",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "bn-BD": {
+          "value": "ট্র্যাক সাজানোর তীর",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "cs": {
+          "value": "Šipky řazení stop",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "da": {
+          "value": "Pile til sporrækkefølge",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "es": {
+          "value": "Flechas de orden de pistas",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "fi": {
+          "value": "Raitajärjestyksen nuolet",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "fr": {
+          "value": "Flèches de tri des pistes",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "gsw-CH": {
+          "value": "Sortierpfiil",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "it": {
+          "value": "Frecce di riordino delle tracce",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "ja": {
+          "value": "トラック順序の矢印",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "nb": {
+          "value": "Piler for sporrekkefølge",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "nl": {
+          "value": "Pijlen voor trackvolgorde",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "pl": {
+          "value": "Strzałki kolejności ścieżek",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "pt-BR": {
+          "value": "Setas de ordem das faixas",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "ru": {
+          "value": "Стрелки порядка дорожек",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "sv": {
+          "value": "Pilar för spårordning",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "tr": {
+          "value": "Parça sıralama okları",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "vi": {
+          "value": "Mũi tên đổi thứ tự",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "zh-CN": {
+          "value": "音轨排序箭头",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        },
+        "zh-HK": {
+          "value": "音軌排序箭頭",
+          "comment": "SourceHash: 37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75"
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "31dbca27327d16ca003d64dd6d439f444702ee63ae063a1d4dc22b07edfc8ab4",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "271a3eec10d57358303791103b43b2797e00838c319a10b3b38d61f581ef56d8",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f959a448a43a140a2b0e648e61ab202f9d0b93cbf8ea6b630ccee8c175f1ebb1",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "d39ac331de7396c050d1d78063d53f1f71e7becfeaef9cac6b3b2f564fb0ed49",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "71bec2658fa802dc100dd76b21999cae9bb95df071691a5ae531f3f12ae81d7a",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "c42c9fb87e714cc2a03ae8506a19aa1de9f764324b00eeab3487dab78900bfeb",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "e31fe2d10b6d9fb1a4c4973023fbe747a0925d8cef66bfdff07272cf2aebbf64",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "3bd8cb9d9b717c5efd4574034da723a59da86e9c586b9d822a9c4838ecf75f06",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "c1052be50b963bf1679d0b1f02a55931e1b21d84b3d4149bc404c4d004a7586f",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "status": "corrected",
+          "date": "2026-10-29",
+          "fingerprint": "eaa323dcdbe1ba50190039de0b3cd64942dbb08e55c3767bf03e7089d5bb54b6",
+          "note": "Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "0e674e4924f43d0d5e5cc12f2086e28e55fbefc42e13f2090908b8fe72132dbb",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "1cbc60e6fcaaf3d6c4d864627735bc45bde323d8ee32c6c3f14b0db1936d1055",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "38974ae4bb975c652d9e2b2522a114d3d54ee39af1848b1958c60a51a00919aa",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "51b2706e463dcd84e47c569d32c4f531835fc93732bab21a5f6ea0c7b1708cff",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "b5904817625c7ac6e7123975f529bbf90bda4aa7cec9af3aa382ecb18c72d75e",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f95880ea9e58b3326649ab5914588954b03f0a5f55e13034e7d13e10bb3fface",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "542b2f0b149141cd8dc4fef456b0292e794ceae1c29c5de2866e907946b24274",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "573d31a4b716f5a17784628d8dd027811f0ce8cceddbbf321e2ad90099e678f7",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "status": "corrected",
+          "date": "2026-10-29",
+          "fingerprint": "41d048f0d67ab8a41a1954b45e189aa4b6decb1819ee0e9b4745f9a0d5869812",
+          "note": "Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "d835962d2f1d2f5884be6bb9c80ea5fb63d17742d49dfbe16296679a0f468974",
+          "note": "Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "status": "corrected",
+          "date": "2026-10-29",
+          "fingerprint": "900463c372091aaca9d82b71217a54ec087627ca6d695c633e9a2e40e242934e",
+          "note": "Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      },
+      "translationBase": {
+        "en": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "5e85a033d16c9acd5dae4e9c7eafe2b1ddba6358dc95ad9720dcff1cb5d9bc9e",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "470ae609143068edd6404f541dcc908dd8f70dc443eb176da1a0535386ba5061",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "89fc74692ddbb6afbc9983304723dba63689530c272b2912c6988f7f9b9fe3e4",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "c3d460a3a86a9307117ff6b450b5c581151a8e174ad1036650ac56ef7b1d12d9",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "c21fef57cb6906d91212bbbfe24c9d67dba3d2123ebed9b5484e50162476a117",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "c32b4adf75cccf54b4f0b63674a7cea0c7e6f18c27a36985ca0ae5eb6505eee8",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "5039daf2da3e7719b50d7449b60850e70940a702ff6c1928b907170ee1672933",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "b45a797f02c96ff6a565cee08c4becbb95a3be480c0ac99e9ae10e03dfcacbae",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "d5526057e7c0537bebeb808904afadb8ed249d737a23f8554e18ae45fb1d6766",
+          "basis": "explicit-translation-review: Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "6a4efb82ca8ab97d0e1c74ec737067851a630dac5a704a51ef8d4c30698e83d7",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "d47fe3a3f2b6c587ef8d5e8360381a553ff87a008c13bc68469230960a3b710b",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "f05d9529cc12c64b143937f57d89c74983bf9e20e4ea79e7f1e096043f87dcf2",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "e0f3922fe0ca0e88c5933aced4bdb0d3b38978d66e6211e7fbf0f26d85250d25",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "3ceb08ed77c9dcb73b126d2c7cccd2095744fd6d4e742fa4ce7e7d43612b6aea",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "87f4e6cb02d4fd61a7a6724acfca74721262c32188db9f3f9c69f5c0e43788b0",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "f3977f26a81a703f936c2a4e887fe545542799fc4623e02733ca9e35a6f42c3a",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "5fc7981df3aaf30763f17be86454452444be0238ab49479e0afff53aa06ecd65",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "ee643a663bfd454e5259797cb13f2058ebec30735005ad5678999da5f0faace6",
+          "basis": "explicit-translation-review: Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "95e2280aae2eaacc9d3b3e42e9e506056d34db1bc9caddd63100b5a39f55ec66",
+          "basis": "explicit-translation-review: Beschriftung im Kontext der Sortierpfeil-Auswahl geprüft; Bedeutung und Zuordnung zu den vier Richtungen stimmen. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "sourceValueSha256": "37ba0d4879eff76c21f6ca030d5c120ff6bb44d6c8e50414b2d2a127a3456e75",
+          "sourceCommentSha256": "f3ec493d62ac7bdd9378ea734a4e83f049247419a1f21272a3bd9cd96f4cf8d9",
+          "targetValueSha256": "2b0d2d5d63057a10ca6f902cfea6017b5a47135e27538f9fa0f8ac70bf1616f1",
+          "basis": "explicit-translation-review: Formulierung korrigiert und anschließend im Kontext der Sortierpfeil-Auswahl geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      }
+    },
+    "Developer.Images.ClassicPng": {
+      "source": {
+        "value": "Classic PNG",
+        "comment": "Context: Developer Tools > Bilder; session-only track-order icon comparison. TranslationRule: KeepOriginal"
+      },
+      "translations": {
+        "en": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "bn-BD": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "cs": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "da": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "es": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "fi": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "fr": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "gsw-CH": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "it": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "ja": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "nb": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "nl": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "pl": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "pt-BR": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "ru": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "sv": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "tr": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "vi": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "zh-CN": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        },
+        "zh-HK": {
+          "value": "Classic PNG",
+          "comment": "SourceHash: b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295"
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "f7bd579cea0f52151c7650f2fbc1ccc4bbb0a8223d730dca64b7015d63c2924d",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      },
+      "translationBase": {
+        "en": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "sourceValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "b9dc9e3286e90be42bd9936ba6b88ee1a5cacc1a16ab38874405b3bb189ff295",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      }
+    },
+    "Developer.Images.ClassicVectors": {
+      "source": {
+        "value": "Classic WPF-Vektoren",
+        "comment": "Context: Developer Tools > Bilder; session-only track-order icon comparison. TranslationRule: KeepOriginal"
+      },
+      "translations": {
+        "en": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "bn-BD": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "cs": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "da": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "es": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "fi": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "fr": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "gsw-CH": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "it": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "ja": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "nb": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "nl": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "pl": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "pt-BR": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "ru": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "sv": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "tr": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "vi": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "zh-CN": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        },
+        "zh-HK": {
+          "value": "Classic WPF-Vektoren",
+          "comment": "SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347"
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-29",
+          "fingerprint": "4c644aac3465289e73d947ec8e63887ed3e08a0837effc4509f5e3d6a81a1bc1",
+          "note": "Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      },
+      "translationBase": {
+        "en": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "bn-BD": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "cs": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "da": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "es": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fi": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "fr": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "it": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ja": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nb": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "nl": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pl": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "pt-BR": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "ru": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "sv": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "tr": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "vi": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-CN": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        },
+        "zh-HK": {
+          "sourceValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
+          "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
+          "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      }
     }
   },
   "auditImports": [

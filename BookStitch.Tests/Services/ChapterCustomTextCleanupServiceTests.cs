@@ -28,6 +28,36 @@ public sealed class ChapterCustomTextCleanupServiceTests
         Assert.Equal(title, _service.CleanFileName(title + ".mp3", ordinal));
     }
 
+    [Theory]
+    [InlineData("Kapitel 27", "Kapitel")]
+    [InlineData("Chapter 27", "Chapter")]
+    [InlineData("Chapitre 27", "Chapitre")]
+    [InlineData("Capítulo 27", "Capítulo")]
+    [InlineData("Глава 27", "Глава")]
+    [InlineData("Kapitel XXVII", "Kapitel")]
+    [InlineData("Chapter twenty seven", "Chapter")]
+    public void CleanTagTitle_ProvenOrdinalKeepsMarkerFallbackAcrossPaddingBoundary(string title, string expected)
+    {
+        Assert.Equal(expected, _service.CleanTagTitle("099 " + title, 99));
+        Assert.Equal(expected, _service.CleanTagTitle("100 " + title, 100));
+        Assert.Equal(expected, _service.CleanTagTitle("125 " + title, 125));
+        Assert.Equal(expected, _service.CleanTagTitle("0999 " + title, 999));
+        Assert.Equal(expected, _service.CleanTagTitle("1000 " + title, 1000));
+    }
+
+    [Theory]
+    [InlineData("125 Zweiter Teil Kapitel 34", 125, "Zweiter Teil")]
+    [InlineData("100 Kapitel 27", null, "100")]
+    [InlineData("125 Kapitel 34", 1, "125")]
+    [InlineData("100", 100, "")]
+    [InlineData("100 - Ankunft", 100, "Ankunft")]
+    [InlineData("100_Kapitel_27", 100, "Kapitel")]
+    public void CleanTagTitle_PreCleanupOrdinalRequiresProofAndPreservesExistingSemantics(
+        string title, int? sourceOrdinal, string expected)
+    {
+        Assert.Equal(expected, _service.CleanTagTitle(title, sourceOrdinal));
+    }
+
     private readonly ChapterCustomTextCleanupService _service = new();
 
     [Theory]

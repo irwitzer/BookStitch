@@ -9,7 +9,11 @@ public sealed record ChapterCanonicalMetadataSnapshot(
     string? AlbumValue,
     MetadataOrigin AlbumOrigin)
 {
-    public static ChapterCanonicalMetadataSnapshot Capture(ProjectMetadata metadata)
+    public bool CustomAlbumUsesTitle { get; init; }
+    public string? CustomAlbumValue => CustomAlbumUsesTitle ? TitleValue : AlbumValue;
+
+    public static ChapterCanonicalMetadataSnapshot Capture(ProjectMetadata metadata,
+        IReadOnlyDictionary<string, bool>? bindingSnapshot = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
@@ -26,7 +30,12 @@ public sealed record ChapterCanonicalMetadataSnapshot(
                     title.Value,
                     title.Origin,
                     album.Value,
-                    album.Origin);
+                    album.Origin)
+                {
+                    CustomAlbumUsesTitle = bindingSnapshot is not null &&
+                        MetadataFieldBindingPreferencesService.ResolveIsEnabled(bindingSnapshot,
+                            ProjectMetadataFieldBindingCatalog.TitleToAlbum)
+                };
             }
         }
 

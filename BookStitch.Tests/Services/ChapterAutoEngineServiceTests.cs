@@ -85,6 +85,45 @@ public sealed class ChapterAutoEngineServiceTests
         Assert.Contains($"title={split+1} Die Verlorenen",new ExportChapterService().BuildFfmpegChapterMetadataFromTimeline(result.RenderedTimeline));
     }
 
+    [Fact]
+    public void Apply_SecondDiscAbovePaddingBoundaryRemovesOrdinalsAmongSparsePartTitles()
+    {
+        var tracks = Enumerable.Range(1, 219).Select(number =>
+        {
+            var part = number switch { 1 => "Verein der Linkshaender", 2 => "Erster Teil Kapitel 1",
+                125 => "Zweiter Teil Kapitel 34", 180 => "Dritter Teil Kapitel 50", _ => "Kapitel 34" };
+            var track = Track($"{number:D3}_Nesser_Linkshaender.mp3", $"{number:D3} {part}", Guid.NewGuid());
+            track.SourceMetadataFields = track.SourceMetadataFields! with { SourceTrackNumber = number };
+            track.SourceTrackNumber = number;
+            return track;
+        }).ToArray();
+        var originalTags = tracks.Select(track => track.TagTitle).ToArray();
+        var manifest = new Mp3DiscProjectManifest
+        {
+            ImportedDiscs = tracks.Select((track, index) => (track, disc: index < 124 ? 1 : 2))
+                .GroupBy(item => item.disc).Select(group => new Mp3DiscProjectManifestDisc
+                {
+                    DiscNumber = group.Key, Signature = "disc-" + group.Key,
+                    SourceFiles = group.Select(item => new Mp3DiscProjectManifestSourceFile
+                    {
+                        SourceId = item.track.SourceId, SourceFileName = item.track.FileName,
+                        RelativePath = item.track.FileName
+                    }).ToList()
+                }).ToList()
+        };
+        var result = _service.Apply(Request(tracks, Canonical(1, "Der Verein der Linkshaender"),
+            new ChapterSettings { Mode = "Auto", NumberingStyle = "Plain" },
+            projectType: ProjectManifestTypes.Mp3DiscProject, mp3Manifest: manifest));
+
+        Assert.Equal("177 Der Verein der Linkshaender", tracks[176].ChapterTitle);
+        Assert.Equal("125 Zweiter Teil", tracks[124].ChapterTitle);
+        Assert.Equal("180 Dritter Teil", tracks[179].ChapterTitle);
+        Assert.Contains("title=177 Der Verein der Linkshaender",
+            new ExportChapterService().BuildFfmpegChapterMetadataFromTimeline(result.RenderedTimeline));
+        Assert.Equal(originalTags, tracks.Select(track => track.TagTitle));
+        Assert.Equal(Enumerable.Range(1, 219), tracks.Select(track => track.Index));
+    }
+
     private readonly ChapterAutoEngineService _service = new();
 
     [Theory]

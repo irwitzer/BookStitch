@@ -8,6 +8,14 @@ public sealed class DeveloperAppearancePreview
     private readonly DeveloperToolsAccessState _access;
     private readonly Dictionary<AppearanceAssetRole, string> _images = [];
     public event EventHandler? Changed;
+    private bool _trackOrderVectors;
+    public bool TrackOrderVectors => _access.IsEnabled && _trackOrderVectors;
+    public void SetTrackOrderVectors(bool value)
+    {
+        if (!_access.IsEnabled || _trackOrderVectors == value) return;
+        _trackOrderVectors = value;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
     public string? BackgroundOverride { get; private set; }
     public string? TextColorOverride { get; private set; }
 
@@ -67,6 +75,7 @@ public sealed class DeveloperAppearancePreview
         BackgroundOverride = null;
         TextColorOverride = null;
         _images.Clear();
+        _trackOrderVectors = false;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }
