@@ -14,6 +14,41 @@ public sealed class AudioDiscProjectServiceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void AddDisc_AdvancesDriveCircleAcrossMultipleRounds(bool virtualDrivesEnabled)
+    {
+        using var folder = new TemporaryFolder();
+        var service = new AudioDiscProjectService();
+        var rotation = new DiscDriveRotationService();
+        var roots = new[] { @"U:\", @"V:\", @"Y:\", @"Z:\", @"X:\" };
+        var configured = roots.Select((root, order) => new DiscDriveConfigurationItem(
+            new ConfiguredDiscDrive { DriveRoot = root, Order = order,
+                IsEnabled = virtualDrivesEnabled || (root != @"Y:\" && root != @"Z:\") }, true, null)).ToArray();
+        var activeRoots = configured.Where(item => item.Configuration.IsEnabled)
+            .Select(item => item.Configuration.DriveRoot).ToArray();
+        var manifest = service.CreateInitialManifest(folder.Path,
+            CreateDisc(1, "disc-1") with { DriveRoot = roots[0], DriveLetter = "U:" },
+            1, CreateSetup("Circle"), AudioDiscWorkingFormat.Flac);
+        manifest.TotalDiscs = activeRoots.Length * 2 + 1;
+
+        for (var number = 2; number <= manifest.TotalDiscs; number++)
+        {
+            var expectedRoot = activeRoots[(number - 1) % activeRoots.Length];
+            Assert.Equal(expectedRoot, rotation.BuildRound(configured, manifest.SourceDriveRoot)[0]);
+            var disc = CreateDisc(1, $"disc-{number}") with
+                { DriveRoot = expectedRoot, DriveLetter = expectedRoot[..2] };
+            var driveInfo = new DiscDriveInfo(expectedRoot, expectedRoot[..2], true,
+                "Audio CD", DiscMediaKind.AudioCd, $"Drive {number}", $@"\Device\CdRom{number}");
+            var added = service.AddDisc(manifest, disc, number, driveInfo);
+            Assert.Equal(expectedRoot, added.SourceDriveRoot);
+            Assert.Equal(expectedRoot, manifest.SourceDriveRoot);
+            Assert.Equal(added.SourceDriveName, manifest.SourceDriveName);
+            Assert.Equal(added.SourceDriveDevicePath, manifest.SourceDriveDevicePath);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Prepared_manifest_survives_successful_or_failed_metadata_attachment_without_ripping(bool failAttachment)
     {
         using var folder = new TemporaryFolder();

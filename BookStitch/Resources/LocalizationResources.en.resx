@@ -7220,6 +7220,11 @@ Black: Uses a black background.
 Applies to covers imported from now on.</value>
     <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
+  <data name="Developer.AlwaysShowCircleDriveButton" xml:space="preserve">
+    <value>Always show Circle Drive Button</value>
+    <comment>SourceHash: c15685539edf9d2ee46aacf9ed1282b7f43b22960a1696e0191d301628d03cd2
+DevelopmentReference: English source maintained in LanguageMaster</comment>
+  </data>
   <data name="Settings.ChapterSample.Tag4" xml:space="preserve">
     <value>04 - A Dream of Escape</value>
     <comment>SourceHash: 052ed75fee91458a34354cb3762f87ec902fb8c72d56c2bf7b1cb69ca4d9432e

@@ -94,7 +94,7 @@ public class AppSettings
 
     public bool KeepComputerAwakeDuringLongOperations { get; set; } = false;
 
-    public string BackgroundPreset { get; set; } = "Black";
+    public string BackgroundPreset { get; set; } = "DeepPetrol";
 
     public string TextColorPreset { get; set; } = "WarmSand";
 

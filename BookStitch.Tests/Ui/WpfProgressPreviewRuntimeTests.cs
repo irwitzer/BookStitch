@@ -50,7 +50,7 @@ public sealed partial class WpfDialogRuntimeTests
                     access.VisibilityChoice = DeveloperToolsVisibilityChoice.Conceal;
                     DrainDispatcher();
                     Assert.False(HasPearl());
-                    Assert.Equal(nameof(BackgroundPreset.Black), settings.BackgroundPreset);
+                    Assert.Equal(AppearanceSettingsService.DefaultBackgroundPreset, settings.BackgroundPreset);
                     Assert.Contains(BackgroundPresetCatalog.All, preset => preset.Preset == BackgroundPreset.PearlStone);
                 });
             }

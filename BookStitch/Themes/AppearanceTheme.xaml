@@ -15,7 +15,7 @@
 
     <BitmapImage x:Key="InfoSquareImageSource" UriSource="/BookStitch;component/Assets/Faq/BookMachin Press.png"/>
 
-    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#000000"/>
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#061719"/>
 
     <!-- DriveCircle follows the existing theme-aware petrol/accent button palette. -->
     <Style x:Key="DriveCircleSlotBorderStyle" TargetType="Border">
@@ -47,8 +47,8 @@
             </DataTrigger>
         </Style.Triggers>
     </Style>
-    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#181E24"/>
-    <SolidColorBrush x:Key="ProjectSetupCardBackgroundBrush" Color="#000000"/>
+    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#112D30"/>
+    <SolidColorBrush x:Key="ProjectSetupCardBackgroundBrush" Color="#061719"/>
     <CornerRadius x:Key="AppearanceTextBoxCornerRadius">7</CornerRadius>
     <CornerRadius x:Key="AppearanceComboBoxCornerRadius">7</CornerRadius>
     <CornerRadius x:Key="ButtonCornerRadius">9</CornerRadius>
@@ -75,7 +75,7 @@
         </ControlTemplate.Triggers>
     </ControlTemplate>
     <SolidColorBrush x:Key="PanelBorderBrush" Color="#2C3640"/>
-    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#11161B"/>
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#0E272A"/>
     <SolidColorBrush x:Key="InputBorderBrush" Color="#35414D"/>
     <SolidColorBrush x:Key="MainTextBrush" Color="#E8EDF2"/>
     <SolidColorBrush x:Key="MutedTextBrush" Color="#9EABB8"/>
@@ -132,7 +132,7 @@
     <SolidColorBrush x:Key="InfoOnPrimaryIconGlyphBrush" Color="#F5F7FA"/>
     <SolidColorBrush x:Key="InfoOnPrimaryIconHoverBorderBrush" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="InfoOnPrimaryIconHoverGlyphBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="InfoPopupBackgroundBrush" Color="#000000"/>
+    <SolidColorBrush x:Key="InfoPopupBackgroundBrush" Color="#061719"/>
     <SolidColorBrush x:Key="InfoPopupBorderBrush" Color="#35414D"/>
     <SolidColorBrush x:Key="InfoPopupForegroundBrush" Color="#FFF7E8"/>
 

@@ -33,7 +33,7 @@ dotnet publish ./BookStitch/BookStitch.csproj -c Release -p:PublishProfile=EndUs
 
 Use a **fresh, empty publish destination**. The publish output, not ordinary `bin/` build output, is the basis for both distributable formats. Package the **entire** directory, not just `BookStitch.exe`. In particular, verify `TagLibSharp.dll`, `BookStitch.runtimeconfig.json`, and the .NET/Windows Desktop runtime files. The CoverImageDrop assemblies and complete `CoverCodecs/` folder (WebP worker and license notices) are also required. Do not remove dependencies to reduce package size. Check portable startup on a compatible clean Windows machine without a separately installed .NET runtime.
 
-The product version comes from `BookStitch/BookStitch.csproj`; release filenames and descriptions must match that version. A filename suffix such as `RC1` does not by itself change the version embedded in the executable.
+The product version is manually increased only in `BookStitch/BookStitch.csproj`. .NET derives the assembly, file and informational versions from it, and Settings → Info reads that assembly metadata. Both release builders pass the project version to Inno Setup for `AppVersion`, `AppVerName` and `VersionInfoVersion`. Use `BookStitch-Setup-{Tag}.exe` and `BookStitch-Portable-{Tag}.zip` as saved filename templates; they are resolved from the current project version and optional candidate on every run. Release descriptions and notes remain editorially maintained. A filename suffix such as `RC1` does not by itself change the version embedded in the executable.
 
 ## External audio tools
 
@@ -41,7 +41,7 @@ BookStitch uses **FFmpeg** and **FFprobe** for audio processing. They are not bu
 
 ## Installer, Store, and WinGet
 
-The classic Windows installer uses **Inno Setup 7** and the `.iss` script shipped with the builder. The portable ZIP and installer should be generated from the same verified publish payload. **Microsoft Store packaging is a separate MSIX workflow**, not part of this builder. Code-signing certificates and private signing infrastructure are not included in the repository.
+The classic Windows installer uses **Inno Setup 7** and the `.iss` script shipped with the builder. The portable ZIP and installer should be generated from the same verified publish payload. **Microsoft Store packaging is a separate MSIX workflow**, not part of this builder. No Store/MSIX packaging project is present in this repository; check the Store package version separately for each Store release. Code-signing certificates and private signing infrastructure are not included in the repository.
 
 Before publishing, verify installation, upgrade, uninstall, portable startup, version information, and that the installer preserves user projects unless deletion is explicitly confirmed. Review dependency/security advisories, including any NuGet warnings; successful compilation alone is not release approval.
 

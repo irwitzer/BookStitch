@@ -6432,6 +6432,10 @@ Cần dựng lại: {11}</value>
     <value>Kiểm tra trang dự án tiếp</value>
     <comment>SourceHash: 1d7d3d41d94eff0be4ee0e7a3a1b853c37067de7d3228817b2a76cf53aef9faf</comment>
   </data>
+  <data name="Developer.AlwaysShowCircleDriveButton" xml:space="preserve">
+    <value>Circle Drive Button immer anzeigen</value>
+    <comment>DevelopmentFallback: de; not a reviewed translation</comment>
+  </data>
   <data name="Developer.AlwaysShowTheFFmpegSetupButton" xml:space="preserve">
     <value>Luôn hiện nút thiết lập FFmpeg trong cửa sổ chính</value>
     <comment>SourceHash: 4ae6e53218425a881b584103d0aad9f165c3e2217f469e1f00160091e5455342</comment>

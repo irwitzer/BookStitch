@@ -25,6 +25,7 @@ public partial class DeveloperToolsWindow : Window
     private readonly NotificationService _notificationService;
     private readonly Action<bool> _setMetadataPanelExpanded;
     private readonly Action<bool> _setForceShowFfmpegSetupButton;
+    private readonly Action<bool>? _setForceShowCircleDriveButton;
     private readonly Action<bool> _setPerformanceDiagnosticsEnabled;
     private readonly Action<int> _setTrackGridRowHeightLevel;
     private readonly Action<string> _setBackgroundPreset;
@@ -76,8 +77,10 @@ public partial class DeveloperToolsWindow : Window
         Func<MetadataDebugSnapshot> getMetadataDebugSnapshot,
         ProjectIndexService? projectIndexService = null,
         Action<int, bool>? startProgressPreview = null,
-        Action? stopProgressPreview = null)
+        Action? stopProgressPreview = null,
+        Action<bool>? setForceShowCircleDriveButton = null)
     {
+        _setForceShowCircleDriveButton = setForceShowCircleDriveButton;
         _startProgressPreview = startProgressPreview;
         _stopProgressPreview = stopProgressPreview;
         _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
@@ -138,6 +141,7 @@ public partial class DeveloperToolsWindow : Window
             .GetProjectSetupPageMilliseconds(_debugSettings)
             .ToString(CultureInfo.InvariantCulture);
         ForceShowFfmpegSetupButtonCheckBox.IsChecked = _debugSettings.ForceShowFfmpegSetupButton;
+        ForceShowCircleDriveButtonCheckBox.IsChecked = _debugSettings.ForceShowCircleDriveButton;
         PerformanceDiagnosticsEnabledCheckBox.IsChecked = _debugSettings.PerformanceDiagnosticsEnabled;
         PrivateGenreListCheckBox.IsChecked = _settings.UsePrivateGenreList;
 
@@ -577,6 +581,16 @@ public partial class DeveloperToolsWindow : Window
         _debugSettings.ForceShowFfmpegSetupButton = checkBox.IsChecked == true;
         _debugSettingsService.Save(_debugSettings);
         _setForceShowFfmpegSetupButton(_debugSettings.ForceShowFfmpegSetupButton);
+    }
+
+    private void ForceShowCircleDriveButtonCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading || sender is not CheckBox checkBox)
+            return;
+
+        _debugSettings.ForceShowCircleDriveButton = checkBox.IsChecked == true;
+        _debugSettingsService.Save(_debugSettings);
+        _setForceShowCircleDriveButton?.Invoke(_debugSettings.ForceShowCircleDriveButton);
     }
 
     private void GenreOptionsChanged(object? sender, EventArgs e)

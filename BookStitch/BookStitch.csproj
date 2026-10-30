@@ -9,7 +9,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\Icons\icon\BookStitch-Icon-OpenBook.ico</ApplicationIcon>
-    <Version>2.1.7</Version>
+    <Version>2.2.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>

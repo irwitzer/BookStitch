@@ -62,7 +62,7 @@ Distribute the full published directory and its dependencies. See [build and pac
 
 ## Documentation
 
-- [Release notes 2.1.7](docs-public/Release-Notes-2.1.7-EN.md)
+- [Release notes 2.2.0 (in preparation)](docs-public/Release-Notes-2.2.0-EN.md)
 
 - [Changelog (English)](Changelog-EN.md)
 - [Localization guide](docs-public/localization-guide.md) · [Localization rules](BookStitch/Resources/LOCALIZATION_RULES.md)

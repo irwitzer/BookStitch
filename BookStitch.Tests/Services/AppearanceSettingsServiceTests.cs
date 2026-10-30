@@ -36,7 +36,8 @@ public sealed class AppearanceSettingsServiceTests
     [Fact]
     public void BackgroundPresets_ExposeOnlyFinalPresets()
     {
-        Assert.Equal(AppearanceSettingsService.DefaultBackgroundPreset, BackgroundPreset.Black.ToString());
+        Assert.Equal("DeepPetrol", AppearanceSettingsService.DefaultBackgroundPreset);
+        Assert.Equal(AppearanceSettingsService.DefaultBackgroundPreset, new AppSettings().BackgroundPreset);
         Assert.Equal(
             [
                 BackgroundPreset.Black,
@@ -50,14 +51,17 @@ public sealed class AppearanceSettingsServiceTests
 
     [Theory]
     [InlineData("BlackNew", BackgroundPreset.Black)]
-    [InlineData("GraphiteNew", BackgroundPreset.Black)]
+    [InlineData("GraphiteNew", BackgroundPreset.DeepPetrol)]
     [InlineData("DeepPetrolNew", BackgroundPreset.DeepPetrol)]
     [InlineData("MidnightBlueNew", BackgroundPreset.MidnightBlue)]
     [InlineData("BookStitchStandard", BackgroundPreset.Black)]
     [InlineData("PearlStone", BackgroundPreset.PearlStone)]
-    [InlineData("Graphite", BackgroundPreset.Black)]
-    [InlineData("Unknown", BackgroundPreset.Black)]
-    public void BackgroundPresets_NormalizeLegacyAliases(string value, BackgroundPreset expected)
+    [InlineData("Graphite", BackgroundPreset.DeepPetrol)]
+    [InlineData("Unknown", BackgroundPreset.DeepPetrol)]
+    [InlineData(null, BackgroundPreset.DeepPetrol)]
+    [InlineData("", BackgroundPreset.DeepPetrol)]
+    [InlineData("Black", BackgroundPreset.Black)]
+    public void BackgroundPresets_NormalizeLegacyAliases(string? value, BackgroundPreset expected)
     {
         Assert.Equal(expected, AppearanceSettingsService.NormalizeBackgroundPreset(value));
     }

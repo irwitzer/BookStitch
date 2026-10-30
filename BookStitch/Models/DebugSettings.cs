@@ -18,6 +18,8 @@ public sealed class DebugSettings
 
     public bool ForceShowFfmpegSetupButton { get; set; }
 
+    public bool ForceShowCircleDriveButton { get; set; }
+
     public bool PerformanceDiagnosticsEnabled { get; set; }
 
     public bool UseBoxedDiscWaitDialog { get; set; }

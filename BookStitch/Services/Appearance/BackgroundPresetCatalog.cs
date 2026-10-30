@@ -25,7 +25,7 @@ public sealed record BackgroundPresetDefinition(
 
 public static class BackgroundPresetCatalog
 {
-    public const string DefaultPreset = nameof(BackgroundPreset.Black);
+    public const string DefaultPreset = nameof(BackgroundPreset.DeepPetrol);
 
     private const string LegacyBookStitchStandardPreset = "BookStitchStandard";
 
@@ -51,7 +51,7 @@ public static class BackgroundPresetCatalog
     public static BackgroundPreset NormalizeRegular(string? preset, bool developerEnabled)
     {
         var normalized = Normalize(preset);
-        return !developerEnabled && IsDeveloperOnly(normalized) ? BackgroundPreset.Black : normalized;
+        return !developerEnabled && IsDeveloperOnly(normalized) ? Normalize(DefaultPreset) : normalized;
     }
 
     public static BackgroundPreset Normalize(string? preset)
@@ -62,7 +62,7 @@ public static class BackgroundPresetCatalog
         return Enum.TryParse<BackgroundPreset>(preset, ignoreCase: false, out var parsed) &&
             All.Any(item => item.Preset == parsed)
                 ? parsed
-                : BackgroundPreset.Black;
+                : BackgroundPreset.DeepPetrol;
     }
 
     public static BackgroundPresetDefinition Get(string? preset)

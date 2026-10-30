@@ -1,8 +1,22 @@
-# BookStitch 2.1.7 – Release Notes
+# BookStitch 2.2.0 – Release Notes
+
+## Version 2.2.0 – Unreleased
+
+Preparation for the next release. Neither 2.1.7 nor 2.2.0 has been published.
+
+- Automatic narrator recognition from complete German and English credits at the end of titles, including credits without parentheses; user-confirmed metadata is preserved.
+- Custom chapters use the selected album correctly, preserve independent chapter titles and handle technical chapter numbering more reliably.
+- Manual order and exclusions survive MP3-CD import and resume. Missing project sources remain visible and prevent incomplete exports.
+- Pausing at the next MP3-CD dialog now cancels running AAC jobs in a controlled way.
+- Additional warning when an original track-number tag conflicts with the number in the filename.
+- Reworked ivory, teal and gold branding and DPI-specific ordering icons; additional appearance variants can be previewed for the session in Developer Tools. Deep Petrol is the new default and fallback background.
+- Larger main window on startup and corrected Drive Circle continuation after accepting an audio CD.
+
+## Earlier development state (2.1.7, unpublished)
 
 Track reordering now updates existing rows while preserving selection. Paused runs keep order controls locked, language suggestions commit correctly with Enter, chapter proposals handle trailing ordinals across disc and digit boundaries, and interrupted MP3-CD live conversions are scheduled again on resume. Final completeness checks remain enabled.
 
-BookStitch 2.1.7 is a major update for creating and managing complete audiobooks. It introduces a much more capable metadata workflow, substantially better chapter handling, more reliable CD and project processing, faster analysis of large audiobook collections, and a new cover-processing pipeline with direct browser drag-and-drop. Existing audiobook projects remain compatible.
+The development state prepared as 2.1.7 includes a major update for creating and managing complete audiobooks. It introduces a much more capable metadata workflow, substantially better chapter handling, more reliable CD and project processing, faster analysis of large audiobook collections, and a new cover-processing pipeline with direct browser drag-and-drop. Existing audiobook projects remain compatible.
 
 ## What's new and improved
 

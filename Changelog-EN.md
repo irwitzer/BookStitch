@@ -2,7 +2,17 @@
 
 BookStitch for Windows version history, newest release first.
 
-## [2.1.7] – October 2026
+## [2.2.0] – Unreleased
+
+Includes the unpublished 2.1.7 development state; neither 2.1.7 nor 2.2.0 has been released.
+
+- Automatic narrator recognition from complete German and English credits at the end of titles, including credits without parentheses; user-confirmed metadata is preserved.
+- Custom chapters use the selected album correctly, preserve independent chapter titles and handle technical chapter numbering more reliably.
+- Manual order and exclusions survive MP3-CD import and resume. Missing project sources remain visible and prevent incomplete exports.
+- Pausing at the next MP3-CD dialog now cancels running AAC jobs in a controlled way.
+- Additional warning when an original track-number tag conflicts with the number in the filename.
+- Reworked ivory, teal and gold branding and DPI-specific ordering icons; additional appearance variants can be previewed for the session in Developer Tools. Deep Petrol is the new default and fallback background.
+- Larger main window on startup and corrected Drive Circle continuation after accepting an audio CD.
 
 - Faster track reordering preserves existing rows and selection; chapter suggestions and timelines remain synchronized.
 - Fix automatic chapter proposals with trailing file numbers across 100/1000 and disc boundaries.

@@ -67,8 +67,12 @@ public sealed partial class WpfDialogRuntimeTests
                 var wrench = FindVisualDescendant<Button>(captionGrid, button => button.Command == DeveloperToolsCommands.OpenDeveloperToolsWindow)!;
                 Assert.NotNull(wrench);
                 if (wrench.Visibility == Visibility.Visible)
-                    Assert.Equal(318d,
-                        wrench.TransformToAncestor(captionGrid).Transform(new Point(wrench.ActualWidth / 2, 0)).X, 2);
+                {
+                    // The caption action must remain reachable after branding/layout changes.
+                    Assert.True(WindowChrome.GetIsHitTestVisibleInChrome(wrench));
+                    var left = wrench.TransformToAncestor(captionGrid).Transform(new Point(0, 0)).X;
+                    Assert.InRange(left, 0, captionGrid.ActualWidth - wrench.ActualWidth);
+                }
                 Assert.Equal(new Thickness(0), header.BorderThickness);
 
                 Assert.Equal(environment == BookStitchEnvironment.Production ? Visibility.Collapsed : Visibility.Visible, wrench.Visibility);

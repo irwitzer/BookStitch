@@ -8801,6 +8801,12 @@ Length: moderate</comment>
     <comment>Context: Developer-only diagnostics / dialog preview; short label or choice
 Length: moderate</comment>
   </data>
+  <data name="Developer.AlwaysShowCircleDriveButton" xml:space="preserve">
+    <value>Circle Drive Button immer anzeigen</value>
+    <comment>Context: Developer Tools / Appearance; Checkbox rechts neben dem FFmpeg-Schalter.
+Meaning: Blendet den Circle-Drive-Schalter im Hauptfenster immer ein, ohne Circle Drive zu aktivieren. Standard: aus. Beim Ausschalten gilt wieder die normale kontextabhaengige Sichtbarkeit.
+Length: moderate</comment>
+  </data>
   <data name="Developer.AlwaysShowTheFFmpegSetupButton" xml:space="preserve">
     <value>FFmpeg-Einrichtungsbutton im Hauptfenster immer anzeigen</value>
     <comment>Context: Developer-only diagnostics / dialog preview; button label

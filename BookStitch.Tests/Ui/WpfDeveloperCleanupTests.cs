@@ -134,7 +134,7 @@ public sealed partial class WpfDialogRuntimeTests
                             imageBackground.SelectedItem = imageBackground.Items.OfType<ComboBoxItem>().Single(choice => Equals(choice.Tag, "Ivory"));
                             DrainDispatcher();
                             Assert.Equal("Ivory", ((ComboBoxItem)((ComboBox)window.FindName("BackgroundPresetComboBox")).SelectedItem).Tag);
-                            Assert.Equal("Black", settings.BackgroundPreset);
+                            Assert.Equal(AppearanceSettingsService.DefaultBackgroundPreset, settings.BackgroundPreset);
                             var originalRegularText = settings.TextColorPreset;
                             var imageText = (ComboBox)window.FindName("ImagesTextColorComboBox");
                             imageText.SelectedIndex = imageText.SelectedIndex == 0 ? imageText.Items.Count - 1 : 0;

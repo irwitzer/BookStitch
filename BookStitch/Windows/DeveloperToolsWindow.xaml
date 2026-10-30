@@ -307,12 +307,21 @@
                                                         AutomationProperties.Name="{services:LocalizedText Key=Developer.TestNextProjectPage}" />
                                                 </StackPanel>
                                             </Grid>
-                                            <CheckBox x:Name="ForceShowFfmpegSetupButtonCheckBox"
-                                                Content="{services:LocalizedText Key=Developer.AlwaysShowTheFFmpegSetupButton}"
-                                                Foreground="{DynamicResource MainTextBrush}"
-                                                FontWeight="SemiBold"
-                                                Checked="ForceShowFfmpegSetupButtonCheckBox_Changed"
-                                                Unchecked="ForceShowFfmpegSetupButtonCheckBox_Changed" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <CheckBox x:Name="ForceShowFfmpegSetupButtonCheckBox"
+                                                    Content="{services:LocalizedText Key=Developer.AlwaysShowTheFFmpegSetupButton}"
+                                                    Foreground="{DynamicResource MainTextBrush}"
+                                                    FontWeight="SemiBold"
+                                                    Checked="ForceShowFfmpegSetupButtonCheckBox_Changed"
+                                                    Unchecked="ForceShowFfmpegSetupButtonCheckBox_Changed" />
+                                                <CheckBox x:Name="ForceShowCircleDriveButtonCheckBox"
+                                                    Margin="24,0,0,0"
+                                                    Content="{services:LocalizedText Key=Developer.AlwaysShowCircleDriveButton}"
+                                                    Foreground="{DynamicResource MainTextBrush}"
+                                                    FontWeight="SemiBold"
+                                                    Checked="ForceShowCircleDriveButtonCheckBox_Changed"
+                                                    Unchecked="ForceShowCircleDriveButtonCheckBox_Changed" />
+                                            </StackPanel>
                                         </StackPanel>
                                         <StackPanel MaxWidth="700"
                                             HorizontalAlignment="Left"

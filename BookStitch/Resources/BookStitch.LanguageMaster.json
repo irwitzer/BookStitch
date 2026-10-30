@@ -337021,6 +337021,17 @@
         }
       }
     },
+    "Developer.AlwaysShowCircleDriveButton": {
+      "source": {
+        "value": "Circle Drive Button immer anzeigen",
+        "comment": "Context: Developer Tools / Appearance; Checkbox rechts neben dem FFmpeg-Schalter.\nMeaning: Blendet den Circle-Drive-Schalter im Hauptfenster immer ein, ohne Circle Drive zu aktivieren. Standard: aus. Beim Ausschalten gilt wieder die normale kontextabhaengige Sichtbarkeit.\nLength: moderate"
+      },
+      "translations": {
+        "en": {
+          "value": "Always show Circle Drive Button"
+        }
+      }
+    },
     "Developer.AlwaysShowTheFFmpegSetupButton": {
       "source": {
         "value": "FFmpeg-Einrichtungsbutton im Hauptfenster immer anzeigen",

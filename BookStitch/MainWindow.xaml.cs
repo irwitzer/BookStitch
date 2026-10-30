@@ -388,7 +388,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _services.Foundation.GlobalSettingsManager.DriveCircleEnabled = value;
         }
     }
-    public Visibility DriveCircleVisibility => LoadedProjectState.IsMp3Disc || LoadedProjectState.IsAudioDisc ||
+    public Visibility DriveCircleVisibility => _debugSettings.ForceShowCircleDriveButton || LoadedProjectState.IsMp3Disc || LoadedProjectState.IsAudioDisc ||
         _pendingAudioDisc is not null || !string.IsNullOrWhiteSpace(_pendingDiscProjectSourceFolder)
             ? Visibility.Visible : Visibility.Collapsed;
 
@@ -8673,6 +8673,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnPropertyChanged(nameof(FfmpegSetupButtonVisibility));
     }
 
+    private void SetForceShowCircleDriveButton(bool visible)
+    {
+        _debugSettings.ForceShowCircleDriveButton = visible;
+        _services.Foundation.DebugSettingsService.Save(_debugSettings);
+        OnPropertyChanged(nameof(DriveCircleVisibility));
+    }
+
     private void SetTrackGridRowHeightLevel(int level)
     {
         var normalized = TrackGridRowHeightService.NormalizeLevel(level);
@@ -8711,7 +8718,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CreateCurrentMetadataDebugSnapshot,
             projectIndexService: _services.Foundation.ProjectIndexService,
             startProgressPreview: (seconds, gold) => MainExportProgress.StartPreview(seconds, gold, StandardProgressPanel),
-            stopProgressPreview: () => MainExportProgress.StopPreview());
+            stopProgressPreview: () => MainExportProgress.StopPreview(),
+            setForceShowCircleDriveButton: SetForceShowCircleDriveButton);
 
 
         developerToolsWindow.Closed += (_, _) =>

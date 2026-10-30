@@ -43,6 +43,7 @@ public sealed class DebugSettingsServiceTests
             LastTab = "Performance",
             PerformanceDiagnosticsEnabled = true,
             ForceShowFfmpegSetupButton = true,
+            ForceShowCircleDriveButton = true,
             UseBoxedDiscWaitDialog = true,
             TrackGridRowHeightLevel = 4,
             MetadataPanelAnimationMillisecondsOverride = 875,
@@ -71,6 +72,7 @@ public sealed class DebugSettingsServiceTests
         Assert.Equal("Performance", loaded.LastTab);
         Assert.True(loaded.PerformanceDiagnosticsEnabled);
         Assert.True(loaded.ForceShowFfmpegSetupButton);
+        Assert.True(loaded.ForceShowCircleDriveButton);
         Assert.True(loaded.UseBoxedDiscWaitDialog);
         Assert.Equal(4, loaded.TrackGridRowHeightLevel);
         Assert.Equal(875, loaded.MetadataPanelAnimationMillisecondsOverride);
@@ -158,6 +160,7 @@ public sealed class DebugSettingsServiceTests
 
         Assert.True(loaded.PerformanceDiagnosticsEnabled);
         Assert.True(loaded.ForceShowFfmpegSetupButton);
+        Assert.False(loaded.ForceShowCircleDriveButton);
         Assert.True(loaded.UseBoxedDiscWaitDialog);
         Assert.True(File.Exists(service.FilePath));
     }

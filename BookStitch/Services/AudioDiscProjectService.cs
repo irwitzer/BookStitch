@@ -219,8 +219,9 @@ public sealed class AudioDiscProjectService
             GetNextGlobalTrackIndex(manifest),
             sourceDriveInfo);
         manifest.Discs.Add(entry);
-        if (preparedDisc is not null)
-            UpdateDiscSourceDrive(manifest, discNumber, disc, sourceDriveInfo);
+        // The next Drive Circle search starts after the most recently accepted drive.
+        // Keep this cursor current for ordinary imports as well as prepared resume discs.
+        UpdateDiscSourceDrive(manifest, discNumber, disc, sourceDriveInfo);
         manifest.CompletedUtc = null;
         manifest.ErrorMessage = string.Empty;
         RefreshProgressState(manifest);

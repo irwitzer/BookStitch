@@ -4888,6 +4888,9 @@ Genopbygning påkrævet: {11}</value>
   <data name="Developer.TestNextProjectPage" xml:space="preserve">
     <value>Test næste projektside</value>
     <comment>SourceHash: 1d7d3d41d94eff0be4ee0e7a3a1b853c37067de7d3228817b2a76cf53aef9faf</comment></data>
+  <data name="Developer.AlwaysShowCircleDriveButton" xml:space="preserve">
+    <value>Circle Drive Button immer anzeigen</value>
+    <comment>DevelopmentFallback: de; not a reviewed translation</comment></data>
   <data name="Developer.AlwaysShowTheFFmpegSetupButton" xml:space="preserve">
     <value>Vis altid knappen til konfiguration af FFmpeg i hovedvinduet</value>
     <comment>SourceHash: 4ae6e53218425a881b584103d0aad9f165c3e2217f469e1f00160091e5455342</comment></data>
@@ -5082,7 +5085,8 @@ Genopbygning påkrævet: {11}</value>
     <comment>SourceHash: cc8f28021c0f97d903f2fa82b344029cdf42a003c3cd208e9fdc92a264a1fdcc</comment></data>
   <data name="Developer.CDWaitingDialogSimulation" xml:space="preserve">
     <value>Cd-ventedialog – simulering</value>
-    <comment>SourceHash: 4ef9751dac49d5b971f1da8b828f63f9dae4f4e16d8a54b04189503dd0065b3e</comment></data>
+    <comment>SourceHash: 4ef9751dac49d5b971f1da8b828f63f9dae4f4e16d8a54b04189503dd0065b3e</comment>
+  </data>
   <data name="Developer.OpensTheRealWaitingDialogWithSimulated" xml:space="preserve">
     <value>Åbner den rigtige ventedialog fra programmet med kontrollerede testtilstande. Drev, projekter og filer forbliver uberørte. Afslut ventetilstande med »Annuller«.</value>
     <comment>SourceHash: 631065f5daa2b9f8153bf6672046d913a9b670c3db56b794f7c89117393fea42</comment>

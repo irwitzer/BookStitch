@@ -80,7 +80,7 @@ public sealed class DeveloperAppearancePreviewTests
         foreach (var background in new[] { "PearlStone", "missing-background" })
         {
             var effective = preview.Resolve(new AppSettings { BackgroundPreset = background, TextColorPreset = "broken" });
-            Assert.Equal("Black", effective.BackgroundPreset);
+            Assert.Equal("DeepPetrol", effective.BackgroundPreset);
             Assert.Equal(AppearanceSettingsService.GetTextColorPreset(effective.TextColorPreset, AppearanceMode.Dark).Preset.ToString(), effective.TextColorPreset);
         }
         Assert.Equal("DeepPetrol", preview.Resolve(new AppSettings { BackgroundPreset = "DeepPetrol" }).BackgroundPreset);

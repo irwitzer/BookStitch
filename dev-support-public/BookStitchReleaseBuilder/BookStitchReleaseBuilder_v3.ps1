@@ -76,6 +76,14 @@ function SelectOutputFilename([string]$description, [string]$default, [string]$e
     return $entered
 }
 
+function ResolveReleaseFilename([string]$template, [string]$tag, [string]$candidate) {
+    # Migrate only former standard names; preserve literal custom filenames.
+    if ($template -match '^BookStitch-(Setup|Portable)-\d+\.\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9][A-Za-z0-9._-]{0,30})?\.(exe|zip)$') {
+        $template = 'BookStitch-' + $Matches[1] + '-{Tag}.' + $Matches[2]
+    }
+    return $template.Replace('{Tag}', $tag).Replace('{Candidate}', $candidate)
+}
+
 function ReadSettings {
     if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) { return $null }
     try {
@@ -237,14 +245,16 @@ try {
     if ($versionInfo -match '^\d+\.\d+\.\d+$') { $versionInfo += '.0' }
     $publishDir = Join-Path $outputRoot "BookStitch-$tag"
     if ($reuse) {
-        $setupName = [string]$settings.SetupName
-        $zipName = [string]$settings.ZipName
-        Write-Host "`nGespeicherte Dateinamen werden ohne Rückfrage verwendet." -ForegroundColor Cyan
+        $setupTemplate = [string]$settings.SetupName
+        $zipTemplate = [string]$settings.ZipName
+        Write-Host "`nGespeicherte Dateinamen-Vorlagen werden ohne Rückfrage verwendet." -ForegroundColor Cyan
     } else {
-        Write-Host "`nDateinamen der Release-Dateien wählen (Enter übernimmt den Standard)." -ForegroundColor Cyan
-        $setupName = SelectOutputFilename 'Name für Installer-EXE' "BookStitch-Setup-$tag.exe" '.exe'
-        $zipName = SelectOutputFilename 'Name für portable ZIP' "BookStitch-Portable-$tag.zip" '.zip'
+        Write-Host "`nDateinamen-Vorlagen wählen: {Tag} = Version mit Suffix, {Candidate} = Kennzeichnung (Enter übernimmt den Standard)." -ForegroundColor Cyan
+        $setupTemplate = SelectOutputFilename 'Vorlage für Installer-EXE' 'BookStitch-Setup-{Tag}.exe' '.exe'
+        $zipTemplate = SelectOutputFilename 'Vorlage für portable ZIP' 'BookStitch-Portable-{Tag}.zip' '.zip'
     }
+    $setupName = ResolveReleaseFilename $setupTemplate $tag $candidate
+    $zipName = ResolveReleaseFilename $zipTemplate $tag $candidate
     foreach ($spec in @(@($setupName,'.exe'), @($zipName,'.zip'))) {
         $name = [string]$spec[0]
         $ext = [string]$spec[1]
@@ -289,7 +299,7 @@ try {
     Write-Host 'ISS-Vorprüfung erfolgreich. Vollständige Kompilierung folgt nach Publish.' -ForegroundColor Green
 
     if (-not $reuse) {
-        $save = [ordered]@{ IssPath=$iss; RepositoryPath=$repo; OutputPath=$outputRoot; Candidate=$candidate; SetupName=$setupName; ZipName=$zipName }
+        $save = [ordered]@{ IssPath=$iss; RepositoryPath=$repo; OutputPath=$outputRoot; Candidate=$candidate; SetupName=$setupTemplate; ZipName=$zipTemplate }
         $json = $save | ConvertTo-Json
         [IO.File]::WriteAllText($settingsPath,$json,(New-Object System.Text.UTF8Encoding($true)))
         Write-Host "Einstellungen gespeichert: $settingsPath"

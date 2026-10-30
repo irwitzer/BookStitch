@@ -363,7 +363,7 @@ public sealed class SettingsServiceTests
 
     [Theory]
     [InlineData("BlackNew", "Black")]
-    [InlineData("GraphiteNew", "Black")]
+    [InlineData("GraphiteNew", "DeepPetrol")]
     [InlineData("DeepPetrolNew", "DeepPetrol")]
     [InlineData("MidnightBlueNew", "MidnightBlue")]
     public void Load_MigratesLegacyNewBackgroundPresetNames(string legacyPreset, string expectedPreset)
