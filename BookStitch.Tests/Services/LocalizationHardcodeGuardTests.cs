@@ -64,6 +64,8 @@ public sealed class LocalizationHardcodeGuardTests
     /// </summary>
     private static readonly HashSet<string> AllowedLiterals = new(StringComparer.Ordinal)
     {
+        // Official website identifier: unchanged in every language and writing system.
+        "bookstitch.app",
         "BookStitch", "irwitzer", "FFmpeg", "Mp3tag", "MusicBrainz", "DriveCircle", "Chapter Master",
         "AAC", "FLAC", "MP3", "M4A", "M4B", "Auto Merge", "Bass", "Retro", "Pass-through",
         ".m4a", ".m4b", ".mp3", ".flac", "OK"

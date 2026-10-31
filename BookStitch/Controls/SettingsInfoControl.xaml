@@ -49,6 +49,16 @@
                                 AutomationProperties.Name="{services:LocalizedText Key=UiIrwitzer}"
                                 Click="DeveloperName_Click"/>
                     </StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="{DynamicResource MainTextBrush}"
+                               Margin="0,0,0,8">
+                        <Hyperlink NavigateUri="https://bookstitch.app/"
+                                   Foreground="{DynamicResource MainTextBrush}"
+                                   TextDecorations="Underline"
+                                   AutomationProperties.Name="bookstitch.app"
+                                   RequestNavigate="Website_RequestNavigate">bookstitch.app</Hyperlink>
+                    </TextBlock>
+
                     <TextBlock Text="{services:LocalizedText Key=UiLizenzGNUGeneralPublicLicenseV30OnlyGPL30Onl}"
                                Foreground="{DynamicResource MainTextBrush}"
                                TextWrapping="Wrap"

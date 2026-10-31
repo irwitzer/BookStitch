@@ -33,6 +33,12 @@ public partial class SettingsInfoControl : UserControl
     private void DeveloperName_Click(object sender, RoutedEventArgs e) =>
         DeveloperToolsCommands.AccessState.RegisterDiscoveryClick();
 
+    private void Website_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        OpenUrl(e.Uri.AbsoluteUri);
+        e.Handled = true;
+    }
+
     private void OpenGitHubProject_Click(object sender, RoutedEventArgs e) => OpenUrl(GitHubProjectUrl);
 
     private void OpenThirdPartyNotices_Click(object sender, RoutedEventArgs e) => OpenUrl(ThirdPartyNoticesUrl);
