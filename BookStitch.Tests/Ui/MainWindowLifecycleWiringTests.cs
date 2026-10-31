@@ -6,6 +6,20 @@ namespace BookStitch.Tests.Ui;
 public sealed class MainWindowLifecycleWiringTests
 {
     [Fact]
+    public void Failed_disc_close_saves_through_window_cross_or_deletes_through_drained_managed_workspace()
+    {
+        var close = SourceContract.ExtractMember(MainWindowSource, "private async Task CloseFailedDiscProjectAsync()");
+        SourceContract.AssertInOrder(close, "_isProjectCloseInProgress = true;", "ConfirmFailedDiscClose(this)",
+            "TrackPathService.PathEquals", "choice == AppDialogResult.Yes", "CloseProjectFromWindowAsync(confirmIntent: false)",
+            "RefreshResumeProjects(showStatus: false)", "choice == AppDialogResult.No", "DeleteCurrentProjectAsync(");
+        Assert.Contains("finally", close);
+        Assert.Contains("_isProjectCloseInProgress = false;", close);
+        Assert.DoesNotContain("CloseCurrentProject();", close);
+        var cancel = SourceContract.ExtractMember(MainWindowSource, "private async void CancelExport_Click(");
+        SourceContract.AssertInOrder(cancel, "Rollback", "CanOfferFailedDiscClose()", "CloseCurrentProject();");
+    }
+
+    [Fact]
     public void Mp3_next_disc_dialog_pause_cancels_live_producers_before_waiting_for_drain()
     {
         var import = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> ImportMp3DiscProjectAsync(");
@@ -223,7 +237,9 @@ public sealed class MainWindowLifecycleWiringTests
     public void New_project_deletion_drains_workers_releases_workspace_guard_and_returns_to_idle()
     {
         var delete = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> DeleteNewProjectAsync(");
-        SourceContract.AssertInOrder(delete, "IsNewProjectPreparation", "WaitForProjectProducersAsync();",
+        SourceContract.AssertInOrder(delete, "IsNewProjectPreparation", "DeleteCurrentProjectAsync(");
+        var core = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> DeleteCurrentProjectAsync(");
+        SourceContract.AssertInOrder(core, "WaitForProjectProducersAsync();",
             "_currentProjectWorkFolder = string.Empty;", "ProjectIndexService.DeleteProject(", "if (!deletion.Deleted)",
             "_currentProjectWorkFolder = projectFolder;", "ClearCurrentProjectWorkspace();");
         var clear = SourceContract.ExtractMember(MainWindowSource, "private void ClearCurrentProjectWorkspace()");
@@ -353,7 +369,8 @@ public sealed class MainWindowLifecycleWiringTests
             "TryCheckpointMetadataBeforeClose()", "CreatePrompt(activity)");
         var close = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> CloseProjectFromWindowAsync(");
         Assert.Contains("_sessionProject.DeleteOnWindowClose", close);
-        Assert.Contains("_sessionProject.StartAccepted", close);
+        Assert.Contains("RequiresDiscBoundarySave()", close);
+        Assert.Contains("_sessionProject.StartAccepted", SourceContract.ExtractMember(MainWindowSource, "private bool RequiresDiscBoundarySave()"));
     }
 
     [Fact]

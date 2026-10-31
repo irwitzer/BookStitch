@@ -1,4 +1,13 @@
-# BookStitch 2.2.0 – Release Notes
+# BookStitch 2.3.0 – Release Notes
+
+## Version 2.3.0 – Unreleased
+
+Preparation for the next release, including the unpublished 2.2.1 development changes. This document does not announce a publication.
+
+- Improved saving and project closure after failed MP3-CD and audio-CD imports, including read errors: Close project offers Save or Delete.
+- Save uses the same disc-boundary recovery as closing the window. Metadata, cover and fully processed CDs are retained; the incomplete CD is removed so the project can be resumed from the project browser.
+- Delete removes the managed project folder after running operations have stopped and resets the main window for a new project. External original media remain untouched. The selection dialog is available in all 21 UI languages.
+- More precise chapter warnings avoid false duplicate reports and already-resolved track-number conflicts when a reliable filename sequence proves the working numbering. Audio analysis and optical-drive operation handling are more robust.
 
 ## Version 2.2.0 – Unreleased
 

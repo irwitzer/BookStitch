@@ -76,7 +76,7 @@ Distribute the complete published directory and its dependencies. See the [build
 
 ## Documentation
 
-- [Release Notes 2.2.0](docs-public/Release-Notes-2.2.0-EN.md)
+- [Release Notes 2.3.0](docs-public/Release-Notes-2.3.0-EN.md)
 - [Changelog (English)](Changelog-EN.md)
 - [Localization Guide](docs-public/localization-guide.md) · [Localization Rules](BookStitch/Resources/LOCALIZATION_RULES.md)
 

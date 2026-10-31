@@ -4,6 +4,7 @@ using BookStitch.Controls;
 using BookStitch.Models;
 using BookStitch.Presentation;
 using BookStitch.Services;
+using BookStitch.Tests.TestHelpers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -13,7 +14,6 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
@@ -21,13 +21,11 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
-using WpfApplication = System.Windows.Application;
-using WpfResourceDictionary = System.Windows.ResourceDictionary;
-using WpfShutdownMode = System.Windows.ShutdownMode;
 using Xunit;
 
 namespace BookStitch.Tests.Ui;
 
+[Collection(WpfRuntimeCollection.Name)]
 public sealed partial class WpfDialogRuntimeTests
 {
     [Fact]
@@ -477,73 +475,11 @@ public sealed partial class WpfDialogRuntimeTests
         return null;
     }
 
-    private static void RunOnStaThread(Action action, int timeoutSeconds = 20)
-    {
-        Exception? capturedException = null;
+    private static void RunOnStaThread(Action action, int timeoutSeconds = 20,
+        [System.Runtime.CompilerServices.CallerMemberName] string testName = "") =>
+        WpfTestDispatcher.Run(action, timeoutSeconds, testName);
 
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                EnsureApplicationResources();
-                // STA alone does not keep awaited UI work on this thread. Model the
-                // context installed by a running WPF dispatcher before creating controls.
-                SynchronizationContext.SetSynchronizationContext(
-                    new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
-                action();
-            }
-            catch (Exception exception)
-            {
-                capturedException = exception;
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "BookStitch WPF runtime test"
-        };
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-
-        Assert.True(
-            thread.Join(TimeSpan.FromSeconds(timeoutSeconds)),
-            $"The WPF runtime-test thread did not finish within {timeoutSeconds} seconds.");
-
-        if (capturedException is not null)
-        {
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-        }
-    }
-
-    private static void EnsureApplicationResources()
-    {
-        var application = WpfApplication.Current ?? new WpfApplication
-        {
-            ShutdownMode = WpfShutdownMode.OnExplicitShutdown
-        };
-
-        EnsureApplicationResourceDictionary(application, "/BookStitch;component/Themes/AppearanceTheme.xaml");
-        EnsureApplicationResourceDictionary(application, "/BookStitch;component/Themes/WindowChromeStyles.xaml");
-        EnsureApplicationResourceDictionary(application, "/BookStitch;component/Themes/NavigationDialogStyles.xaml");
-        EnsureApplicationResourceDictionary(application, "/BookStitch;component/Themes/ProjectTypeVisuals.xaml");
-        EnsureApplicationResourceDictionary(application, "/BookStitch;component/Themes/ChapterSymbols.xaml");
-        foreach (var key in LocalizationText.GetKeys())
-            application.Resources[key] = LocalizationText.Get(key);
-    }
-
-    private static void EnsureApplicationResourceDictionary(WpfApplication application, string source)
-    {
-        if (application.Resources.MergedDictionaries.Any(dictionary =>
-                string.Equals(dictionary.Source?.OriginalString, source, StringComparison.Ordinal)))
-        {
-            return;
-        }
-
-        application.Resources.MergedDictionaries.Add(new WpfResourceDictionary
-        {
-            Source = new Uri(source, UriKind.Relative)
-        });
-    }
+    private static void EnsureApplicationResources() => WpfTestDispatcher.EnsureApplicationResources();
 
     private static void CloseWithoutDraftWarning(MetadataDialog dialog)
     {

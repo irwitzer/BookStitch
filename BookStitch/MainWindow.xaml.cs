@@ -336,7 +336,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _sessionProject.ProjectType == ProjectManifestTypes.FolderProject &&
         !_presentationState.IsProjectExtensionRun && _presetReconversionRollbackContext is null;
 
-    public bool CanCancelExport => !_isDiscStopSaveInProgress && ExportUiState.CanCancelExport;
+    public bool CanCancelExport => !_isDiscStopSaveInProgress && !_isProjectCloseInProgress && ExportUiState.CanCancelExport;
     public bool CanStopAndSaveDiscProject => _presentationState.UiTransition is null && _presentationState.IsPipelinePaused &&
         !IsBusy && !_isDiscStopSaveInProgress &&
         (LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc) &&
@@ -12026,7 +12026,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void CancelExport_Click(object sender, RoutedEventArgs e)
     {
-        if (_isDiscStopSaveInProgress || _presentationState.UiTransition is not null || _presentationState.PauseRequested) return;
+        if (_isProjectCloseInProgress || _isDiscStopSaveInProgress || _presentationState.UiTransition is not null || _presentationState.PauseRequested) return;
         if (_presentationState.IsPipelineFailed)
         {
             if (_presetReconversionRollbackContext is not null || _presentationState.IsProjectExtensionRun)
@@ -12035,6 +12035,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (_presetReconversionRollbackContext is not null) await StopPausedPresetReconversionAsync();
                 else await StopPausedProjectExtensionAsync();
             }
+            else if (CanOfferFailedDiscClose()) await CloseFailedDiscProjectAsync();
             else CloseCurrentProject();
             return;
         }
@@ -12599,9 +12600,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task<bool> DeleteNewProjectAsync(bool confirm)
     {
         if (_isDiscStopSaveInProgress || !IsNewProjectPreparation || (confirm && !ConfirmProjectCloseIntent(ProjectCloseIntent.DeleteNewProject))) return false;
+        return await DeleteCurrentProjectAsync(PipelineUiTransitionTarget.DeleteNewProject);
+    }
+
+    private async Task<bool> DeleteCurrentProjectAsync(PipelineUiTransitionTarget target)
+    {
+        if (_isDiscStopSaveInProgress || string.IsNullOrWhiteSpace(_currentProjectWorkFolder)) return false;
         var projectFolder = _currentProjectWorkFolder;
         _isDiscStopSaveInProgress = true;
-        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Stopping, PipelineUiTransitionTarget.DeleteNewProject);
+        var transitionOwner = BeginPipelineUiTransition(PipelineUiTransitionKind.Stopping, target);
         try
         {
             await Dispatcher.Yield(DispatcherPriority.Background);
@@ -12636,6 +12643,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private bool RequiresDiscBoundarySave() => ApplicationShutdownService.RequiresDiscBoundarySave(
+        LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc, ProjectReviewState.Phase,
+        _sessionProject.Owns(_currentProjectWorkFolder) && _sessionProject.StartAccepted);
+
+    private bool CanOfferFailedDiscClose() => ApplicationShutdownService.CanOfferFailedDiscClose(
+        _presentationState.IsPipelineFailed, LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc,
+        ProjectReviewState.Phase, _sessionProject.Owns(_currentProjectWorkFolder) && _sessionProject.StartAccepted,
+        _presentationState.IsProjectExtensionRun, _presetReconversionRollbackContext is not null,
+        _sessionProject.IsUnstartedAudio(_currentProjectWorkFolder));
+
+    private async Task CloseFailedDiscProjectAsync()
+    {
+        if (_isProjectCloseInProgress || !CanOfferFailedDiscClose()) return;
+        var projectFolder = _currentProjectWorkFolder;
+        _isProjectCloseInProgress = true;
+        NotifyExportUiStateChanged();
+        try
+        {
+            var choice = AppDialogService.ConfirmFailedDiscClose(this);
+            if (!TrackPathService.PathEquals(projectFolder, _currentProjectWorkFolder)) return;
+            if (choice == AppDialogResult.Yes)
+            {
+                // Exactly the window-cross save path: drain, checkpoint, commit at
+                // the disc boundary and only then detach the old workspace.
+                if (await CloseProjectFromWindowAsync(confirmIntent: false))
+                {
+                    ApplyPipelineTransition(_services.Pipeline.PipelinePauseTransitionService.CreateContinuationStart());
+                    RefreshResumeProjects(showStatus: false);
+                }
+            }
+            else if (choice == AppDialogResult.No)
+                await DeleteCurrentProjectAsync(PipelineUiTransitionTarget.Secondary);
+        }
+        finally
+        {
+            _isProjectCloseInProgress = false;
+            NotifyExportUiStateChanged();
+        }
+    }
+
     private async Task<bool> CloseProjectFromWindowAsync(bool confirmIntent = true, bool cancelActiveWork = false)
     {
         var intent = ApplicationShutdownService.ResolveProjectCloseIntent(_sessionProject.DeleteOnWindowClose(_currentProjectWorkFolder,
@@ -12643,11 +12690,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _presentationState.IsProjectExtensionRun, _presetReconversionRollbackContext is not null,
             ProjectReviewState.Phase == ProjectPipelineState.Merging);
         // Capture eligibility before cancellation changes the presentation state.
-        var saveDiscBoundary = intent == ProjectCloseIntent.Save &&
-            (LoadedProjectState.IsAudioDisc || LoadedProjectState.IsMp3Disc) &&
-            (ProjectReviewState.Phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting ||
-             (_sessionProject.Owns(_currentProjectWorkFolder) && _sessionProject.StartAccepted &&
-              ProjectReviewState.Phase == ProjectPipelineState.Preparing));
+        var saveDiscBoundary = intent == ProjectCloseIntent.Save && RequiresDiscBoundarySave();
         if (confirmIntent && (intent != ProjectCloseIntent.Save || saveDiscBoundary) && !ConfirmProjectCloseIntent(intent))
         {
             CancelApplicationRestartRequest();

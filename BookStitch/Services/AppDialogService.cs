@@ -7,6 +7,20 @@ namespace BookStitch.Services;
 
 public static class AppDialogService
 {
+    internal static AppMessageDialog CreateFailedDiscCloseDialog() => new(
+        LocalizationText.Get("MainWindow.Action.CloseProject"),
+        LocalizationText.Get("MainWindow.Action.CloseProject"),
+        LocalizationText.Get("Project.Close.FailedDiscMessage"), AppDialogKind.Question, null,
+        [new(LocalizationText.Get("Project.Close.Delete"), AppDialogResult.No, IsDanger: true),
+         new(LocalizationText.Get("MainWindow.Action.Save"), AppDialogResult.Yes, IsPrimary: true, IsDefault: true)]);
+
+    public static AppDialogResult ConfirmFailedDiscClose(Window owner)
+    {
+        var dialog = CreateFailedDiscCloseDialog();
+        ModalDialogService.ShowDialog(dialog, owner);
+        return dialog.Result;
+    }
+
     public static bool ConfirmProjectUpdate(Window owner) => Show(owner,
         LocalizationText.Get("Integrity.Startup.Title"),LocalizationText.Get("Integrity.Startup.Title"),
         LocalizationText.Get("Integrity.Startup.Message"),AppDialogKind.Information,

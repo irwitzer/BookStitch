@@ -9,6 +9,74 @@ namespace BookStitch.Tests.Services;
 public sealed class FolderScannerTests
 {
     [Fact]
+    public void Filename_preferred_three_disc_import_resolves_source_tag_conflicts_without_hiding_an_unresolved_import()
+    {
+        using var folder = new TemporaryFolder();
+        var metadata = new Dictionary<string, OriginalTagMetadata>();
+        foreach (var disc in new[] { 1, 2, 3 })
+            for (var n = 1; n <= (disc == 3 ? 53 : 51); n++)
+            {
+                var name = $"{disc * 100 + n:0000} Book.mp3";
+                folder.CreateFile($"CD {disc:00}/{name}");
+                metadata[name] = new OriginalTagMetadata { TrackNumber = 1 };
+            }
+        var scanner = new FolderScanner(new PerFileTagMetadataReader(metadata), new FileSystemMetadataReader());
+        var imported = scanner.Scan(folder.Path, TrackNumberPreference.FileName);
+        var numbers = imported.Select(row => row.TrackNumber).ToArray();
+        var positions = imported.Select(row => row.AutomaticOrderPosition).ToArray();
+        new TrackListWarningService().Apply(imported);
+        Assert.Equal(155, imported.Count);
+        Assert.All(imported, row => Assert.False(row.HasChapterWarning));
+        Assert.All(imported, row => Assert.Equal(1, row.SourceTrackNumber));
+        Assert.Equal(numbers, imported.Select(row => row.TrackNumber));
+        Assert.Equal(positions, imported.Select(row => row.AutomaticOrderPosition));
+
+        // Tag-preferred working numbers are still unresolved and must keep their warnings.
+        var unresolved = scanner.Scan(folder.Path, TrackNumberPreference.EmbeddedTag);
+        new TrackListWarningService().Apply(unresolved);
+        Assert.All(unresolved, row => Assert.True(row.HasChapterWarning));
+    }
+
+    [Fact]
+    public void Mp3_disc_preview_with_142_identical_track_tags_uses_warning_only_filename_evidence()
+    {
+        using var folder = new TemporaryFolder();
+        var metadata = new Dictionary<string, OriginalTagMetadata>();
+        for (var n = 1; n <= 142; n++)
+        {
+            var name = $"{1000 + n:00000} Book.mp3";
+            folder.CreateFile(name);
+            metadata[name] = new OriginalTagMetadata { TrackNumber = 1 };
+        }
+        var rows = new FolderScanner(new PerFileTagMetadataReader(metadata), new FileSystemMetadataReader())
+            .Scan(folder.Path, TrackNumberPreference.FileName);
+        new Mp3DiscTrackReconciliationService().NormalizeProjectDiscNumber(rows, 1);
+        foreach (var row in rows) row.SourceId = Guid.NewGuid();
+        var manifest = new Mp3DiscProjectManifest
+        {
+            ProjectId = "repeated-tag-regression", ProjectFolder = folder.Path, TotalDiscs = 1,
+            ImportedDiscs = [new Mp3DiscProjectManifestDisc { DiscNumber = 1, Signature = "disc-one",
+                SourceFiles = rows.Select(row => new Mp3DiscProjectManifestSourceFile
+                { SourceId = row.SourceId, SourceFileName = row.FileName, RelativePath = row.FileName }).ToList() }]
+        };
+        var projection = new ChapterAutoEngineService().Apply(new ChapterAutoEngineRequest(
+            rows, ProjectManifestTypes.Mp3DiscProject, manifest.ProjectId, folder.Path,
+            new ChapterCanonicalMetadataSnapshot(0, "Book", MetadataOrigin.User, null, MetadataOrigin.None),
+            new ChapterSettings { Mode = "Auto", NumberingStyle = "SpacePadded" }, false, Mp3DiscManifest: manifest));
+        var originalTitles = rows.Select(row => row.ChapterTitle).ToArray();
+        var originalOrder = rows.ToArray();
+
+        new TrackListWarningService().Apply(rows);
+
+        Assert.Equal(142, projection.RenderedTimeline.Count);
+        Assert.Single(rows, row => row.HasChapterWarning);
+        Assert.Equal(LocalizationText.Format("WarningTrackTagFileNumberMismatch", 1, 1001), rows[0].ChapterWarningText);
+        Assert.All(rows, row => { Assert.Equal(1, row.SourceTrackNumber); Assert.Equal(1, row.TrackNumber); });
+        Assert.Equal(originalOrder, rows);
+        Assert.Equal(originalTitles, rows.Select(row => row.ChapterTitle));
+    }
+
+    [Fact]
     public void Two_disc_preview_keeps_the_complete_chapter_number_family_with_a_bad_source_tag()
     {
         using var folder = new TemporaryFolder();

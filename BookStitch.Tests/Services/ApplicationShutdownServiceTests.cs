@@ -1,4 +1,5 @@
-﻿using BookStitch.Services;
+﻿using BookStitch.Models;
+using BookStitch.Services;
 using System.Threading;
 using Xunit;
 
@@ -6,6 +7,30 @@ namespace BookStitch.Tests.Services;
 
 public sealed class ApplicationShutdownServiceTests
 {
+    [Theory]
+    [InlineData(ProjectPipelineState.Preparing, false, false)]
+    [InlineData(ProjectPipelineState.Preparing, true, true)]
+    [InlineData(ProjectPipelineState.AcquiringSources, false, true)]
+    [InlineData(ProjectPipelineState.Converting, false, true)]
+    [InlineData(ProjectPipelineState.Merging, true, false)]
+    [InlineData(ProjectPipelineState.ReviewBeforeMerge, true, false)]
+    [InlineData(ProjectPipelineState.Completed, true, false)]
+    public void Failed_disc_choice_uses_window_close_boundary_policy(ProjectPipelineState phase, bool started, bool expected)
+    {
+        Assert.Equal(expected, ApplicationShutdownService.RequiresDiscBoundarySave(true, phase, started));
+        Assert.Equal(expected, ApplicationShutdownService.CanOfferFailedDiscClose(true, true, phase, started, false, false, false));
+        Assert.False(ApplicationShutdownService.RequiresDiscBoundarySave(false, phase, started));
+    }
+
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, false, false, true)]
+    public void Failed_disc_choice_preserves_other_close_policies(bool failed, bool extension, bool reconversion, bool unstarted)
+        => Assert.False(ApplicationShutdownService.CanOfferFailedDiscClose(failed, true,
+            ProjectPipelineState.AcquiringSources, true, extension, reconversion, unstarted));
+
     [Theory]
     [InlineData(false, false, false, ProjectCloseIntent.Save)]
     [InlineData(true, false, false, ProjectCloseIntent.DeleteNewProject)]

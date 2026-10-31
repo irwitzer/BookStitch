@@ -1,4 +1,6 @@
 using BookStitch.Services;
+using BookStitch.Tests.TestHelpers;
+using System.Threading.Channels;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
@@ -29,9 +31,11 @@ public sealed class FfprobeRunnerServiceTests
     public async Task Streaming_output_is_consumed_without_retaining_stdout()
     {
         var count = 0;
-        var result = await new FfprobeRunnerService().RunAsync(GetCommandProcessor(),
-            ["/c", "for /L %i in (1,1,5000) do @echo packet-record"], TimeSpan.FromSeconds(5),
-            CancellationToken.None, stdoutLineHandler: line => { Assert.Equal("packet-record", line); count++; });
+        await using var probe = await ControlledProbeProcess.StartAsync(onOutput: line =>
+        { Assert.Equal("packet-record", line); Interlocked.Increment(ref count); });
+        await probe.SendAsync("out|5000|packet-record");
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(5000, count);
         Assert.Empty(result.Stdout);
@@ -40,36 +44,40 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task Streaming_parser_failure_stops_process_and_reports_error()
     {
-        await Assert.ThrowsAsync<InvalidDataException>(() => AwaitWithGuardAsync(new FfprobeRunnerService().RunAsync(
-            GetCommandProcessor(), ["/c", "echo invalid & ping -n 6 127.0.0.1 > nul"],
-            TimeSpan.FromSeconds(10), CancellationToken.None,
-            stdoutLineHandler: _ => throw new InvalidDataException("Invalid packet"))));
+        await using var probe = await ControlledProbeProcess.StartAsync(onOutput: _ =>
+            throw new InvalidDataException("Invalid packet"));
+        await probe.SendAsync("out|1|invalid");
+        await Assert.ThrowsAsync<InvalidDataException>(() => probe.ResultAsync());
     }
 
     [Fact]
     public async Task Productive_stream_can_exceed_the_inactivity_timeout()
     {
-        var count = 0;
-        var result = await new FfprobeRunnerService().RunAsync(GetCommandProcessor(),
-            ["/c", "for /L %i in (1,1,4) do @(echo packet & ping -n 2 127.0.0.1 > nul)"],
-            TimeSpan.FromSeconds(2), CancellationToken.None,
-            stdoutLineHandler: _ => count++, useInactivityTimeout: true);
+        var clock = new DeadlineTestTimeProvider();
+        var received = Channel.CreateUnbounded<string>();
+        await using var probe = await ControlledProbeProcess.StartAsync(clock, TimeSpan.FromSeconds(2),
+            onOutput: line => received.Writer.TryWrite(line), inactivity: true);
+        for (var i = 0; i < 4; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            await probe.SendAsync("out|1|packet");
+            Assert.Equal("packet", await received.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(20)));
+        }
+        // Four seconds of controlled time have passed against a two-second inactivity deadline.
+        Assert.False(probe.Execution.IsCompleted);
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
         Assert.Equal(0, result.ExitCode);
         Assert.False(result.TimedOut);
-        Assert.Equal(4, count);
     }
 
     [Fact]
     public async Task RunAsync_ReturnsStdoutAndExitCode()
     {
-        var runner = new FfprobeRunnerService();
-
-        var result = await runner.RunAsync(
-            GetCommandProcessor(),
-            ["/c", "echo", "ffprobe-ok"],
-            TimeSpan.FromSeconds(5),
-            CancellationToken.None);
-
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        await probe.SendAsync("out|1|ffprobe-ok");
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
         Assert.False(result.TimedOut);
         Assert.Equal(0, result.ExitCode);
         Assert.Contains("ffprobe-ok", result.Stdout, StringComparison.OrdinalIgnoreCase);
@@ -78,14 +86,10 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task RunAsync_ReturnsStdoutBeyondLegacyCaptureLimit()
     {
-        var runner = new FfprobeRunnerService();
-
-        var result = await runner.RunAsync(
-            GetCommandProcessor(),
-            ["/c", "for /L %i in (1,1,5000) do @echo 01234567890123456789"],
-            TimeSpan.FromSeconds(5),
-            CancellationToken.None);
-
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        await probe.SendAsync("out|5000|01234567890123456789");
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
         Assert.False(result.TimedOut);
         Assert.Equal(0, result.ExitCode);
         Assert.True(result.Stdout.Length > 100000);
@@ -95,14 +99,10 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task RunAsync_KeepsStderrBounded()
     {
-        var runner = new FfprobeRunnerService();
-
-        var result = await runner.RunAsync(
-            GetCommandProcessor(),
-            ["/c", "for /L %i in (1,1,5000) do @echo 01234567890123456789 1>&2"],
-            TimeSpan.FromSeconds(5),
-            CancellationToken.None);
-
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        await probe.SendAsync("err|5000|01234567890123456789");
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
         Assert.False(result.TimedOut);
         Assert.Equal(0, result.ExitCode);
         Assert.True(result.Stderr.Length >= 40000);
@@ -112,14 +112,10 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task RunAsync_ReturnsNonZeroExitAndStderr()
     {
-        var runner = new FfprobeRunnerService();
-
-        var result = await runner.RunAsync(
-            GetCommandProcessor(),
-            ["/c", "echo ffprobe-error 1>&2 & exit /b 7"],
-            TimeSpan.FromSeconds(5),
-            CancellationToken.None);
-
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        await probe.SendAsync("err|1|ffprobe-error");
+        await probe.SendAsync("exit|7");
+        var result = await probe.ResultAsync();
         Assert.False(result.TimedOut);
         Assert.Equal(7, result.ExitCode);
         Assert.Contains("ffprobe-error", result.Stderr, StringComparison.OrdinalIgnoreCase);
@@ -128,14 +124,10 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task RunAsync_WhenTimeout_KillsProcessAndReturnsTimeout()
     {
-        var runner = new FfprobeRunnerService();
-
-        var result = await AwaitWithGuardAsync(runner.RunAsync(
-                GetCommandProcessor(),
-                ["/c", "ping -n 6 127.0.0.1 > nul"],
-                TimeSpan.FromMilliseconds(100),
-                CancellationToken.None));
-
+        var clock = new DeadlineTestTimeProvider();
+        await using var probe = await ControlledProbeProcess.StartAsync(clock, TimeSpan.FromMilliseconds(100));
+        clock.Advance(TimeSpan.FromMilliseconds(100));
+        var result = await probe.ResultAsync();
         Assert.True(result.TimedOut);
         Assert.Null(result.ExitCode);
     }
@@ -143,40 +135,52 @@ public sealed class FfprobeRunnerServiceTests
     [Fact]
     public async Task RunAsync_WhenExternallyCanceled_StopsProcessAndReturnsCanceledResult()
     {
-        var runner = new FfprobeRunnerService();
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-
-        var result = await AwaitWithGuardAsync(
-            runner.RunAsync(
-                GetCommandProcessor(),
-                ["/c", "ping -n 6 127.0.0.1 > nul"],
-                TimeSpan.FromSeconds(10),
-                cancellation.Token));
-
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        probe.Cancel(); // Startup handshake has completed; this cancels an actually running child.
+        var result = await probe.ResultAsync();
         Assert.True(result.Canceled);
         Assert.False(result.TimedOut);
         Assert.Null(result.ExitCode);
     }
 
-    private static async Task<T> AwaitWithGuardAsync<T>(Task<T> task)
+    [Fact]
+    public async Task Output_reader_honors_cancellation_before_consuming_records()
     {
-        var completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
-        Assert.Same(task, completed);
-        return await task;
+        using var input = new StringReader("must not be consumed");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => FfprobeRunnerService.ReadOutputLinesAsync(
+            input, _ => Assert.Fail("A canceled reader consumed output."), 65536, cancellation.Token));
     }
 
-    private static async Task AwaitWithGuardAsync(Task task)
+    [Fact]
+    public async Task RunAsync_DrainsBothPipesAndTheirFinalUnterminatedRecordsBeforeReturning()
     {
-        var completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
-        Assert.Same(task, completed);
-        await task;
+        await using var probe = await ControlledProbeProcess.StartAsync();
+        await probe.SendAsync("both|2000|record");
+        await probe.SendAsync("raw|1|last-record");
+        await probe.SendAsync("exit|0");
+        var result = await probe.ResultAsync();
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(2001, CountNonEmptyLines(result.Stdout));
+        Assert.Equal(2001, CountNonEmptyLines(result.Stderr));
+        Assert.EndsWith("last-record" + Environment.NewLine, result.Stdout);
+        Assert.EndsWith("last-record" + Environment.NewLine, result.Stderr);
+    }
+
+    [Fact]
+    public async Task RunAsync_CancellationWhileFinalOutputIsConsumedCannotReturnSuccess()
+    {
+        ControlledProbeProcess? owner = null;
+        await using var probe = await ControlledProbeProcess.StartAsync(onOutput: _ => owner!.Cancel());
+        owner = probe;
+        await probe.SendAsync("out-exit|0|final-record");
+        var result = await probe.ResultAsync();
+        Assert.True(result.Canceled);
+        Assert.False(result.TimedOut);
+        Assert.Null(result.ExitCode);
     }
 
     private static int CountNonEmptyLines(string value) =>
-        value
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-            .Length;
-
-    private static string GetCommandProcessor() =>
-        Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
+        value.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).Length;
 }

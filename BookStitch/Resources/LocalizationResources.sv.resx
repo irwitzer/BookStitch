@@ -7463,4 +7463,8 @@ TranslationNote: Added for the 2026-10-24 complete-target-locale batch; cross-ch
     <value>Classic WPF-Vektoren</value>
     <comment>SourceHash: 6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347</comment>
   </data>
+  <data name="Project.Close.FailedDiscMessage" xml:space="preserve">
+    <value>Du kan ta bort projektet eller spara det och fortsätta senare.</value>
+    <comment>SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2</comment>
+  </data>
 </root>

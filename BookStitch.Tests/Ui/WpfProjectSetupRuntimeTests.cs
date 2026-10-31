@@ -2,6 +2,7 @@ using BookStitch.Controls;
 using BookStitch.Dialog;
 using BookStitch.Models;
 using BookStitch.Services;
+using BookStitch.Tests.TestHelpers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -239,16 +240,59 @@ public sealed partial class WpfDialogRuntimeTests
                 dialog.Close();
             }
 
-            using var startInputSource = CreateKeyboardInputSource("BookStitch project setup start button test");
             var startDialog = CreateProjectSetupDialog(ProjectSetupSourceKind.Folder, getAnimationMilliseconds: () => 0);
+            Exception? keyboardFailure = null;
+            var watchdog = new System.Windows.Threading.DispatcherTimer(
+                System.Windows.Threading.DispatcherPriority.Send, startDialog.Dispatcher)
+            { Interval = TimeSpan.FromSeconds(5) };
+            watchdog.Tick += (_, _) =>
+            {
+                watchdog.Stop();
+                keyboardFailure ??= new TimeoutException(
+                    $"Space did not confirm project setup: enabled={startDialog.StartProjectButton.IsEnabled}, " +
+                    $"keyboardFocus={startDialog.StartProjectButton.IsKeyboardFocused}, active={startDialog.IsActive}.");
+                startDialog.DialogResult = false;
+            };
             startDialog.Loaded += (_, _) => startDialog.Dispatcher.BeginInvoke(new Action(() =>
             {
-                Assert.True(startDialog.StartProjectButton.Focus());
-                RaiseKey(startDialog.StartProjectButton, startInputSource, Key.Space, Keyboard.KeyDownEvent);
-                RaiseKey(startDialog.StartProjectButton, startInputSource, Key.Space, Keyboard.KeyUpEvent);
-            }));
+                try
+                {
+                    startDialog.Activate();
+                    startDialog.StartProjectButton.Focus();
+                    WpfTestDispatcher.WaitUntil(() => startDialog.StartProjectButton.IsKeyboardFocused,
+                        "project start button receives keyboard focus");
+                    // Route keys through the real shown window, not an unrelated hidden HWND.
+                    var source = Assert.IsType<System.Windows.Interop.HwndSource>(PresentationSource.FromVisual(startDialog));
+                    using var keyboardState = new ThreadKeyboardStateScope();
+                    Mouse.Capture(null);
+                    Assert.Equal(ModifierKeys.None, Keyboard.Modifiers);
+                    Assert.Equal(MouseButtonState.Released, Mouse.LeftButton);
+                    keyboardState.SetPressed(Key.Space, true);
+                    RaiseKey(startDialog.StartProjectButton, source, Key.Space, Keyboard.KeyDownEvent);
+                    Assert.True(startDialog.StartProjectButton.IsPressed, "Space down must press the focused start button.");
+                    keyboardState.SetPressed(Key.Space, false);
+                    RaiseKey(startDialog.StartProjectButton, source, Key.Space, Keyboard.KeyUpEvent);
+                }
+                catch (Exception error)
+                {
+                    keyboardFailure = error;
+                    if (startDialog.IsVisible) startDialog.DialogResult = false;
+                }
+            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
-            Assert.True(startDialog.ShowDialog());
+            try
+            {
+                watchdog.Start();
+                var accepted = startDialog.ShowDialog();
+                if (keyboardFailure is not null)
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(keyboardFailure).Throw();
+                Assert.True(accepted);
+            }
+            finally
+            {
+                watchdog.Stop();
+                startDialog.Close();
+            }
         });
     }
 

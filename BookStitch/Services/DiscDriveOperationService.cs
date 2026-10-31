@@ -33,6 +33,12 @@ internal static class DiscDriveOperationService
         if (_heldRoots?.Contains(key) == true) return action();
         var gate = Gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         gate.Wait(token);
+        try { return ExecuteLeased(key, action, token); }
+        finally { gate.Release(); }
+    }
+
+    private static T ExecuteLeased<T>(string key, Func<T> action, CancellationToken token)
+    {
         var previousToken = _currentCancellationToken;
         (_heldRoots ??= new(StringComparer.OrdinalIgnoreCase)).Add(key);
         _currentCancellationToken = token;
@@ -47,13 +53,23 @@ internal static class DiscDriveOperationService
         {
             _currentCancellationToken = previousToken;
             _heldRoots.Remove(key);
-            gate.Release();
         }
     }
 
     // Await the actual operation. Cancellation never reports a running native call as finished.
-    public static Task<T> ExecuteAsync<T>(string? root, Func<T> action, CancellationToken cancellationToken) =>
-        Task.Run(() => Execute(root, action, cancellationToken), CancellationToken.None);
+    public static async Task<T> ExecuteAsync<T>(string? root, Func<T> action, CancellationToken cancellationToken)
+    {
+        var key = Key(root);
+        var gate = Gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        // Queued operations must not occupy pool threads just to wait for a drive.
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Task.Run(() => ExecuteLeased(key, action, cancellationToken), CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        finally { gate.Release(); }
+    }
 
     private sealed class Lease(SemaphoreSlim gate) : IDisposable
     {

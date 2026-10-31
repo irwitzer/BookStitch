@@ -392,10 +392,7 @@ Length: critical</comment>
   </data>
   <data name="Project.Close.Delete" xml:space="preserve">
     <value>Projekt löschen</value>
-    <comment>Context: Project lifecycle and project browser: Closing projects; short label or choice (referenced by MainWindow.xaml)
-Meaning: Delete a new in-session BookStitch project and its managed working files, not the user’s external input files.
-TranslationNote: Do not suggest deleting external source folders; only BookStitch-managed project contents.
-Length: critical</comment>
+    <comment>Context: Schaltfläche zum Löschen des aktuellen verwalteten Projekts, auch nach fehlgeschlagenem CD-Import. Meaning: Entfernt den gesamten Projektordner, aber niemals externe Originalmedien. Length: critical.</comment>
   </data>
   <data name="Project.Close.DeleteHeading" xml:space="preserve">
     <value>Neues Projekt löschen?</value>
@@ -10104,5 +10101,9 @@ Meaning: Startet die ausgewaehlte Vorschau erneut bei null; haelt am Ende 100 Pr
   <data name="Developer.Images.ClassicVectors" xml:space="preserve">
     <value>Classic WPF-Vektoren</value>
     <comment>Context: Developer Tools &gt; Bilder; session-only track-order icon comparison. TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Project.Close.FailedDiscMessage" xml:space="preserve">
+    <value>Das Projekt kann gelöscht oder gespeichert und später fortgesetzt werden.</value>
+    <comment>Context: Kurzer Auswahldialog beim Schließen eines fehlgeschlagenen MP3-CD- oder Audio-CD-Imports. Meaning: Löschen entfernt den verwalteten Projektordner; Speichern erhält Metadaten und vollständig verarbeitete CDs und ermöglicht späteres Fortsetzen an der CD-Grenze. Externe Originalmedien bleiben unverändert. Placeholders: keine. Text darf umbrechen.</comment>
   </data>
 </root>

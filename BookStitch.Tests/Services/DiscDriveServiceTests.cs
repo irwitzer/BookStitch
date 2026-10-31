@@ -11,27 +11,16 @@ public class DiscDriveServiceTests
     [Fact]
     public async Task A_canceled_queued_operation_never_runs_its_hardware_action()
     {
-        using var release = new ManualResetEventSlim();
+        using var running = await DiscDriveOperationService.AcquireAsync(@"S:\", CancellationToken.None);
         using var cancellation = new CancellationTokenSource();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
-        var running = _service.MeasureOperationAsync(@"S:\", "test.running", () =>
-        {
-            started.SetResult();
-            Assert.True(release.Wait(TimeSpan.FromSeconds(5)));
-            return 1;
-        });
-        try
-        {
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            var queued = _service.MeasureOperationAsync(@"s:\folder", "test.queued-eject", () => ++calls, cancellation.Token);
-            cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued);
-            Assert.Equal(0, calls);
-            Assert.False(running.IsCompleted);
-        }
-        finally { release.Set(); await running; }
+        var queued = _service.MeasureOperationAsync(@"s:\folder", "test.queued-eject", () => ++calls, cancellation.Token);
+        Assert.False(queued.IsCompleted);
+        cancellation.Cancel();
+        // The drive is still held; cancellation must complete without releasing it.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Equal(0, calls);
+        Assert.True(Assert.Single(_service.MeasurementStore.Snapshot()).Cancelled);
     }
 
     [Fact]
@@ -87,15 +76,16 @@ public class DiscDriveServiceTests
         var first = _service.MeasureOperationAsync(root, "test.native", () =>
         {
             started.SetResult();
-            Assert.True(release.Wait(TimeSpan.FromSeconds(5)));
+            release.Wait();
             return DiscDriveOperationService.Execute(root, () => ++sideEffects);
         }, cancellation.Token);
+        Task<int>? next = null;
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             cancellation.Cancel();
             Assert.False(first.IsCompleted);
-            var next = new DiscDriveService().MeasureOperationAsync(root, "test.followup", () => ++sideEffects);
+            next = new DiscDriveService().MeasureOperationAsync(root, "test.followup", () => ++sideEffects);
             var other = new DiscDriveService().MeasureOperationAsync(@"R:\", "test.other", () => 7);
             Assert.Equal(7, await other.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.False(next.IsCompleted);
@@ -105,7 +95,13 @@ public class DiscDriveServiceTests
             Assert.Equal(1, sideEffects);
             Assert.True(Assert.Single(_service.MeasurementStore.Snapshot()).Cancelled);
         }
-        finally { release.Set(); }
+        finally
+        {
+            release.Set();
+            try { await first; }
+            catch (OperationCanceledException) { }
+            if (next is not null) await next;
+        }
     }
 
     [Theory]

@@ -1,4 +1,6 @@
-﻿namespace BookStitch.Services;
+﻿using BookStitch.Models;
+
+namespace BookStitch.Services;
 
 public enum ApplicationActivity
 {
@@ -18,6 +20,15 @@ public enum ProjectCloseIntent { Save, DeleteNewProject, RollbackRun, DiscardMer
 
 public sealed class ApplicationShutdownService
 {
+    internal static bool RequiresDiscBoundarySave(bool isDiscProject, ProjectPipelineState phase, bool startedPreparation) =>
+        isDiscProject && (phase is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting ||
+            startedPreparation && phase == ProjectPipelineState.Preparing);
+
+    internal static bool CanOfferFailedDiscClose(bool failed, bool isDiscProject, ProjectPipelineState phase,
+        bool startedPreparation, bool extension, bool reconversion, bool unstartedAudio) =>
+        failed && !extension && !reconversion && !unstartedAudio &&
+        RequiresDiscBoundarySave(isDiscProject, phase, startedPreparation);
+
     internal static ProjectCloseIntent ResolveProjectCloseIntent(bool isNewPreparation, bool isExtension, bool isReconversion, bool isMerge = false) =>
         isMerge ? ProjectCloseIntent.DiscardMerge :
         isExtension || isReconversion ? ProjectCloseIntent.RollbackRun :

@@ -2,6 +2,19 @@
 
 BookStitch for Windows version history, newest release first.
 
+## [2.3.0] – Unreleased
+
+- Improved saving and closure of failed MP3-CD/audio-CD projects: choose Save for disc-boundary recovery or Delete for complete managed-project cleanup and an empty workspace. Metadata and cover survive saving; external original media are preserved.
+- Consolidates the unpublished 2.2.1 development improvements documented below, including more precise chapter warnings and robust audio analysis and optical-drive handling. Updated release notes and documentation for 2.3.0.
+
+## [2.2.1] – Unreleased
+
+- After a failed MP3-CD or audio-CD import, Close project now offers Save or Delete. Saving uses the same disc-boundary recovery as closing the window; deleting removes the managed project and resets the workspace. Dialog translated and checked in all 21 UI languages.
+
+- Omit already-resolved source track-tag conflicts when a reliable filename inventory matches every working track number; keep ambiguous conflicts and independent duplicate, gap and ordering warnings.
+- Drain FFprobe output streams directly before accepting results and wait asynchronously for optical-drive access; preserve cancellation and the completion boundary of running native operations.
+- Avoid false duplicate-chapter warnings for proven, consecutive zero-padded filename families when every source track tag contains the same number. Keep one representative metadata conflict per family; preserve source tags, ordering and chapter proposals.
+
 ## [2.2.0] – Unreleased
 
 Includes the unpublished 2.1.7 development state; neither 2.1.7 nor 2.2.0 has been released.

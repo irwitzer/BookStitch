@@ -7,10 +7,20 @@ public sealed class TrackListWarningService
 {
     private static readonly Regex LeadingNumberRegex = new(@"^\s*(\d+)", RegexOptions.Compiled);
 
+    // Warning-only evidence; do not widen the scanner, ordering or chapter parsers.
+    private static readonly Regex PaddedFilenameSequenceRegex = new(
+        @"^(?<number>0[0-9]{4,9})(?<tail>[\s._\-]+.+)$", RegexOptions.Compiled);
+
     public bool Apply(IList<TrackInfo> tracks)
     {
         ArgumentNullException.ThrowIfNull(tracks);
 
+        // Only a proven observed inventory can resolve a tag conflict. Equality
+        // on one row is not enough, and this never changes the working numbers.
+        var resolvedFileNumbers = tracks.GroupBy(GetDiscWarningScope)
+            .Where(HasResolvedFilenameInventory)
+            .SelectMany(scope => scope)
+            .ToHashSet();
         var changed = false;
         foreach (var track in tracks)
         {
@@ -27,7 +37,7 @@ public sealed class TrackListWarningService
                 track.WarningCodes |= TrackWarningCodes.InvalidAudio;
             }
             changed |= SetFileWarning(track, BuildFileWarning(track));
-            changed |= SetChapterWarning(track, BuildInitialChapterWarning(track));
+            changed |= SetChapterWarning(track, BuildInitialChapterWarning(track, resolvedFileNumbers.Contains(track)));
         }
 
         var sequenceNumbers = tracks.ToDictionary(track => track, ExtractSequenceNumber);
@@ -43,6 +53,19 @@ public sealed class TrackListWarningService
                 rows.Select((row, i) => row.TrackNumber == names[i]).Count(matches => matches) >= rows.Count - 1 &&
                 ordered.Zip(ordered.Skip(1), (a, b) => (long)b - a).All(delta => delta == 1))
                 for (var i = 0; i < rows.Count; i++) sequenceNumbers[rows[i]] = names[i];
+            else if (TryGetRepeatedTagFilenameSequence(rows, out var fileNumbers, out var sourceNumber))
+            {
+                for (var i = 0; i < rows.Count; i++) sequenceNumbers[rows[i]] = fileNumbers[i];
+
+                // One representative metadata conflict per family, not one false
+                // duplicate chapter per file. Keep independent warning codes intact.
+                var representative = rows.Select((row, i) => (Row: row, Number: fileNumbers[i]))
+                    .Where(item => !item.Row.IsExcluded && item.Number != sourceNumber)
+                    .OrderBy(item => item.Number).FirstOrDefault();
+                if (representative.Row is not null)
+                    changed |= AddChapterWarning(representative.Row,
+                        LocalizationText.Format("WarningTrackTagFileNumberMismatch", sourceNumber, representative.Number));
+            }
         }
         var tracksByDisc = tracks.GroupBy(GetDiscWarningScope);
 
@@ -91,6 +114,49 @@ public sealed class TrackListWarningService
     }
 
 
+    private static bool TryGetRepeatedTagFilenameSequence(
+        IReadOnlyList<TrackInfo> rows, out int[] fileNumbers, out int sourceNumber)
+    {
+        fileNumbers = [];
+        sourceNumber = 0;
+        if (rows.Count < 3)
+            return false;
+
+        var source = rows[0].SourceTrackNumber ?? rows[0].SourceMetadataFields?.SourceTrackNumber;
+        if (source is not > 0 || rows.Any(row => row.TrackNumber != source ||
+            (row.SourceTrackNumber ?? row.SourceMetadataFields?.SourceTrackNumber) != source ||
+            !string.Equals(row.RelativeFolder, rows[0].RelativeFolder, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var matches = rows.Select(row => PaddedFilenameSequenceRegex.Match(
+            System.IO.Path.GetFileNameWithoutExtension(row.FileName ?? string.Empty))).ToArray();
+        if (matches.Any(match => !match.Success ||
+            match.Groups["number"].Length != matches[0].Groups["number"].Length ||
+            !string.Equals(match.Groups["tail"].Value, matches[0].Groups["tail"].Value, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var numbers = new int[rows.Count];
+        for (var i = 0; i < matches.Length; i++)
+            if (!int.TryParse(matches[i].Groups["number"].Value, out numbers[i]) || numbers[i] <= 0)
+                return false;
+
+        var ordered = numbers.Order().ToArray();
+        if (!ordered.Zip(ordered.Skip(1), (left, right) => (long)right - left).All(delta => delta == 1))
+            return false;
+
+        // 02001 can be CD 02 / track 001, but an ordinary year family must
+        // not become sequence evidence. Require the known disc and a 001 start.
+        if (numbers.Any(number => number is >= 1900 and <= 2199) &&
+            !(rows[0].DiscNumber is int knownDisc && knownDisc > 0 && ordered[0] == (long)knownDisc * 1000 + 1 &&
+              matches.All(match => match.Groups["number"].Length == 5 &&
+                  match.Groups["number"].Value.StartsWith(knownDisc.ToString("00", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal))))
+            return false;
+
+        fileNumbers = numbers;
+        sourceNumber = source.Value;
+        return true;
+    }
+
     private static int? GetDiscWarningScope(TrackInfo track)
     {
         return track.DiscNumber is > 0 ? track.DiscNumber.Value : null;
@@ -123,7 +189,26 @@ public sealed class TrackListWarningService
         return JoinWarningMessages(messages);
     }
 
-    private static string BuildInitialChapterWarning(TrackInfo track)
+    private static bool HasResolvedFilenameInventory(IEnumerable<TrackInfo> scope)
+    {
+        var rows = scope.ToArray();
+        if (rows.Length < 3)
+            return false;
+
+        var numbers = rows.Select(ExtractFilenameNumber).ToArray();
+        if (numbers.Any(number => number is not > 0 || number is >= 1900 and <= 2199) ||
+            rows.Where((row, index) => row.TrackNumber != numbers[index] ||
+                !string.Equals(row.RelativeFolder, rows[0].RelativeFolder, StringComparison.OrdinalIgnoreCase)).Any())
+            return false;
+
+        var ordered = numbers.Select(number => number!.Value).Order().ToArray();
+        return ordered.Zip(ordered.Skip(1), (left, right) => (long)right - left).All(delta => delta == 1);
+    }
+
+    private static int? ExtractFilenameNumber(TrackInfo track) => FolderScanner.TryExtractTrackNumber(
+        System.IO.Path.GetFileNameWithoutExtension(track.FileName ?? string.Empty));
+
+    private static string BuildInitialChapterWarning(TrackInfo track, bool filenameConflictResolved)
     {
         var codes = track.WarningCodes;
         var messages = new List<string>();
@@ -143,11 +228,11 @@ public sealed class TrackListWarningService
         if (codes.HasFlag(TrackWarningCodes.UnreadableTags))
             AddWarningMessage(messages, TrackWarningPresentation.Format(TrackWarningCodes.UnreadableTags));
 
-        // Compare immutable source tags with filename evidence, never the working
-        // track number, list position or free-form title. This does not sort tracks.
+        // An unresolved conflict still describes the immutable source tag, never
+        // the working number, list position or generated chapter proposal.
         var sourceNumber = track.SourceTrackNumber ?? track.SourceMetadataFields?.SourceTrackNumber;
-        var fileNumber = FolderScanner.TryExtractTrackNumber(System.IO.Path.GetFileNameWithoutExtension(track.FileName ?? string.Empty));
-        if (sourceNumber is > 0 && fileNumber is > 0 && sourceNumber != fileNumber)
+        var fileNumber = ExtractFilenameNumber(track);
+        if (!filenameConflictResolved && sourceNumber is > 0 && fileNumber is > 0 && sourceNumber != fileNumber)
             AddWarningMessage(messages, LocalizationText.Format("WarningTrackTagFileNumberMismatch", sourceNumber.Value, fileNumber.Value));
 
         return JoinWarningMessages(messages);

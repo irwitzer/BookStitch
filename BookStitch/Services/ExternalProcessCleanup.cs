@@ -33,7 +33,7 @@ internal static class ExternalProcessCleanup
         }
         catch
         {
-            // DataReceived end markers can be delayed or absent after a hard kill.
+            // A reader or end marker may still be pending after a hard kill.
         }
     }
 

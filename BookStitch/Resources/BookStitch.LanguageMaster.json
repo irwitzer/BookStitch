@@ -28247,7 +28247,7 @@
     "Project.Close.Delete": {
       "source": {
         "value": "Projekt löschen",
-        "comment": "Context: Project lifecycle and project browser: Closing projects; short label or choice (referenced by MainWindow.xaml)\nMeaning: Delete a new in-session BookStitch project and its managed working files, not the user’s external input files.\nTranslationNote: Do not suggest deleting external source folders; only BookStitch-managed project contents.\nLength: critical"
+        "comment": "Context: Schaltfläche zum Löschen des aktuellen verwalteten Projekts, auch nach fehlgeschlagenem CD-Import. Meaning: Entfernt den gesamten Projektordner, aber niemals externe Originalmedien. Length: critical."
       },
       "translations": {
         "bn-BD": {
@@ -28334,123 +28334,421 @@
       "translationBase": {
         "bn-BD": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "36eb68de2ae1ee6fbb4c6d071aa9718ada0bbf92a8b01f8a1e1e7bfcf0863593",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "cs": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "5443d8316e9c729a43a02199c14c62b4c3d195f155f61cd9eb2c87fcae96ffcb",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "da": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "3ea7842bb6947f9f2934a81861e80a90d581832d3a51d1e97e61f3d22d5c1444",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "en": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "9c0b617e79e94dac7c07fb7d1af3058bf4db656719ba28466f39a723073efabe",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "es": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "ba2474a559b3ba4721f8cfe2d10032c492425953d494b125bd8953f55238c9f3",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fi": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "3710548a50a4d1c9a7b59ebec566aaaf292e15aa7b199a165713106e9faebff0",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fr": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "ea065a3e2c330fb735675904129d5c38460063f8911efc11eeb20fa21feb79f9",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "gsw-CH": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "15fc6707443558ed62449a30d96c4fa6afa2b19ae537dbd92a78c90d9351c3fc",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "it": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "6170c8f92d5349c9acbd3fd0760c480409f30fe56040daf47dbed3be9c9870b9",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ja": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "f7f7f0698440585aea79aed1ddfc92feb779a5e5885555a1aa668bdd7e969f6c",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nb": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "a57632596e21aadea61a5078faff39da26167bd91c11f1beffece27e5f5d6313",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nl": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "bd23aa734f25bd64af291d21e638323dd4b71da3702cbc228b9341efebe22d52",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pl": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "1d7bd6d9daa1624380fa2df40055c26a2fc498aedccfca23488284d5fafdfc0f",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pt-BR": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "ba218a7351377aced74001897197a21c73e53c1c5dda5535d4852927c4062f6c",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ru": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "b8d719c6e9a4139a5febc24cb8e1fea253b41e710c208dca1def171bf0997f22",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "sv": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "6da907c7c982234876b0de731a654c19e7dff7eff317450956ed97b33a2ef1e3",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "tr": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "f0c88c1b747faf3d710227d87a4e553f077430f03f1349718f02586ca0c500a9",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "vi": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "42b69fc3d65fd923486d1835146f6ec370d1f4dab4554577991337ea4a7ba8a2",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-CN": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "f6dc6a110d09321f2f0f2b64e2577c2e56419ff1919e47062bed376a18e2eeca",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-HK": {
           "sourceValueSha256": "836e196fdf1432e0a559b832fdaacfb52d7315d7eaf5b2cca293392a0fe4bd54",
-          "sourceCommentSha256": "49cd7cee754e343013be54067a6b7f68640c3e1ce21fd244eb88172544bd7c52",
+          "sourceCommentSha256": "de9871171d31045b1fd3412f1c3a2c55413e104bb910fdeadf20a6a3b43f5795",
           "targetValueSha256": "43b1e0edec7f4f9f0c77d58dac67e9ad5744c25123e611d79612dac6128a4fbb",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "8c5298ac25b31dd7bafa356e77ae69a59c0234b829887b8d990418a9203ced36",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "779483756394eaa501cb25ed67fb88a067cf7cbd20b11c3cf8ecb61cc98e9130",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "dd8d01a59d8665832e13b265daa116e491d3e96dfeb50f40d44edab461eeddbc",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "82c2d6ececeb594b61700833474e79e04a2322a0eb572ac847e4928445e60615",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "c73b96b4a73924d8e9680a448f5d2bc221ed7dd4b400c08f0b85fa069c3c4b84",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "754bbf0028494732043b11816a3f0119bd437159d3c61f12536d6ac28b74a546",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "54b39ac12444a57b1e03563bda4368cc2b005775c55f9e13e8aa9278ae3cb37c",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "22ad59637c0273d0533f94908eed12fa373ecb830282ebe9072473bf99a272d2",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "d0d5e7b6955414b50f5948d753db1e6b472d2a94023655df064978a36e7d3718",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "9b5fccf6d962249c316b12ab662933e8d77cbaeb8c8cb9fadcf737c31be29382",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "e6b94e29b61000ceba5390f82f3e85b39ea5ee0232f3d2e20f55860f82e306dc",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "a2d91ec97f38fedc9639a86a5007f5bf32c1c8c2fc288a77086c4c409b732538",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "cb5cde6546dea3482ad4e57f1f998619494b786eb2cb30c63cef1dbbb63037c5",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "220a08c520654805929fd350ad8ddc96d5fb2c6d0ca9c54afb0be5fd1a6c92a9",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "3c35cf3c46230be53fe120584f52201892fbaf247a110ade9cf4f3abba56927f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1c82b513b45228f9f152f6b11498b65be81ddae47ead6cc9d31661e490400222",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "7f506e966530509efcd4b9355ae1eeaefd2ac51b4bf3ade8dbf9710276a92c99",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "e628a0a8ee53e62b4a5f02e0e60842db756e84cc7be4253b47c0b646e301acf1",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "659bd1aed992d684850b6ed75a0c96ce16bd96b1eee443e4ec1ae8ec2720a5c6",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "579c79aae005bc46d92e545fbe58a68862c86f6b680d1912fd312ad9097a05fe",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "4a51adb6ac686371c221101492fc9ffe56218679fbc3b3854ecdc82e1a357378",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        }
+      },
+      "uiFit": {
+        "de": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "8c5298ac25b31dd7bafa356e77ae69a59c0234b829887b8d990418a9203ced36",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "en": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "779483756394eaa501cb25ed67fb88a067cf7cbd20b11c3cf8ecb61cc98e9130",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "bn-BD": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "dd8d01a59d8665832e13b265daa116e491d3e96dfeb50f40d44edab461eeddbc",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "cs": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "82c2d6ececeb594b61700833474e79e04a2322a0eb572ac847e4928445e60615",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "da": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "c73b96b4a73924d8e9680a448f5d2bc221ed7dd4b400c08f0b85fa069c3c4b84",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "es": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "754bbf0028494732043b11816a3f0119bd437159d3c61f12536d6ac28b74a546",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "54b39ac12444a57b1e03563bda4368cc2b005775c55f9e13e8aa9278ae3cb37c",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "22ad59637c0273d0533f94908eed12fa373ecb830282ebe9072473bf99a272d2",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "gsw-CH": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "d0d5e7b6955414b50f5948d753db1e6b472d2a94023655df064978a36e7d3718",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "it": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "9b5fccf6d962249c316b12ab662933e8d77cbaeb8c8cb9fadcf737c31be29382",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ja": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "e6b94e29b61000ceba5390f82f3e85b39ea5ee0232f3d2e20f55860f82e306dc",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nb": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "a2d91ec97f38fedc9639a86a5007f5bf32c1c8c2fc288a77086c4c409b732538",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "cb5cde6546dea3482ad4e57f1f998619494b786eb2cb30c63cef1dbbb63037c5",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "220a08c520654805929fd350ad8ddc96d5fb2c6d0ca9c54afb0be5fd1a6c92a9",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pt-BR": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "3c35cf3c46230be53fe120584f52201892fbaf247a110ade9cf4f3abba56927f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ru": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1c82b513b45228f9f152f6b11498b65be81ddae47ead6cc9d31661e490400222",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "sv": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "7f506e966530509efcd4b9355ae1eeaefd2ac51b4bf3ade8dbf9710276a92c99",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "tr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "e628a0a8ee53e62b4a5f02e0e60842db756e84cc7be4253b47c0b646e301acf1",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "vi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "659bd1aed992d684850b6ed75a0c96ce16bd96b1eee443e4ec1ae8ec2720a5c6",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-CN": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "579c79aae005bc46d92e545fbe58a68862c86f6b680d1912fd312ad9097a05fe",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-HK": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "4a51adb6ac686371c221101492fc9ffe56218679fbc3b3854ecdc82e1a357378",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
         }
       }
     },
@@ -129350,121 +129648,419 @@
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "47831e33908ae46641b8bb6bc6635fb768e8c504d408e90a1fff078a48f5a201",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "cs": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "69ef67392de5593095be9de72381b8b6110ce31fab39bf3198ccf96e2e40f091",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "da": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "db008054481d0a3631a4d55db75db8fc3a66808a125d922361faa323c86eee7f",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "en": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "e46827dc0b15e76ec7fc8a3b283d9d496a9216206ab01a34bd505a75338c14a4",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "es": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "66db2da021a4075a5697e09270246c7d7fbf427de19c1502b09f43a1fdfd3710",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fi": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "19c9e26f6a4167c2102dbe6e39d574a21c8edfacfa7818faf73687702542f939",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fr": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "80ef6c31c5b1b5593cd423ed0927c78fdedde62c7734e1a167ec1d761d14f8a0",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "gsw-CH": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "9ad8ab10d0012372b84774bf7ffd53cab7fae84390c6555a1abe4cb56297c14e",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "it": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "c00df9e3726e6ce66933e4ebaafec1d4d83ea56275f91803e0f58553461be676",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ja": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "434924547bd325018178b1541cb87980ff59746d6e8a38817315e19cc152febc",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nb": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "c9eb18a745a37bcc16b960fc5ae8ac801783f16e6bf5cc257a9200aba772ea66",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nl": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "96e748bf289bec2221593f8b6c8500474a95ffcebf30c8f6c319f3e9aa6e6b02",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pl": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "d0d04fdda4558a1db3bff3ecb79cbb296620f63924f6306612c4a70fa4b39fb3",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pt-BR": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "509016e80d7a3da47afa9c02239ed8ba342d6614f9e6ac094258c35efe8cbc35",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ru": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "040ad8102ef26599c9a5a4c41b672d1ca8e74cd07dc9f6176d71381fecf4ab59",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "sv": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "8f739d82412765014f79c4ea91636cbcb8638d512a12bf9c27be19b49268fc9b",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "tr": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "e7f9b629f67d7533cc885c68cd9cd10c10130d5613419cb9f14b02146e6ce80a",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "vi": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "6ae2b9b6fb733de8f6b718ee064473f7a64d8aa4d3babb36d9a2756a27f73dd6",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-CN": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "21cc26e21731d303e1784208722472aeb75b2c2e8ff9efe2c4bf8012cbfb2ac4",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-HK": {
           "sourceValueSha256": "545931b88ea75a3f9bdfe4b3acccb671ce0b4cca3e42f7efdd79dd2f818e7657",
           "sourceCommentSha256": "76645c7481a459e9275fc6a2496f71bc0df31ee4a709f7276de3f71f5e9424ef",
           "targetValueSha256": "e642581df698f8d2df7b3772c9a22b11a8121417a534f60dd0283da20153c38b",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "86ecf5347fb70ee2dff9fa6c3c553b7425e7292159d75870982f752d5af8660f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "a34b6ffdf7f6338c5933b03bb1f9c59cc06ba43b622d4f874eb0bb310cebedde",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "39b2f4a974177e782b63d9af6c6bd7f28b1460d6ae9718fa8908bb952be604d1",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "79a4514591f09cd4d0524a7f9559e8e8ab6498cf08793e438a9f985cd6ad57f3",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "f64288e3cba6a9a7600f27c45f267c90df1fda541a51add3fcfc44e0cd456922",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "8e84827043abdffa6d11e56736ba5fe386d8b684e8162e8505c0b06ee15a28f0",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "dad8d520c40ebda19afaffc3c19700ccafe7f520c80ff882991e6c878db492c1",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "72b227912e451b330877899d27e157a9868e35e81f0bb6d9e443f4cf7db3642f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "6981bfac674a3e449719735ee2d680177c69e0dcf4931237dd534c9cec05b060",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "54ae391bbedea60e7936fce669e75a29b7dfe670c58c3cd45404ff8e546992c4",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "7876e3cd03dcc31294782da116ac3945a1f13c7f99a1d38345b95e38e638eb39",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "7190aa07a2aff822e06adbabc31de6a7c154a3906b2ffcbdeac704807d5a8f12",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "d83b5c859524dd8e555b03ef43b21e73fabb0dde820f2dfc5893445ee2d54403",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "291e6b86a8c9dcdc45d37daa6cb2ec19d30b561a62b6e8ff183c67c2cd3df7b7",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "b42ea32884fcdb1c0c3b3d357e3288501e80c9bdd17cb82ab349dac67ef3e21d",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "5b3bbe0fb954b3ef02f6b944402c15114c073b15f586ed2bde6515588ba99d3e",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "15a6668bc6c096460dd4a5d02c2411377821873c385bac4bfc5f28f4e39b7249",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "e1f888c9b0e68670de7d23ef6d91a48e2d958737227e5414a78052b2f562bfef",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1132ae00cce6eec9447d64a1af0643fac38bb768cf45c995f42a59d4066be3a3",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "cefea7c3693afaac4e5bbb6c95ed141917f87755f0d38824d9ae127b1930f707",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "894dbd2b0ffcd17f563dce01b5003d58cb0336b6867bc33a238c2ccab5d6c78b",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        }
+      },
+      "uiFit": {
+        "de": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "86ecf5347fb70ee2dff9fa6c3c553b7425e7292159d75870982f752d5af8660f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "en": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "a34b6ffdf7f6338c5933b03bb1f9c59cc06ba43b622d4f874eb0bb310cebedde",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "bn-BD": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "39b2f4a974177e782b63d9af6c6bd7f28b1460d6ae9718fa8908bb952be604d1",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "cs": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "79a4514591f09cd4d0524a7f9559e8e8ab6498cf08793e438a9f985cd6ad57f3",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "da": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "f64288e3cba6a9a7600f27c45f267c90df1fda541a51add3fcfc44e0cd456922",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "es": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "8e84827043abdffa6d11e56736ba5fe386d8b684e8162e8505c0b06ee15a28f0",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "dad8d520c40ebda19afaffc3c19700ccafe7f520c80ff882991e6c878db492c1",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "72b227912e451b330877899d27e157a9868e35e81f0bb6d9e443f4cf7db3642f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "gsw-CH": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "6981bfac674a3e449719735ee2d680177c69e0dcf4931237dd534c9cec05b060",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "it": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "54ae391bbedea60e7936fce669e75a29b7dfe670c58c3cd45404ff8e546992c4",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ja": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "7876e3cd03dcc31294782da116ac3945a1f13c7f99a1d38345b95e38e638eb39",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nb": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "7190aa07a2aff822e06adbabc31de6a7c154a3906b2ffcbdeac704807d5a8f12",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "d83b5c859524dd8e555b03ef43b21e73fabb0dde820f2dfc5893445ee2d54403",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "291e6b86a8c9dcdc45d37daa6cb2ec19d30b561a62b6e8ff183c67c2cd3df7b7",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pt-BR": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "b42ea32884fcdb1c0c3b3d357e3288501e80c9bdd17cb82ab349dac67ef3e21d",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ru": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "5b3bbe0fb954b3ef02f6b944402c15114c073b15f586ed2bde6515588ba99d3e",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "sv": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "15a6668bc6c096460dd4a5d02c2411377821873c385bac4bfc5f28f4e39b7249",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "tr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "e1f888c9b0e68670de7d23ef6d91a48e2d958737227e5414a78052b2f562bfef",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "vi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1132ae00cce6eec9447d64a1af0643fac38bb768cf45c995f42a59d4066be3a3",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-CN": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "cefea7c3693afaac4e5bbb6c95ed141917f87755f0d38824d9ae127b1930f707",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-HK": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "894dbd2b0ffcd17f563dce01b5003d58cb0336b6867bc33a238c2ccab5d6c78b",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
         }
       }
     },
@@ -329087,121 +329683,419 @@
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "9ddea5533bf61861cdb600f0b2d6c08486bff988c4b32e8d790dce306ccebe72",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "cs": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "78a5fe4f6b87d9997bc2212139f9dfc8b3400065007be7b30f75b58ce645cf57",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "da": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "5108a0f0dc3622b288239ea17bc08694a7fd0c90649c3256ebf60528f7d53b85",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "en": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "1509f561f2416598629b886ad7d3c05a7e221e4e0675c84bbff4ee6d9e03913d",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "es": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "13e51a210f45ed1b09bd6dfc2f64b834b06ed81424464750ca47a9eceb7da7ea",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fi": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "106ee672ec96e76228be918b9ad1770a55cb2c9c20c78e7f4693ac8ddc0a59b7",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "fr": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "71dc74873e23107dfda512ec806b4cf4b98270b4937e2bcc4202b8a79359d6b5",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "gsw-CH": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "dbd004e04695a699a5b4158d3433f8df286cca48353db670ce2e05dc4b2b08b6",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "it": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "c5997e85ae513c0789bc816b1230a6b9d097d897b5485f4e88fd79b0d1ba7333",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ja": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "a3030bf8f16dc63c6b277564c68f78a3be5abe5f2907c51826dee7184ff793fd",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nb": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "c79c47a32b80ab594700674aba9a7a86f43606d961de86623ae46eaf0ff8e62b",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "nl": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "3caa6d88a258af55186bede2685969ba485945ea3b8c7832a04f742f8018146b",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pl": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "b6a0c0c469c5b62d3a45bc61f3a218d4ebcfb1d72579acc9f7a7a1a93aa603c0",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "pt-BR": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "aef7cd5b2081351dcd4b3767cc84f77797ee1a945e758e8013961c283304b947",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "ru": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "b4d30cae52894cf0a87c1c072b864768dace8b01d2d800a9e8741a6f1b50791e",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "sv": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "2ac5c9c2bb0c3a253048591d67d8ac6e4d3c430d9cd637b7964dd3ec1d8897e6",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "tr": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "c1fe2ecdff02ec1d91e53fbd137be03f8e833b142e69c5d63d15928aaf9bad62",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "vi": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "e91f26c04ae902feb4349638f8054d4465d77fe968d87aeacdcbb19193f83a31",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-CN": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "a3030bf8f16dc63c6b277564c68f78a3be5abe5f2907c51826dee7184ff793fd",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
         },
         "zh-HK": {
           "sourceValueSha256": "f6b2ff39f540eb8164628b1f1a838aea1eb673394253fa603d8935297eaaf36e",
           "sourceCommentSha256": "3d3588d7c35042b7ed0d641460c96f45fbe47c3325541f27fb91126039c0463e",
           "targetValueSha256": "dba44ed3f54f2012941c8fb13fc2a13c4960a6df4b89166424f17ae9d796521f",
-          "basis": "initial-snapshot-not-linguistically-approved"
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "7557180309adbd253b261d630d55f9fe0af571556ff1e6e35bcda21cc130cc03",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "bd888cfd743289ae642972e10fa2b79c4a83c4d3b267a44ca227f84846eb29a6",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "b872864f109992f9437aa0c8e6c5d100da03f0a73468c0e40f87209ea4b1c9fd",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "416da34f6fc23e940961f8caca3f180081e9634c4a569e7be61d01adf1166356",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "e920463b83a92235bd4b9202b870ad5ee93bda32577e086d14d084e2e486c40f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "e31aa22bbb8764ffe03fbc5e650edd72638e96db7f13912b15d908be3377ed82",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "72a476e4a409b47c596d1b3a35d7fd96108ac6f6338d5310e74c451f16692823",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "dbeb7fa0f1f52058f5c4c0e5da49b778fd411e2392bb343c0e02d3f3bcbd7ff7",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "8e30ea6fd1fa8e8b1323ed08545dec0afd0fc42a5cc4485d9953f79ab5e89e9f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "693ffa33c5000f6c2a5048c4f67e3ef6eec96278e7068c52558741f702636aea",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1a84e0b719ce4418f34575017e6b35ca0b623235ce411fac981fd33eef5678b9",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "b7ebf84d559c14616e7d2fc139d3dc3785d3fe589b277fa7a9b0c1d949cfd99b",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "9805e289b854e6319f5d2f68953be7ecf2916b28e47a93a0c2d66d2f15b7af64",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "90fa321a71e1aa2bd9e45119963d3914760bb67d7add64226945a69872e99e85",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "7c29376e7476e9ef0b072ff7d157ca1b13f4ab6b4c1d78d9bc6a4da9189f4680",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1c2f64ef5460e7ca527d61f235b930f4f446ad9cb0d7c2a7ae20685525321799",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1ed038cdb88a58da910d0a37b631dceef050e7c091ebb6b41f34e1c493d6364f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "bfb231a71ddf62787bd446ee191880e926dd22da3a86942f3b4e9f17d7068376",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "817e1d0fd3ef9107a31643f95ae2c197f905f3d26c92d3cb293e6011197de045",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "1a84e0b719ce4418f34575017e6b35ca0b623235ce411fac981fd33eef5678b9",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "c0ada216f67f9b4a2e111ee24569ec9d36bf3b760f8d3d3a35db31adcfd80de2",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        }
+      },
+      "uiFit": {
+        "de": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "7557180309adbd253b261d630d55f9fe0af571556ff1e6e35bcda21cc130cc03",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "en": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "bd888cfd743289ae642972e10fa2b79c4a83c4d3b267a44ca227f84846eb29a6",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "bn-BD": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "b872864f109992f9437aa0c8e6c5d100da03f0a73468c0e40f87209ea4b1c9fd",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "cs": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "416da34f6fc23e940961f8caca3f180081e9634c4a569e7be61d01adf1166356",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "da": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "e920463b83a92235bd4b9202b870ad5ee93bda32577e086d14d084e2e486c40f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "es": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "e31aa22bbb8764ffe03fbc5e650edd72638e96db7f13912b15d908be3377ed82",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "72a476e4a409b47c596d1b3a35d7fd96108ac6f6338d5310e74c451f16692823",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "dbeb7fa0f1f52058f5c4c0e5da49b778fd411e2392bb343c0e02d3f3bcbd7ff7",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "gsw-CH": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "8e30ea6fd1fa8e8b1323ed08545dec0afd0fc42a5cc4485d9953f79ab5e89e9f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "it": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "693ffa33c5000f6c2a5048c4f67e3ef6eec96278e7068c52558741f702636aea",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ja": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1a84e0b719ce4418f34575017e6b35ca0b623235ce411fac981fd33eef5678b9",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nb": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "b7ebf84d559c14616e7d2fc139d3dc3785d3fe589b277fa7a9b0c1d949cfd99b",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "9805e289b854e6319f5d2f68953be7ecf2916b28e47a93a0c2d66d2f15b7af64",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "90fa321a71e1aa2bd9e45119963d3914760bb67d7add64226945a69872e99e85",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pt-BR": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "7c29376e7476e9ef0b072ff7d157ca1b13f4ab6b4c1d78d9bc6a4da9189f4680",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ru": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1c2f64ef5460e7ca527d61f235b930f4f446ad9cb0d7c2a7ae20685525321799",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "sv": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1ed038cdb88a58da910d0a37b631dceef050e7c091ebb6b41f34e1c493d6364f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "tr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "bfb231a71ddf62787bd446ee191880e926dd22da3a86942f3b4e9f17d7068376",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "vi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "817e1d0fd3ef9107a31643f95ae2c197f905f3d26c92d3cb293e6011197de045",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-CN": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "1a84e0b719ce4418f34575017e6b35ca0b623235ce411fac981fd33eef5678b9",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-HK": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "c0ada216f67f9b4a2e111ee24569ec9d36bf3b760f8d3d3a35db31adcfd80de2",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
         }
       }
     },
@@ -393133,6 +394027,514 @@
           "sourceCommentSha256": "72602d8792e02d9fb915ce6b2725cb2249e5589402c58b09604ab2704ba91e34",
           "targetValueSha256": "6c05b2232f9d3b590b07baa7b03342ea5cdf2069a9f721ca7be0e216783f2347",
           "basis": "explicit-translation-review: Festgelegter Variantenname; identische Schreibweise in allen Sprachen gemäß KeepOriginal geprüft. KI-gestützte Prüfung auf ausdrücklichen Freigabeauftrag vom 29.10.2026; keine Muttersprachler-Zertifizierung oder neue Screenshot-Freigabe."
+        }
+      }
+    },
+    "Project.Close.FailedDiscMessage": {
+      "source": {
+        "value": "Das Projekt kann gelöscht oder gespeichert und später fortgesetzt werden.",
+        "comment": "Context: Kurzer Auswahldialog beim Schließen eines fehlgeschlagenen MP3-CD- oder Audio-CD-Imports. Meaning: Löschen entfernt den verwalteten Projektordner; Speichern erhält Metadaten und vollständig verarbeitete CDs und ermöglicht späteres Fortsetzen an der CD-Grenze. Externe Originalmedien bleiben unverändert. Placeholders: keine. Text darf umbrechen."
+      },
+      "translations": {
+        "en": {
+          "value": "You can delete the project or save it and resume it later.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "bn-BD": {
+          "value": "প্রজেক্টটি মুছে ফেলতে পারো, অথবা সংরক্ষণ করে পরে আবার চালিয়ে যেতে পারো।",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "cs": {
+          "value": "Projekt můžeš odstranit nebo uložit a později v něm pokračovat.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "da": {
+          "value": "Du kan slette projektet eller gemme det og fortsætte senere.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "es": {
+          "value": "Puedes eliminar el proyecto o guardarlo para retomarlo más tarde.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "fi": {
+          "value": "Voit poistaa projektin tai tallentaa sen ja jatkaa myöhemmin.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "fr": {
+          "value": "Tu peux supprimer le projet ou l’enregistrer pour le reprendre plus tard.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "gsw-CH": {
+          "value": "Du chasch ds Projekt lösche oder spichere u spöter wytermache.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "it": {
+          "value": "Puoi eliminare il progetto oppure salvarlo e riprenderlo più tardi.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "ja": {
+          "value": "プロジェクトを削除するか、保存して後で再開できます。",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "nb": {
+          "value": "Du kan slette prosjektet eller lagre det og fortsette senere.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "nl": {
+          "value": "Je kunt het project verwijderen of opslaan en later hervatten.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "pl": {
+          "value": "Możesz usunąć projekt lub zapisać go i wznowić później.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "pt-BR": {
+          "value": "Você pode excluir o projeto ou salvá-lo e retomá-lo mais tarde.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "ru": {
+          "value": "Проект можно удалить или сохранить и продолжить позже.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "sv": {
+          "value": "Du kan ta bort projektet eller spara det och fortsätta senare.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "tr": {
+          "value": "Projeyi silebilir veya kaydedip daha sonra devam edebilirsin.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "vi": {
+          "value": "Bạn có thể xóa dự án hoặc lưu lại để tiếp tục sau.",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "zh-CN": {
+          "value": "你可以删除项目，或保存项目以便稍后继续。",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        },
+        "zh-HK": {
+          "value": "你可以刪除專案，或儲存專案以便稍後繼續。",
+          "comment": "SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2"
+        }
+      },
+      "reviews": {
+        "de": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "72faec635c8ac4575780ec4b74966ecdec29b74d60f0b4b3f1b10ba5389346fb",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "en": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "498f7b076b333da841212df3f66e61c7c0f8e25656f667da8db86e1a3c9a896b",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "bn-BD": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "ee99c08137aa253409b79c964e438c134c5a66283da6d959e902081cdf575e9f",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "cs": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "89860f4ccb0693e9c7b9ff71597f8e7d6733cfd5029d584fc2a994286a182d37",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "da": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "54bc122f09ef0774630a71197d97d4326b1761867d90e648960bfe355465f144",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "es": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "5a9ab0627d6b629a2d94e277ec70671a47863e72bcfff70f43362608dde9f589",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "f721990b0e78fe6ee103e66b6027df9f61e424644007d0ef38f529beb8037c1c",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "fr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "f82f03a7fce7dcedbff40aea487b5fbac4a0e3b6d96da208f9c39c7593e8c944",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "gsw-CH": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "9b8802438ffc741cfb797d385dca977446b4102ca31096724aad60d7d15b4dee",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "it": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "ac3fc3fa9fd11fe96417edac1a5f4e8338b062294783e90338b47c93e77c7f26",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ja": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "f4c1292c2a04b0c1c0a1f9b16799bbc3bf2a1017e228f2553c511c050aacaad4",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nb": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "66088c9c205b92ccb60b9c7da89bd0ebdbded45be7d0d946daf8cabeea98aeed",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "nl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "139ab28ae3b39f55cbed9a7d5bb1883ad8680979cbcc0b61954328a1588793a1",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pl": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "4bc147faf37eb53dca156e691acd69812711a091d6a4b87200ab376a3679d63b",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "pt-BR": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "a59fa3b8afc6a2c57dbfe88849e42844ea31bc80c4cf7536efe138e8b3b762aa",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "ru": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "0d7ed0b27a3742ea021ac898f2033bb050309a864611dc67e335570934856aa9",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "sv": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "d0ee1cb825aa40db1b64073b35ad2aa671caecbdc32543ab1ad1b2c0f05bfb83",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "tr": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "0df43d97a8276ebd80cc412d178882bc184db14b959ce567254aefff1526e715",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "vi": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "d05a4a2a8d49b2f5046ecf6c4afd22057881a6532fe70931f970e94cc17af9c1",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-CN": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "29ce5c0e500e71807ceb9b5c750609fa1d6d0e74f7e44fdb11fcb2bf2cb10d41",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        },
+        "zh-HK": {
+          "status": "ok",
+          "date": "2026-10-31",
+          "fingerprint": "9438bc1f96f954543d584824902a9b47acb07ab8b87a609d09434f65d6727e80",
+          "note": "Owner-authorized AI semantic review: clear save/resume versus managed-project deletion in failed CD import dialog; terminology and informal register checked. No independent native-speaker certification."
+        }
+      },
+      "translationBase": {
+        "en": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "de28288958c77ff0c5666cc419059f462f4ab591149ad9d8597338639ef6fac4",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "bn-BD": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "ca16411625632188580239b817388b47773f2ae745e651943840ddc12ee63ab0",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "cs": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "60b5becdd7416de993e2ca1ccc976a808e663f8dc0fee36c11f30027f7d7219c",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "da": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "a9e3c5e1e1d8b24f947b0e28963f4424dcb7a035dcd1df12849b70e159d5e331",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "es": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "e8d2c0e292ba32d4daab50fd4535462c6ea4b8a5518a0583578468d3f23716fb",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "fi": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "0d51775a6439f775d512fb0faa05d5b2f0cda3197e94c757e950916e34d548ba",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "fr": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "d9e249903670b794820b4bf728a1a697eed027af792415e5196ae3a580bde3c4",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "gsw-CH": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "7a70f91094f4c3317b415eb3215735ad7e23a7fe8dad65c862d51d4973195974",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "it": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "cfc904c4d3c3f734cef8a758af2e1e7a226563c31c121c313244d6635abb585f",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "ja": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "28fba83cfeae15bd6b78801c2bb7d284c4f226010811995d61e1602606f5c3fe",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "nb": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "4f115d1243695592b429623cde811a9f377a12a896fffe18e457a5412d660775",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "nl": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "0181d74e0af4bffcbb6c2e8bee51c44b87a689831c6c62ead2bcb6a1906b53cb",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "pl": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "3ffedc46520ef7f8f0abd4f4a7ebc5802271aca802b303b3b26819b834f18cd2",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "pt-BR": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "f537106df10e0613c628f30441aab88b7f231379a8443e16b87ce5b353bb4496",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "ru": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "d567e6bcb28e55e9c411e3d1770c8f816937e06d4a8063f25ad6f62fefb4e0e1",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "sv": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "b4bf38da01b5f997b41c6264079069e3898dc5e38a7240ec7ec9ae33db622cbc",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "tr": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "ec5b20fa64c1be115cb86ebf15f325e7a1b15a66a4e199fe06358f6761c06488",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "vi": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "e374af8e2375d713a7a1416b15e8c478375c515dc1715ad3ddd0f6014aa6b008",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "zh-CN": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "d75ad06c023773d5e0a9223a5487614f56a82ced45a2fc9712d89107c08e7b2c",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        },
+        "zh-HK": {
+          "sourceValueSha256": "17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2",
+          "sourceCommentSha256": "e2408b64ed0b2720247c3487ab7189ebc22f863a596e94105f0d0ceaf5ccfc1a",
+          "targetValueSha256": "38ff224bcc6c65f48870457edc1d9a7b065862540886cd299ada385eeeb4e5a3",
+          "basis": "explicit-translation-review: Reviewed for failed CD close dialog under explicit owner authorization; source meaning and target terminology checked."
+        }
+      },
+      "uiFit": {
+        "de": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "72faec635c8ac4575780ec4b74966ecdec29b74d60f0b4b3f1b10ba5389346fb",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "en": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "498f7b076b333da841212df3f66e61c7c0f8e25656f667da8db86e1a3c9a896b",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "bn-BD": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "ee99c08137aa253409b79c964e438c134c5a66283da6d959e902081cdf575e9f",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "cs": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "89860f4ccb0693e9c7b9ff71597f8e7d6733cfd5029d584fc2a994286a182d37",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "da": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "54bc122f09ef0774630a71197d97d4326b1761867d90e648960bfe355465f144",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "es": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "5a9ab0627d6b629a2d94e277ec70671a47863e72bcfff70f43362608dde9f589",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "f721990b0e78fe6ee103e66b6027df9f61e424644007d0ef38f529beb8037c1c",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "fr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "f82f03a7fce7dcedbff40aea487b5fbac4a0e3b6d96da208f9c39c7593e8c944",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "gsw-CH": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "9b8802438ffc741cfb797d385dca977446b4102ca31096724aad60d7d15b4dee",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "it": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "ac3fc3fa9fd11fe96417edac1a5f4e8338b062294783e90338b47c93e77c7f26",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ja": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "f4c1292c2a04b0c1c0a1f9b16799bbc3bf2a1017e228f2553c511c050aacaad4",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nb": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "66088c9c205b92ccb60b9c7da89bd0ebdbded45be7d0d946daf8cabeea98aeed",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "nl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "139ab28ae3b39f55cbed9a7d5bb1883ad8680979cbcc0b61954328a1588793a1",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pl": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "4bc147faf37eb53dca156e691acd69812711a091d6a4b87200ab376a3679d63b",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "pt-BR": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "a59fa3b8afc6a2c57dbfe88849e42844ea31bc80c4cf7536efe138e8b3b762aa",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "ru": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "0d7ed0b27a3742ea021ac898f2033bb050309a864611dc67e335570934856aa9",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "sv": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "d0ee1cb825aa40db1b64073b35ad2aa671caecbdc32543ab1ad1b2c0f05bfb83",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "tr": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "0df43d97a8276ebd80cc412d178882bc184db14b959ce567254aefff1526e715",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "vi": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "d05a4a2a8d49b2f5046ecf6c4afd22057881a6532fe70931f970e94cc17af9c1",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-CN": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "29ce5c0e500e71807ceb9b5c750609fa1d6d0e74f7e44fdb11fcb2bf2cb10d41",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
+        },
+        "zh-HK": {
+          "surface": "Failed MP3/audio CD import > Close project dialog",
+          "testedWindow": "480 x 230 DIP (minimum size)",
+          "status": "verified",
+          "approvedFingerprint": "9438bc1f96f954543d584824902a9b47acb07ab8b87a609d09434f65d6727e80",
+          "verifiedDate": "2026-10-31",
+          "note": "Rendered actual WPF dialog in all 21 registered languages; message wrapping and both button widths checked by runtime test, rendered contact sheet inspected. No independent native-language certification."
         }
       }
     }

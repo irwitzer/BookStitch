@@ -6,6 +6,7 @@ using Xunit;
 
 namespace BookStitch.Tests.Ui;
 
+[Collection(WpfRuntimeCollection.Name)]
 public sealed class WpfPreparedLifecycleRuntimeTests
 {
     [Fact]

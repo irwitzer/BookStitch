@@ -6,6 +6,11 @@ namespace BookStitch.Services;
 
 public sealed class FfprobeRunnerService
 {
+    private readonly TimeProvider _timeProvider;
+
+    public FfprobeRunnerService(TimeProvider? timeProvider = null) =>
+        _timeProvider = timeProvider ?? TimeProvider.System;
+
     private const int CapturedOutputLimit = 40000;
     private const int MaximumJsonOutput = 16 * 1024 * 1024;
 
@@ -28,9 +33,10 @@ public sealed class FfprobeRunnerService
         var stderr = new StringBuilder();
         var stdout = new StringBuilder();
         Exception? outputError = null;
-        using var timeoutSource = new CancellationTokenSource();
-        var stderrClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var stdoutClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var timeoutSource = new CancellationTokenSource(Timeout.InfiniteTimeSpan, _timeProvider);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutSource.Token);
+        Task stdoutClosed = Task.CompletedTask;
+        Task stderrClosed = Task.CompletedTask;
 
         process.StartInfo = new ProcessStartInfo
         {
@@ -60,8 +66,9 @@ public sealed class FfprobeRunnerService
                             throw new InvalidDataException("FFprobe metadata output exceeds the supported size; packet scans require streaming.");
                         stdout.AppendLine(line);
                     }
-                }, stdoutLineHandler is null ? MaximumJsonOutput : 64 * 1024).ConfigureAwait(false);
+                }, stdoutLineHandler is null ? MaximumJsonOutput : 64 * 1024, linked.Token).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
             catch (Exception ex)
             {
                 Interlocked.CompareExchange(ref outputError, ex, null);
@@ -71,19 +78,26 @@ public sealed class FfprobeRunnerService
                     Trace.TraceWarning("FFprobe stop after output failure failed: {0}", cleanupError.Message);
                 }
             }
-            finally { stdoutClosed.TrySetResult(true); }
         }
 
-        process.ErrorDataReceived += (_, e) =>
+        async Task ReadErrorAsync()
         {
-            if (e.Data is null)
+            try
             {
-                stderrClosed.TrySetResult(true);
-                return;
+                while (await process.StandardError.ReadLineAsync(linked.Token).ConfigureAwait(false) is { } line)
+                    AppendBounded(stderr, line);
             }
-
-            AppendBounded(stderr, e.Data);
-        };
+            catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                Interlocked.CompareExchange(ref outputError, ex, null);
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                catch (Exception cleanupError) when (cleanupError is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    Trace.TraceWarning("FFprobe stop after stderr failure failed: {0}", cleanupError.Message);
+                }
+            }
+        }
 
         var performanceScope =
             performanceContext?.Start("ffprobe", "audio.probe") ?? default;
@@ -99,23 +113,40 @@ public sealed class FfprobeRunnerService
                     Trace.TraceWarning("FFprobe background priority could not be applied: {0}", error.Message);
                 }
             }
-            _ = ReadOutputAsync();
-            process.BeginErrorReadLine();
-
+            // Observe the readers themselves, rather than queued DataReceived EOF
+            // notifications. Process exit does not prove that both pipes drained.
             timeoutSource.CancelAfter(timeout);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutSource.Token);
+            stdoutClosed = ReadOutputAsync();
+            stderrClosed = ReadErrorAsync();
 
             try
             {
                 await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+
+                await ExternalProcessCleanup.DrainStreamsBoundedAsync(
+                        stdoutClosed,
+                        stderrClosed,
+                        ExternalProcessCleanup.StreamDrainTimeout)
+                    .ConfigureAwait(false);
+
+                linked.Token.ThrowIfCancellationRequested();
+                if (!stdoutClosed.IsCompletedSuccessfully || !stderrClosed.IsCompletedSuccessfully)
+                    throw new IOException("FFprobe output streams did not finish; partial output cannot be accepted.");
+                if (outputError is not null) throw new InvalidDataException("FFprobe output could not be processed.", outputError);
+                performanceScope.Complete(process.ExitCode);
+                return new FfprobeRunResult(
+                    process.ExitCode,
+                    stdout.ToString(),
+                    stderr.ToString(),
+                    TimedOut: false);
             }
             catch (OperationCanceledException) when (!token.IsCancellationRequested && timeoutSource.IsCancellationRequested)
             {
                 performanceScope.Cancel();
                 await ExternalProcessCleanup.StopAfterCancellationAsync(
                         process,
-                        stdoutClosed.Task,
-                        stderrClosed.Task)
+                        stdoutClosed,
+                        stderrClosed)
                     .ConfigureAwait(false);
                 return new FfprobeRunResult(
                     ExitCode: null,
@@ -128,8 +159,8 @@ public sealed class FfprobeRunnerService
                 performanceScope.Cancel();
                 await ExternalProcessCleanup.StopAfterCancellationAsync(
                         process,
-                        stdoutClosed.Task,
-                        stderrClosed.Task)
+                        stdoutClosed,
+                        stderrClosed)
                     .ConfigureAwait(false);
                 return new FfprobeRunResult(
                     ExitCode: null,
@@ -139,29 +170,14 @@ public sealed class FfprobeRunnerService
                     Canceled: true);
             }
 
-            await ExternalProcessCleanup.DrainStreamsBoundedAsync(
-                    stdoutClosed.Task,
-                    stderrClosed.Task,
-                    ExternalProcessCleanup.StreamDrainTimeout)
-                .ConfigureAwait(false);
-
-            if (!stdoutClosed.Task.IsCompletedSuccessfully || !stderrClosed.Task.IsCompletedSuccessfully)
-                throw new IOException("FFprobe output streams did not finish; partial output cannot be accepted.");
-            if (outputError is not null) throw new InvalidDataException("FFprobe output could not be processed.", outputError);
-            performanceScope.Complete(process.ExitCode);
-            return new FfprobeRunResult(
-                process.ExitCode,
-                stdout.ToString(),
-                stderr.ToString(),
-                TimedOut: false);
         }
         catch (OperationCanceledException)
         {
             performanceScope.Cancel();
             await ExternalProcessCleanup.StopAfterCancellationAsync(
                     process,
-                    stdoutClosed.Task,
-                    stderrClosed.Task)
+                    stdoutClosed,
+                    stderrClosed)
                 .ConfigureAwait(false);
             throw;
         }
@@ -172,12 +188,13 @@ public sealed class FfprobeRunnerService
         }
     }
 
-    internal static async Task ReadOutputLinesAsync(TextReader reader, Action<string> consume, int maximumLineLength)
+    internal static async Task ReadOutputLinesAsync(TextReader reader, Action<string> consume, int maximumLineLength,
+        CancellationToken cancellationToken = default)
     {
         var buffer = new char[4096];
         var line = new StringBuilder();
         int count;
-        while ((count = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) != 0)
+        while ((count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) != 0)
         {
             var start = 0;
             for (var index = 0; index < count; index++)

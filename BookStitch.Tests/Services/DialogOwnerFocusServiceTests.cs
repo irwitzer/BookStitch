@@ -1,11 +1,12 @@
+using BookStitch.Tests.TestHelpers;
 using BookStitch.Services;
-using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Threading;
 using Xunit;
 
 namespace BookStitch.Tests.Services;
 
+[Collection(WpfRuntimeCollection.Name)]
 public sealed class DialogOwnerFocusServiceTests
 {
     [Fact]
@@ -68,11 +69,15 @@ public sealed class DialogOwnerFocusServiceTests
             var activations = 0;
             var service = new DialogOwnerFocusService(_ => activations++);
 
-            service.RestoreOwnerAfterModalDialog(null);
-            service.RestoreOwnerAfterModalDialog(new Window());
-            PumpDispatcher();
-
-            Assert.Equal(0, activations);
+            var invisibleOwner = new Window();
+            try
+            {
+                service.RestoreOwnerAfterModalDialog(null);
+                service.RestoreOwnerAfterModalDialog(invisibleOwner);
+                PumpDispatcher();
+                Assert.Equal(0, activations);
+            }
+            finally { invisibleOwner.Close(); }
         });
     }
 
@@ -153,38 +158,9 @@ public sealed class DialogOwnerFocusServiceTests
         Dispatcher.PushFrame(frame);
     }
 
-    private static void RunOnStaThread(Action action)
-    {
-        Exception? capturedException = null;
+    private static void RunOnStaThread(Action action,
+        [System.Runtime.CompilerServices.CallerMemberName] string testName = "") =>
+        WpfTestDispatcher.Run(action, 20, testName);
 
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception exception)
-            {
-                capturedException = exception;
-            }
-            finally
-            {
-                Dispatcher.CurrentDispatcher.InvokeShutdown();
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "BookStitch dialog owner focus test"
-        };
 
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-
-        Assert.True(
-            thread.Join(TimeSpan.FromSeconds(20)),
-            "The WPF dialog owner focus test thread did not finish within 20 seconds.");
-
-        if (capturedException is not null)
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-    }
 }

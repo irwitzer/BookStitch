@@ -372,9 +372,12 @@ public sealed class PreparedTrackLifecycleSessionTests
             File.WriteAllText(target, "prepared");
             session.Complete(index, fixture.Track, fixture.Source, target, fixture.Preset, CancellationToken.None);
         }
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(expectedSlots, peak);
-        finish.SetResult();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(expectedSlots, peak);
+        }
+        finally { finish.TrySetResult(); }
         await session.DrainAsync();
         Assert.Equal(12, calls);
         Assert.InRange(peak, 1, expectedSlots);

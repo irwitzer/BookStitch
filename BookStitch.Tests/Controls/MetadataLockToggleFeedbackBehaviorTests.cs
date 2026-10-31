@@ -1,6 +1,6 @@
-﻿using BookStitch.Controls;
+﻿using BookStitch.Tests.TestHelpers;
+using BookStitch.Controls;
 using System.ComponentModel;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls.Primitives;
@@ -10,6 +10,7 @@ using Xunit;
 
 namespace BookStitch.Tests.Controls;
 
+[Collection(WpfRuntimeCollection.Name)]
 public sealed class MetadataLockToggleFeedbackBehaviorTests
 {
     [Fact]
@@ -135,35 +136,9 @@ public sealed class MetadataLockToggleFeedbackBehaviorTests
         Dispatcher.PushFrame(frame);
     }
 
-    private static void RunOnStaThread(Action action)
-    {
-        Exception? capturedException = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception exception)
-            {
-                capturedException = exception;
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "Metadata lock feedback behavior test"
-        };
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-
-        Assert.True(
-            thread.Join(TimeSpan.FromSeconds(5)),
-            "The metadata lock feedback STA thread did not finish within five seconds.");
-
-        if (capturedException is not null)
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-    }
+    private static void RunOnStaThread(Action action,
+        [System.Runtime.CompilerServices.CallerMemberName] string testName = "") =>
+        WpfTestDispatcher.Run(action, 5, testName);
 
     private sealed class TestToggleButton : ToggleButton
     {

@@ -23,7 +23,7 @@ public sealed class PipelineTransitionFeedbackWiringTests
     [InlineData("private async Task StopPausedPresetReconversionAsync()", "RollbackPresetReconversion")]
     [InlineData("private async Task StopPausedProjectExtensionAsync(", "stopAction?.Invoke()")]
     [InlineData("private async Task StopAndSaveDiscProjectAsync()", "RequestActiveOperationCancellation()")]
-    [InlineData("private async Task<bool> DeleteNewProjectAsync(", "RequestActiveOperationCancellation()")]
+    [InlineData("private async Task<bool> DeleteCurrentProjectAsync(", "RequestActiveOperationCancellation()")]
     public void Existing_stop_owners_publish_and_render_before_cleanup_and_release_even_on_error(string signature, string cleanup)
     {
         var method = SourceContract.ExtractMember(Source, signature);
