@@ -1,5 +1,6 @@
 using BookStitch.Dialog;
 using BookStitch.Services;
+using BookStitch.Tests.TestHelpers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -233,6 +234,9 @@ public sealed partial class WpfDialogRuntimeTests
                     {
                         warning.DiscCountInput.Input.Text = "";
                         warning.DiscCountInput.Input.GetBindingExpression(TextBox.TextProperty)!.UpdateSource();
+                        // Enter without modifiers must not depend on desktop input during the suite.
+                        using var keyboardState = new ThreadKeyboardStateScope();
+                        Assert.Equal(ModifierKeys.None, Keyboard.Modifiers);
                         RaiseKey(warning.DiscCountInput.Input, source, Key.Enter, Keyboard.PreviewKeyDownEvent);
                         Assert.True(warning.IsVisible);
                         Assert.Equal(Visibility.Visible, warning.ErrorText.Visibility);

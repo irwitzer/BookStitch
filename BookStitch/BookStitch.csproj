@@ -68,6 +68,11 @@
     </Page>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Windows 10 reads this sidecar next to the apphost, outside WPF resources. -->
+    <None Update="BookStitch.VisualElementsManifest.xml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="$(AssemblyName).VisualElementsManifest.xml" />
+    <None Update="Assets/Icons/BookStitch-OpenBook-Startkachel/BookStitch-OpenBook-Tile-150.png;Assets/Icons/BookStitch-OpenBook-Startkachel/BookStitch-OpenBook-Tile-70.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
   <Target Name="CopyTagLibSharpRuntimeAssembly" AfterTargets="Build;Publish">
     <ItemGroup>
       <TagLibSharpRuntimeAssembly Remove="@(TagLibSharpRuntimeAssembly)" />

@@ -1,4 +1,4 @@
-﻿; BookStitch 2.0 public release - classic Windows installer
+; BookStitch 2.3.1 public release - classic Windows installer
 ; Target compiler: Inno Setup 7.1.0 (x64).
 ; Keeps the existing AppId for upgrades from version 1.x.
 ; The command line supplies MyAppVersion, MyVersionInfoVersion,
@@ -190,14 +190,28 @@ finnish.UninstallProjectsDeleteFailed=Projektikansiota ei voitu poistaa kokonaan
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Required sidecar and tile artwork: fail compilation if publish is incomplete.
+Source: "{#SourceDir}\BookStitch.VisualElementsManifest.xml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\Assets\Icons\BookStitch-OpenBook-Startkachel\BookStitch-OpenBook-Tile-150.png"; DestDir: "{app}\Assets\Icons\BookStitch-OpenBook-Startkachel"; Flags: ignoreversion
+Source: "{#SourceDir}\Assets\Icons\BookStitch-OpenBook-Startkachel\BookStitch-OpenBook-Tile-70.png"; DestDir: "{app}\Assets\Icons\BookStitch-OpenBook-Startkachel"; Flags: ignoreversion
+; Explicit mandatory entry: wildcard enumeration skips hidden runtime files.
+Source: "{#SourceDir}\TagLibSharp.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\*"; Excludes: "\TagLibSharp.dll,\BookStitch.VisualElementsManifest.xml,\Assets\Icons\BookStitch-OpenBook-Startkachel\BookStitch-OpenBook-Tile-150.png,\Assets\Icons\BookStitch-OpenBook-Startkachel\BookStitch-OpenBook-Tile-70.png"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+; Recreate the application shortcut on updates so Windows reparses tile assets.
+Type: files; Name: "{group}\BookStitch.lnk"
+
 [Icons]
 Name: "{group}\BookStitch"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\BookStitch"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[UninstallDelete]
+Type: dirifempty; Name: "{app}\de"
+Type: dirifempty; Name: "{app}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,BookStitch}"; Flags: nowait postinstall skipifsilent

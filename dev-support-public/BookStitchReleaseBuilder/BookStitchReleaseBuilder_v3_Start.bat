@@ -10,9 +10,9 @@ if not errorlevel 1 (
 set "RESULT=%ERRORLEVEL%"
 echo.
 if not "%RESULT%"=="0" (
-  echo BUILD FEHLGESCHLAGEN. Exitcode: %RESULT%
+  echo BUILD FAILED. Exitcode: %RESULT%
 ) else (
-  echo BUILD ABGESCHLOSSEN.
+  echo BUILD COMPLETED.
 )
 pause
 exit /b %RESULT%

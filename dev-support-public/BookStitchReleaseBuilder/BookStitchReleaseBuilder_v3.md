@@ -1,52 +1,26 @@
-# BookStitch – Windows Release Builder
+# BookStitch – Windows Release Builder v3
 
-This tool creates a **self-contained Windows x64 portable folder**, a **portable ZIP**, a **classic Inno Setup 7 installer EXE**, and **SHA-256 checksums** from a local checkout of the BookStitch repository. It does not create Microsoft Store packages or upload releases.
+This builder creates a self-contained Windows x64 portable folder, portable ZIP, Inno Setup installer EXE and SHA-256 checksums. It does not publish to GitHub.
 
-## Quick start
+## Start
 
-1. On Windows, keep the launcher, PowerShell script, and `.iss` file together in this directory. The supplied installer script is `BookStitch-Installer-2.0-Public-Inno-7.1.0.iss`.
-2. Double-click the supplied `BookStitchReleaseBuilder_v3_Start.bat`. It prefers **PowerShell 7** and falls back to **Windows PowerShell 5.1**; both use STA mode for Windows file/folder dialogs.
-3. The builder checks for **Inno Setup 7.x** and offers to install it via **WinGet** if absent (approval and administrator access may be needed). You must also have the **.NET 10 SDK** installed; the builder checks for it but does not install it automatically.
-4. If exactly one `.iss` file is alongside the launcher, it is selected automatically. If there are none or several, choose the script in the Windows file picker. The builder runs a **basic Inno preprocessor check**; complete Inno compilation happens later.
-5. Choose the **repository root** (containing `BookStitch/BookStitch.csproj`) and an **output directory** using Windows folder pickers. The output directory must be outside the repository.
-6. At the suffix prompt, **Enter means no suffix**; `FINAL` also means no suffix. Other values, such as `RC1`, are appended to the release filenames. Enter the **installer EXE name** and the **portable ZIP name** separately; **Enter accepts the displayed default** for each.
-7. Review the selected paths and filenames, then confirm the build. Existing outputs are not overwritten.
+1. Place the PowerShell script, BAT launcher and the chosen `.iss` file in the same folder. Start `BookStitchReleaseBuilder_v3_Start.bat`.
+2. The builder checks for Inno Setup **7.1.0 or newer** and uses WinGet (`JRSoftware.InnoSetup.7`) to install or upgrade it when required, before the build begins.
+3. If saved paths exist, choose whether to reuse them. Otherwise, select the ISS file (automatically selected if exactly one exists), repository root and output root. The .NET 10 SDK is also required.
+4. There are **no suffix prompts, filename prompts or final build confirmation**. After selecting or confirming the paths the build begins.
 
-## Reusing settings
+## Output layout
 
-The builder saves its settings next to the scripts in **`builder-settings.json`**: ISS path, repository, destination, suffix, setup filename, and ZIP filename. On subsequent starts it displays those values. Answering **Yes** reuses them, without asking again for either filename or the suffix; you still confirm the build itself. Answering **No** reopens the selection workflow. Older settings without filenames require one-time entry.
+Each run creates a new folder in the chosen output root, named `yyyy.MM.dd--HH.mm.ss_BookStitch`, for example:
 
-Use `BookStitch-Setup-{Tag}.exe` and `BookStitch-Portable-{Tag}.zip` as filename templates. `{Tag}` is resolved on every run from the current project version plus the optional suffix, including when saved settings are reused. `{Candidate}` inserts the entered label (empty for empty input; `FINAL` for FINAL); `{Tag}` omits the suffix for empty input or FINAL. Templates are saved as entered, preserving custom names. Former standard filenames containing a literal version are automatically treated as `{Tag}` templates; other literal custom names stay unchanged.
-
-The public tool is supplied without a preconfigured `builder-settings.json`. A local settings file is created when settings are saved. Keep generated release artifacts outside the source repository.
-
-## Outputs and safety
-
-Typical filenames for version `<version>` with suffix `RC1`:
-
-- `BookStitch-<version>-RC1/` – complete portable publish folder.
-- `BookStitch-Portable-<version>-RC1.zip` – ZIP containing that top-level folder.
-- `BookStitch-Setup-<version>-RC1.exe` – classic installer.
-- `BookStitch-<version>-RC1-SHA256SUMS.txt` – hashes of the ZIP and installer.
-
-The program version is read from `BookStitch/BookStitch.csproj`. The builder publishes the application once and packages both formats from that same output. It does **not** edit source code, delete existing output folders, overwrite existing artifacts, or publish to GitHub. If the selected output names already exist, choose a different destination or suffix/name instead.
-
-The portable app includes its required .NET runtime, but **FFmpeg/FFprobe are not bundled by default**. A successful compile is not a substitute for installation, upgrade, uninstall, portable-startup, or security testing; review any NuGet dependency advisories before distribution.
-
-## Requirements
-
-- Windows x64; .NET **10 SDK**.
-- Inno Setup **7.x** (installation via WinGet can be offered by the builder).
-- Network connectivity if required build dependencies have not been restored already.
-
-## Run directly from PowerShell
-
-From this directory, instead of double-clicking the BAT:
-
-```powershell
-pwsh.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\BookStitchReleaseBuilder_v3.ps1
-# Windows PowerShell 5.1 alternative:
-powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File .\BookStitchReleaseBuilder_v3.ps1
+```
+2026.11.01--09.12.35_BookStitch/
+    BookStitch-2.3.0/                  (portable publish folder)
+    BookStitch-Portable-2.3.0.zip
+    BookStitch-Setup-2.3.0.exe
+    BookStitch-2.3.0-SHA256SUMS.txt
 ```
 
-For manual build details and Store/WinGet distinctions, see [`docs-public/release-build-notes.md`](../../docs-public/release-build-notes.md).
+The version is read from `BookStitch/BookStitch.csproj`. The new folder must not already exist, and the output root must be outside the source repository. The builder refuses to overwrite existing outputs. `builder-settings.json` retains only the ISS, repository and output-root paths; existing settings with older suffix/name fields are still accepted, but those fields are ignored.
+
+The original publish, ZIP, installer and hash operations are preserved. Windows execution was not available for an end-to-end test here.
