@@ -122,11 +122,6 @@ public sealed class ProjectMetadataState : INotifyPropertyChanged
         set => _canonicalMetadata.SetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate, value, MetadataOrigin.User);
     }
 
-    public int? Year
-    {
-        get => _canonicalMetadata.GetValue<int?>(ProjectMetadataField.Year).Value;
-        set => _canonicalMetadata.SetValue<int?>(ProjectMetadataField.Year, value, MetadataOrigin.User);
-    }
 
     public string License
     {
@@ -239,13 +234,13 @@ public sealed class ProjectMetadataState : INotifyPropertyChanged
             nameof(ProjectMetadataField.Series) => nameof(Series),
             nameof(ProjectMetadataField.Volume) => nameof(Volume),
             nameof(ProjectMetadataField.Edition) => nameof(Edition),
+            nameof(ProjectMetadataField.Composers) => nameof(ProjectMetadataField.Composers),
             nameof(ProjectMetadataField.Authors) => nameof(Author),
             nameof(ProjectMetadataField.Narrators) => nameof(Narrator),
             nameof(ProjectMetadata.UseNarratorsAsComposers) => nameof(UseNarratorsAsComposers),
             nameof(ProjectMetadataField.Translators) => nameof(Translators),
             nameof(ProjectMetadataField.Publisher) => nameof(Publisher),
             nameof(ProjectMetadataField.ReleaseDate) => nameof(ReleaseDate),
-            nameof(ProjectMetadataField.Year) => nameof(Year),
             nameof(ProjectMetadataField.License) => nameof(License),
             nameof(ProjectMetadataField.OutputTrackNumber) => nameof(OutputTrackNumber),
             nameof(ProjectMetadataField.OutputTrackTotal) => nameof(OutputTrackTotal),
@@ -282,7 +277,6 @@ public sealed class ProjectMetadataState : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Translators)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Publisher)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ReleaseDate)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Year)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(License)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OutputTrackNumber)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OutputTrackTotal)));

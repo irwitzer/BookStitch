@@ -22,7 +22,24 @@ public class AudioInfoService
         _ffmpegRunnerService = ffmpegRunnerService;
     }
 
-    public async Task<AudioProbeInfo> ProbeAsync(
+    public Task<AudioProbeInfo> ProbeAsync(string filePath, string? ffprobePath,
+        PerformanceExternalProcessContext? performanceContext = null, CancellationToken token = default,
+        AudioEvidenceCache? evidenceCache = null, Action<bool>? onCacheAccess = null)
+    {
+        if (evidenceCache is null || !File.Exists(filePath) || !File.Exists(ffprobePath))
+            return ProbeCoreAsync(filePath, ffprobePath, performanceContext, token);
+        var identity = AudioEvidenceCache.ProbeSchemaIdentity + AacToolchainIdentityCache.Identity(ffprobePath!);
+        return evidenceCache.GetOrProbeAsync(filePath, identity,
+            async () =>
+            {
+                var probe = await ProbeCoreAsync(filePath, ffprobePath, performanceContext, token).ConfigureAwait(false);
+                if (!probe.IsDurationEstimated && probe.AudioStreamDuration is { Ticks: > 0 } duration)
+                    probe.Duration = duration;
+                return probe;
+            }, token, onCacheAccess);
+    }
+
+    private async Task<AudioProbeInfo> ProbeCoreAsync(
         string filePath,
         string? ffprobePath,
         PerformanceExternalProcessContext? performanceContext = null,
@@ -101,7 +118,9 @@ public class AudioInfoService
                 };
             }
 
-            return _audioProbeJsonParser.Parse(filePath, result.Stdout);
+            var parsed = _audioProbeJsonParser.Parse(filePath, result.Stdout);
+            parsed.HasProbeErrors = AudioProbeDiagnosticService.HasAudioErrors(parsed, result.Stderr);
+            return parsed;
         }
         catch (OperationCanceledException)
         {

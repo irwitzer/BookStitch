@@ -125,11 +125,15 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         if (context.Tracks.Count == 0)
             return false;
 
-        var convertedBySourcePath = LoadConvertedEntries(context.ProjectWorkFolder, context.SelectedPreset, measurement, trace);
+        var convertedBySourcePath = context.PreparedOnly
+            ? new Dictionary<string, ConvertedTrackState>(StringComparer.OrdinalIgnoreCase)
+            : LoadConvertedEntries(context.ProjectWorkFolder, context.SelectedPreset, measurement, trace);
         var preset = ExportPreset.Parse(context.SelectedPreset);
         var changed = false;
 
-        foreach (var track in context.Tracks)
+        // Disc acquisition owns source presentation; inspect only completed project artifacts while it runs.
+        var inspectionTracks = context.PreparedOnly ? Array.Empty<TrackInfo>() : context.Tracks;
+        foreach (var track in inspectionTracks)
         {
             measurement?.Add("TracksChecked");
             var sourcePath = NormalizePath(track.FilePath);
@@ -203,15 +207,16 @@ public sealed class TrackStateUpdateQueueService : IDisposable
         }
 
         var previousPrepared = context.Tracks.Select(track =>
-            (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable)).ToArray();
-        new TrackPreparedStateRefreshService().RefreshForCurrentPreset(context.Tracks, context.ProjectWorkFolder, context.SelectedPreset, measurement, trace);
+            (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable, track.PreparedAudio, track.PreparedAudioPreview)).ToArray();
+        new TrackPreparedStateRefreshService().RefreshForCurrentPreset(context.Tracks, context.ProjectWorkFolder, context.SelectedPreset, measurement, trace,
+            acquiringSources: context.IsWorkflowActive);
         for (var index = 0; index < context.Tracks.Count; index++)
         {
             var track = context.Tracks[index];
             if (context.IsWorkflowActive && previousPrepared[index].ConvertedSizeAvailable)
                 track.ConvertedSizeAvailable = true; // Partial-size observation is separate from preparation evidence.
             changed |= previousPrepared[index] !=
-                (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable);
+                (track.PreparedConvertedPath, track.PreparedConvertedPreset, track.HasReusableConvertedFile, track.ConvertedSizeAvailable, track.PreparedAudio, track.PreparedAudioPreview);
         }
         if (changed) measurement?.Add("ChangedCycles");
         return changed;

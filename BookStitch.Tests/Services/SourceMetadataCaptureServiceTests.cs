@@ -22,7 +22,6 @@ public sealed class SourceMetadataCaptureServiceTests
                 Genres = ["Genre 1", "Genre 2", "Genre 3"],
                 AbridgedStatus = "0",
                 AudioWorkType = "Audio Drama",
-                Barcode = "9781234567890",
                 RawTags = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["TXXX:ASIN"] = [" B012345678 "],
@@ -46,7 +45,6 @@ public sealed class SourceMetadataCaptureServiceTests
         Assert.Equal(["Autor 1", "Autor 2"], snapshot.CanonicalFields.Authors);
         Assert.Equal(["Sprecher 1", "Sprecher 2"], snapshot.CanonicalFields.Narrators);
         Assert.Equal(["Genre 1", "Genre 2", "Genre 3"], snapshot.CanonicalFields.Genres);
-        Assert.Equal("9781234567890", snapshot.CanonicalFields.Barcode);
         Assert.Equal(AbridgedStatus.Unabridged, snapshot.CanonicalFields.AbridgedStatus);
         Assert.Equal(AudioWorkType.AudioDrama, snapshot.CanonicalFields.AudioWorkType);
         Assert.Equal(TimeSpan.FromSeconds(5), snapshot.TechnicalInfo.Duration);
@@ -107,9 +105,8 @@ public sealed class SourceMetadataCaptureServiceTests
             License = "Lizenz",
             Categories = ["Fiktion"],
             Series = [new SeriesEntry("Hauptreihe", "4"), new SeriesEntry("Nebenreihe", "1")],
-            Barcode = "9781234567890",
             CatalogNumbers = ["CAT-1", "CAT-2"],
-            MusicBrainzReleaseId = "mb-release",
+            MusicBrainzWorkId = "mb-release",
             SortTitle = "Titel, Der",
             SortAuthors = ["Autor, Ada"],
             SortNarrators = ["Stimme, Nina"],
@@ -134,11 +131,9 @@ public sealed class SourceMetadataCaptureServiceTests
         Assert.Equal(["Gast"], snapshot.CanonicalFields.Guests);
         Assert.Equal(["Stimme"], snapshot.CanonicalFields.Speakers);
         Assert.Equal(new MetadataDate(2024, 1, 31), snapshot.CanonicalFields.ReleaseDate);
-        Assert.Equal(1997, snapshot.CanonicalFields.Year);
         Assert.Equal(
             [new SeriesEntry("Hauptreihe", "4"), new SeriesEntry("Nebenreihe", "1")],
             snapshot.CanonicalFields.Series);
-        Assert.Equal("9781234567890", snapshot.CanonicalFields.Barcode);
         Assert.Equal(["CAT-1", "CAT-2"], snapshot.CanonicalFields.CatalogNumbers);
         Assert.Equal("https://example.test/book", snapshot.CanonicalFields.Website);
         Assert.Equal("Publisher archive", snapshot.CanonicalFields.Source);
@@ -159,7 +154,6 @@ public sealed class SourceMetadataCaptureServiceTests
             coverData: null);
 
         Assert.Equal(new MetadataDate(2026, 1, 31), snapshot.CanonicalFields.ReleaseDate);
-        Assert.Equal(2026, snapshot.CanonicalFields.Year);
     }
 
     [Fact]

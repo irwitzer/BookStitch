@@ -63,6 +63,34 @@ public sealed class AacExportProcessingService : IAudioExportProcessingService
     {
         var action = AudioProcessingService.NormalizeProcessingAction(track.ProcessingAction);
 
+        if (track.AacPlanAction is not null && track.AacPlanPreset == preset.DisplayName)
+        {
+            if (action != track.AacPlanAction) throw new InvalidDataException(LocalizationText.Get("Aac.Plan.SourceError"));
+            if (action == ProcessingActionIds.Reuse)
+            {
+                var probeTool = ffprobePath ?? Path.Combine(Path.GetDirectoryName(ffmpegPath)!, "ffprobe.exe");
+                if (Path.GetExtension(sourcePath).Equals(".aac", StringComparison.OrdinalIgnoreCase))
+                {
+                    await RemuxTrackForExportAsync(track, sourcePath, convertedPath, preset, ffmpegPath, probeTool,
+                        token, onProgress, performanceContext, adts: true);
+                }
+                else
+                {
+                    var sourceProbe = await new AudioInfoService().ProbeAsync(sourcePath, probeTool, token: token);
+                    if (!sourceProbe.SupportsAacStreamCopy || sourceProbe.SampleRateHz != track.TargetSampleRateHz ||
+                        sourceProbe.Channels != preset.Channels || sourceProbe.AacConfigurationId != track.AacConfigurationId)
+                        throw new InvalidDataException(LocalizationText.Get("Aac.Plan.SourceError"));
+                    if (sourceProbe.StreamCount > 1 || sourceProbe.Chapters.Count > 0)
+                        await RemuxTrackForExportAsync(track, sourcePath, convertedPath, preset, ffmpegPath, probeTool,
+                            token, onProgress, performanceContext, adts: false);
+                    else await CopyTrackForExportAsync(track, sourcePath, convertedPath, token, onProgress);
+                }
+                onProgress(TimeSpan.MaxValue);
+                return;
+            }
+        }
+        if (preset.IsPassThrough) throw new InvalidDataException(LocalizationText.Get("Aac.Plan.InvalidOriginal"));
+
         var sampleRate = track.SampleRateHz;
         if (action == ProcessingActionIds.Reuse && File.Exists(ffmpegPath))
         {
@@ -90,7 +118,7 @@ public sealed class AacExportProcessingService : IAudioExportProcessingService
             ffmpegPath,
             token,
             onProgress,
-            performanceContext);
+            performanceContext, strict: track.AacPlanAction is not null);
     }
 
     public async Task ValidateMergeInputsAsync(IReadOnlyList<string> paths, int targetRate, string ffprobePath,
@@ -155,6 +183,26 @@ public sealed class AacExportProcessingService : IAudioExportProcessingService
             throw new InvalidOperationException("FFmpeg konnte die finale Ausgabedatei nicht zusammenfügen.\n\n" + result.GetShortError());
     }
 
+    private async Task RemuxTrackForExportAsync(TrackInfo track, string source, string target, ExportPreset preset,
+        string ffmpeg, string ffprobe, CancellationToken token, Action<TimeSpan> progress,
+        PerformanceExternalProcessContext? context, bool adts)
+    {
+        var part = target + ".part";
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var args = new List<string> { "-v", "error", "-xerror", "-y", "-i", source, "-map", "0:a:0", "-vn", "-sn", "-dn",
+            "-map_metadata", "-1", "-map_chapters", "-1", "-c:a", "copy" };
+        if (adts) args.AddRange(["-bsf:a", "aac_adtstoasc"]);
+        args.AddRange(["-movflags", "+faststart", "-f", "ipod", part]);
+        var result = await _ffmpegRunnerService.RunAsync(ffmpeg, args, token, progress, context);
+        if (result.ExitCode != 0) throw new InvalidDataException(result.GetShortError());
+        await ValidateMergeInputsAsync([part], track.TargetSampleRateHz, ffprobe, token, preset);
+        var probe = await new AudioInfoService().ProbeAsync(part, ffprobe, token: token);
+        if (probe.StreamCount != 1 || probe.AacConfigurationId != track.AacConfigurationId)
+            throw new InvalidDataException(LocalizationText.Get("Aac.Plan.SourceError"));
+        ProjectExtensionRollbackService.PreserveActiveConvertedFile(target);
+        File.Move(part, target, true);
+    }
+
     private static async Task CopyTrackForExportAsync(
         TrackInfo track,
         string sourcePath,
@@ -210,7 +258,7 @@ public sealed class AacExportProcessingService : IAudioExportProcessingService
         string ffmpegPath,
         CancellationToken token,
         Action<TimeSpan> onProgress,
-        PerformanceExternalProcessContext? performanceContext)
+        PerformanceExternalProcessContext? performanceContext, bool strict = false)
     {
         var partPath = convertedPath + ".part";
 
@@ -234,10 +282,11 @@ public sealed class AacExportProcessingService : IAudioExportProcessingService
             "-f", "ipod",
             partPath
         };
+        if (strict) args.InsertRange(args.IndexOf("-vn"), ["-map", "0:a:0"]);
 
         var result = await _ffmpegRunnerService.RunAsync(
             ffmpegPath,
-            args,
+            strict ? new[] { "-xerror" }.Concat(args).ToArray() : args,
             token,
             onProgress,
             performanceContext);

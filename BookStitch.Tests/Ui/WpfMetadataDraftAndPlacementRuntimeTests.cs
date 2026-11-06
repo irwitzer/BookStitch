@@ -149,7 +149,7 @@ public sealed partial class WpfDialogRuntimeTests
                 dialog.AuthorsField.Draft = "Offener Autor";
                 dialog.DescriptionField.Draft = "Offene Beschreibung";
                 dialog.SpecialDrafts.WorkType = AudioWorkType.Audiobook;
-                dialog.SpecialDrafts.Year = "2027";
+                dialog.ReleaseDateDraft = "2027";
                 dialog.SpecialDrafts.TrackNumber = "4";
 
                 var getActiveDrafts = typeof(MetadataDialog).GetMethod(
@@ -176,7 +176,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.Equal(ConceptMetadataGroupIds.People, drafts[nameof(ProjectMetadataField.Authors)].FamilyKey);
                 Assert.Equal(ConceptMetadataGroupIds.Description, drafts[nameof(ProjectMetadataField.Description)].FamilyKey);
                 Assert.Equal(ConceptMetadataGroupIds.Work, drafts[nameof(ProjectMetadataField.AudioWorkType)].FamilyKey);
-                Assert.Equal(ConceptMetadataGroupIds.Publication, drafts[nameof(ProjectMetadataField.Year)].FamilyKey);
+                Assert.Equal(ConceptMetadataGroupIds.Publication, drafts[nameof(ProjectMetadataField.ReleaseDate)].FamilyKey);
                 Assert.Equal(ConceptMetadataGroupIds.Sorting, drafts[nameof(ProjectMetadataField.OutputTrackNumber)].FamilyKey);
                 Assert.All(drafts.Values, draft => Assert.False(string.IsNullOrWhiteSpace(draft.Label)));
 
@@ -187,7 +187,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.False(dialog.AuthorsField.HasDraft);
                 Assert.False(dialog.DescriptionField.HasDraft);
                 Assert.Null(dialog.SpecialDrafts.WorkType);
-                Assert.Equal(string.Empty, dialog.SpecialDrafts.Year);
+                Assert.Equal(string.Empty, ((ComboBox)dialog.FindName("ConceptQuickAccessReleaseDateComboBox")).Text);
                 Assert.Equal(string.Empty, dialog.SpecialDrafts.TrackNumber);
             }
             finally

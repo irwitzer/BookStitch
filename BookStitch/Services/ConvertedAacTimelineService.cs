@@ -51,7 +51,7 @@ public sealed class ConvertedAacTimelineService
         var runner = new FfprobeRunnerService();
         var streamResult = await runner.RunAsync(ffprobePath,
             ["-v", "error", "-select_streams", "a:0", "-show_entries",
-             "stream=codec_name,time_base,sample_rate", "-of", "json", path],
+             "stream=codec_name,profile,time_base,sample_rate,channels,bit_rate", "-of", "json", path],
             TimeSpan.FromMinutes(2), token, runBelowNormalPriority: true);
         token.ThrowIfCancellationRequested();
         if (streamResult.ExitCode != 0 || streamResult.TimedOut || streamResult.Canceled)
@@ -95,6 +95,7 @@ public sealed class ConvertedAacTimelineService
     internal sealed class PacketAccumulator
     {
         private readonly long _numerator, _denominator, _rate, _length, _modified;
+        private readonly AudioStreamDetails? _audio;
         private long _first = long.MaxValue, _end = long.MinValue, _previous = long.MinValue;
 
         public PacketAccumulator(JsonElement stream, long length, long modified)
@@ -106,6 +107,13 @@ public sealed class ConvertedAacTimelineService
             _rate = long.Parse(stream.GetProperty("sample_rate").GetString()!, CultureInfo.InvariantCulture);
             if (_numerator <= 0 || _denominator <= 0 || _rate <= 0) throw InvalidTimeline("Invalid AAC time base.");
             (_length, _modified) = (length, modified);
+            if (stream.TryGetProperty("channels", out var channels) && channels.TryGetInt32(out var count) && count > 0)
+            {
+                var profile = stream.TryGetProperty("profile", out var p) ? p.GetString() : null;
+                decimal? bits = stream.TryGetProperty("bit_rate", out var bitrate) && decimal.TryParse(bitrate.ToString(),
+                    NumberStyles.Number, CultureInfo.InvariantCulture, out var value) && value > 0 ? value : null;
+                _audio = new AudioStreamDetails("aac", profile, checked((int)_rate), count, bits);
+            }
         }
 
         public void AddCompactPacket(string line)
@@ -147,7 +155,7 @@ public sealed class ConvertedAacTimelineService
         public ConvertedAacTiming Complete()
         {
             if (_first == long.MaxValue) throw InvalidTimeline("Empty AAC packet timeline.");
-            var timing = new ConvertedAacTiming(1, _length, _modified, checked(_end - _first), _numerator, _denominator);
+            var timing = new ConvertedAacTiming(1, _length, _modified, checked(_end - _first), _numerator, _denominator) { Audio = _audio };
             if (!timing.IsValid) throw InvalidTimeline("Empty or invalid AAC timeline.");
             return timing;
         }

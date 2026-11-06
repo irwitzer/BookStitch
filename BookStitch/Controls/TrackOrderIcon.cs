@@ -15,7 +15,7 @@ public sealed class TrackOrderIcon : Control
         new FrameworkPropertyMetadata(TrackOrderDirection.Up, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty VectorModeProperty = DependencyProperty.Register(
         nameof(VectorMode), typeof(bool), typeof(TrackOrderIcon),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty ThemeProperty = DependencyProperty.Register(
         nameof(Theme), typeof(string), typeof(TrackOrderIcon),
         new FrameworkPropertyMetadata("Dark", FrameworkPropertyMetadataOptions.AffectsRender));

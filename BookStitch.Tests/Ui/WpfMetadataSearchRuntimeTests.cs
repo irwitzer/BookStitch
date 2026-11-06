@@ -55,13 +55,12 @@ public sealed partial class WpfDialogRuntimeTests
                     .Concat(dialog.DescriptionAdditionalFields).Concat(dialog.PassThroughFields).Distinct().ToArray();
                 var specialFields = new[]
                 {
-                    (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Year), "ConceptQuickAccessYearField"),
+                    (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ReleaseDate), "ConceptQuickAccessReleaseDateField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.AbridgedStatus), "ConceptQuickAccessAbridgedStatusField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.AudioWorkType), "ConceptQuickAccessWorkTypeField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Description), "ConceptQuickAccessDescriptionField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.OutputTrackNumber), "ConceptWorkTrackNumberField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.OutputTrackTotal), "ConceptWorkTrackCountField"),
-                    (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ReleaseDate), "ConceptPublicationReleaseDateField"),
                     (ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Series), "ConceptWorkSeriesField"),
                     (ConceptMetadataFieldCatalog.Get(ConceptMetadataFieldCatalog.SeriesPartId), "ConceptWorkSeriesField")
                 };
@@ -418,8 +417,8 @@ public sealed partial class WpfDialogRuntimeTests
                          {
                              ProjectMetadataField.ISBN,
                              ProjectMetadataField.ASIN,
-                             ProjectMetadataField.Barcode,
-                             ProjectMetadataField.MusicBrainzReleaseId
+                             ProjectMetadataField.ASIN,
+                             ProjectMetadataField.MusicBrainzWorkId
                          })
                 {
                     Assert.Contains(dialog.CatalogDataFields, field =>

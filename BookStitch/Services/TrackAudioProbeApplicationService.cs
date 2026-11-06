@@ -38,6 +38,7 @@ public sealed class TrackAudioProbeApplicationService
         ApplyDuration(track, probeInfo.Duration);
         track.EmbeddedChapters = probeInfo.Chapters.ToList();
         track.BitrateKbps = probeInfo.BitrateKbps;
+        track.AudioBitrateBitsPerSecond = probeInfo.AudioBitrateBitsPerSecond;
         track.Channels = probeInfo.Channels;
         track.SampleRateHz = probeInfo.SampleRateHz;
         track.AacConfigurationId = probeInfo.AacConfigurationId;
@@ -46,7 +47,9 @@ public sealed class TrackAudioProbeApplicationService
              Path.GetExtension(probeInfo.FilePath).Equals(".m4b", StringComparison.OrdinalIgnoreCase));
         track.ChannelLayout = AudioProcessingService.FormatChannelLayout(probeInfo.Channels);
         track.Codec = AudioProcessingService.NormalizeCodecName(probeInfo.CodecName);
-        track.ProcessingAction = AudioProcessingService.DetermineProcessingAction(probeInfo, preset, track.TargetSampleRateHz);
+        track.AudioProfile = probeInfo.AudioProfile;
+        track.ProcessingAction = track.AacPlanPreset == preset.DisplayName && track.AacPlanAction is not null
+            ? track.AacPlanAction : AudioProcessingService.DetermineProcessingAction(probeInfo, preset, track.TargetSampleRateHz);
 
         if (track.WarningCodes == TrackWarningCodes.InvalidAudio &&
             (LegacyTrackWarningReader.IsSingleInvalidAudioWarning(track.Warning) ||

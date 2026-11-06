@@ -9,6 +9,22 @@ public sealed class TrackListActionServiceTests
 {
     private readonly TrackListActionService _service = new();
 
+    [Theory]
+    [InlineData("PreparedSampleRateHz")]
+    [InlineData("DisplayPreparedBitrateKbps")]
+    public void Output_columns_sort_measured_numbers_instead_of_source_or_nominal_preset(string key)
+    {
+        var tracks = CreateTracks("A", "B", "C");
+        var values = new[] { 96000, 11025, 44100 };
+        for (var i = 0; i < tracks.Count; i++)
+        {
+            tracks[i].HasReusableConvertedFile = true;
+            tracks[i].PreparedConvertedPreset = "AAC Stereo 128 kbps";
+            tracks[i].PreparedAudio = new("aac", "LC", values[i], 2, values[i]);
+        }
+        Assert.Equal(new[] { "B", "C", "A" }, _service.Sort(tracks, key, ListSortDirection.Ascending).Select(track => track.FileName));
+    }
+
     [Fact]
     public void Original_channel_sort_uses_source_channels_without_changing_prepared_channels()
     {
@@ -20,6 +36,7 @@ public sealed class TrackListActionServiceTests
         {
             track.PreparedConvertedPreset = "AAC Mono 64 kbps";
             track.HasReusableConvertedFile = true;
+            track.PreparedAudio = new("aac", "LC", 44100, 1, 64000m);
         }
         var sorted = _service.Sort(tracks, "Channels", ListSortDirection.Ascending);
         Assert.Equal(new[] { "C", "B", "A" }, sorted.Select(track => track.FileName));

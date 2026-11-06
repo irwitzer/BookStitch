@@ -45,6 +45,10 @@ public sealed class AudioProbeJsonParser
                 info.AudioStreamCount = streams.EnumerateArray().Count(stream => GetStringOrNull(stream, "codec_type") == "audio");
                 info.HasNonCoverVideo = streams.EnumerateArray().Any(stream => GetStringOrNull(stream, "codec_type") == "video" &&
                     (!stream.TryGetProperty("disposition", out var disposition) || GetIntOrNull(disposition, "attached_pic") != 1));
+                info.AttachedPictureCodecs = streams.EnumerateArray()
+                    .Where(stream => GetStringOrNull(stream, "codec_type") == "video" &&
+                        stream.TryGetProperty("disposition", out var flags) && GetIntOrNull(flags, "attached_pic") == 1)
+                    .Select(stream => GetStringOrNull(stream, "codec_name")).OfType<string>().Distinct().ToList();
                 info.AudioProfile = GetStringOrNull(audioStream, "profile");
                 info.AudioTimeBase = GetStringOrNull(audioStream, "time_base");
                 info.AudioChannelLayout = GetStringOrNull(audioStream, "channel_layout");
@@ -64,8 +68,14 @@ public sealed class AudioProbeJsonParser
                     info.Channels = channels;
 
                 var streamBitrate = GetLongOrNull(audioStream, "bit_rate");
+                var preciseDuration = GetDoubleOrNull(audioStream, "duration");
+                if (preciseDuration is > 0 && double.IsFinite(preciseDuration.Value))
+                    info.AudioStreamDuration = TimeSpan.FromSeconds(preciseDuration.Value);
                 if (streamBitrate is not null)
+                {
+                    info.AudioBitrateBitsPerSecond = streamBitrate.Value > 0 ? streamBitrate.Value : null;
                     info.BitrateKbps = (int)Math.Round(streamBitrate.Value / 1000.0);
+                }
 
                 if (info.Duration is null)
                 {
@@ -77,6 +87,8 @@ public sealed class AudioProbeJsonParser
         }
 
         info.Chapters = ParseChapters(root);
+        info.IsDurationEstimated = string.Equals(info.FormatName, "aac", StringComparison.OrdinalIgnoreCase);
+        info.DurationPrecision = info.IsDurationEstimated ? "Estimated" : info.AudioStreamDuration is { Ticks: > 0 } ? "Stream" : "Container";
 
         if (string.IsNullOrWhiteSpace(info.CodecName))
         {

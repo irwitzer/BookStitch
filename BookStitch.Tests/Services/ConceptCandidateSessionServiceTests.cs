@@ -242,11 +242,11 @@ public sealed class ConceptCandidateSessionServiceTests
     {
         var service = new ConceptCandidateSessionService();
 
-        service.RetainUserValue(ProjectMetadataField.Barcode, "4000000000041");
-        service.RetainUserValue(ProjectMetadataField.Barcode, "4012345678901");
+        service.RetainUserValue(ProjectMetadataField.ASIN, "4000000000041");
+        service.RetainUserValue(ProjectMetadataField.ASIN, "4012345678901");
 
         var result = service.PresentScalar(
-            ProjectMetadataField.Barcode,
+            ProjectMetadataField.ASIN,
             [],
             new MetadataValue<string>("4012345678901", MetadataOrigin.User),
             []);
@@ -258,7 +258,6 @@ public sealed class ConceptCandidateSessionServiceTests
 
     [Theory]
     [InlineData(ProjectMetadataField.ISBN)]
-    [InlineData(ProjectMetadataField.Barcode)]
     [InlineData(ProjectMetadataField.ASIN)]
     [InlineData(ProjectMetadataField.SortTitle)]
     public void GenericScalar_UserCanonicalWithoutSource_IsPresentedAndRetained(ProjectMetadataField field)
@@ -309,16 +308,16 @@ public sealed class ConceptCandidateSessionServiceTests
         var service = new ConceptCandidateSessionService();
 
         service.PresentScalar(
-            ProjectMetadataField.Barcode,
+            ProjectMetadataField.ASIN,
             [],
             new MetadataValue<string>("4000000000041", MetadataOrigin.User),
             []);
 
         var result = service.PresentScalar(
-            ProjectMetadataField.Barcode,
+            ProjectMetadataField.ASIN,
             [
-                Scalar(ProjectMetadataField.Barcode, "4000000000041", 3),
-                Scalar(ProjectMetadataField.Barcode, "4012345678901", 2)
+                Scalar(ProjectMetadataField.ASIN, "4000000000041", 3),
+                Scalar(ProjectMetadataField.ASIN, "4012345678901", 2)
             ],
             new MetadataValue<string>("4000000000041", MetadataOrigin.User),
             []);
@@ -420,7 +419,7 @@ public sealed class ConceptCandidateSessionServiceTests
             [],
             new MetadataValue<MetadataDate?>(date, MetadataOrigin.User));
         var intResult = service.PresentValueScalar(
-            ProjectMetadataField.Year,
+            ProjectMetadataField.OutputTrackNumber,
             [],
             new MetadataValue<int?>(2024, MetadataOrigin.User));
 

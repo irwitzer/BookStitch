@@ -155,8 +155,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             scalarCandidatePresentation ?? new ScalarCandidatePresentationService(_normalization));
         WorkTypeFieldState = CreateSpecialFieldState(ProjectMetadataField.AudioWorkType);
         AbridgedStatusFieldState = CreateSpecialFieldState(ProjectMetadataField.AbridgedStatus);
-        YearFieldState = CreateSpecialFieldState(ProjectMetadataField.Year);
-        SpecialDrafts.Attach(YearFieldState, WorkTypeFieldState, AbridgedStatusFieldState);
+        SpecialDrafts.Attach(WorkTypeFieldState, AbridgedStatusFieldState);
         InitializeConceptFieldStates();
         WorkTypeFieldState.PropertyChanged += WorkTypeFieldState_PropertyChanged;
         SeriesFieldState.PropertyChanged += SeriesFieldState_PropertyChanged;
@@ -177,15 +176,12 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         SeriesFieldState.SetTechnicalFieldNameMode(_metadataPreferences.ShowTechnicalConceptFieldNames);
         WorkTypeFieldState.SetTechnicalFieldNameMode(_metadataPreferences.ShowTechnicalConceptFieldNames);
         AbridgedStatusFieldState.SetTechnicalFieldNameMode(_metadataPreferences.ShowTechnicalConceptFieldNames);
-        YearFieldState.SetTechnicalFieldNameMode(_metadataPreferences.ShowTechnicalConceptFieldNames);
         _isWorkTypeIncluded =
             MetadataPreferencesService.GetPolicy(_metadataPreferences, ProjectMetadataField.AudioWorkType) == OutputFieldPolicy.Enabled;
         _isAbridgedStatusIncluded =
             MetadataPreferencesService.GetPolicy(_metadataPreferences, ProjectMetadataField.AbridgedStatus) == OutputFieldPolicy.Enabled;
         _isReleaseDateIncluded =
             MetadataPreferencesService.GetPolicy(_metadataPreferences, ProjectMetadataField.ReleaseDate) == OutputFieldPolicy.Enabled;
-        _isYearIncluded =
-            MetadataPreferencesService.GetPolicy(_metadataPreferences, ProjectMetadataField.Year) == OutputFieldPolicy.Enabled;
         _isTrackNumberIncluded =
             MetadataPreferencesService.GetPolicy(_metadataPreferences, ProjectMetadataField.OutputTrackNumber) == OutputFieldPolicy.Enabled;
         _isTrackCountIncluded =
@@ -258,7 +254,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     public ConceptDescriptionFieldState DescriptionFieldState { get; private set; } = null!;
     public ConceptSpecialMetadataFieldState WorkTypeFieldState { get; private set; } = null!;
     public ConceptSpecialMetadataFieldState AbridgedStatusFieldState { get; private set; } = null!;
-    public ConceptSpecialMetadataFieldState YearFieldState { get; private set; } = null!;
     private readonly List<ConceptMetadataFieldViewModel> _conceptFieldStates = [];
     private ConceptMetadataFieldComposition _quickAccessFieldComposition = null!;
     private readonly List<ConceptMetadataFieldBindingState> _conceptFieldBindings = [];
@@ -274,7 +269,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     public ObservableCollection<ConceptSeriesEntryCandidate> SeriesEntryCandidates => SeriesFieldState.SeriesEntryCandidates;
     public ObservableCollection<ConceptMetadataCandidate> ReleaseDateCandidates { get; } = [];
 
-    public ObservableCollection<ConceptSingleValue> YearValues => YearFieldState.Values;
 
     public ObservableCollection<ConceptSingleValue> TrackNumberValues { get; } = [];
 
@@ -302,7 +296,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     private bool _isReleaseDateIncluded = true;
     private bool _isWorkTypeIncluded = true;
     private bool _isAbridgedStatusIncluded = true;
-    private bool _isYearIncluded = true;
     private bool _isTrackNumberIncluded = true;
     private bool _isTrackCountIncluded = true;
     private bool _isTrackNumberLocked;
@@ -322,11 +315,9 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             SeriesFieldState.SetTechnicalFieldNameMode(value);
             WorkTypeFieldState.SetTechnicalFieldNameMode(value);
             AbridgedStatusFieldState.SetTechnicalFieldNameMode(value);
-            YearFieldState.SetTechnicalFieldNameMode(value);
 
             _metadataPreferencesChanged(_metadataPreferences);
             OnPropertyChanged();
-            OnPropertyChanged(nameof(YearLabel));
             OnPropertyChanged(nameof(SeriesLabel));
             OnPropertyChanged(nameof(SeriesPartLabel));
             OnPropertyChanged(nameof(WorkTypeLabel));
@@ -356,7 +347,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         }
     }
 
-    public string YearLabel => YearFieldState.Label;
     public string SeriesLabel => SeriesFieldState.SeriesLabel;
     public string SeriesPartLabel => SeriesFieldState.SeriesPartLabel;
     public string WorkTypeLabel => WorkTypeFieldState.Label;
@@ -364,17 +354,29 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     public string TrackNumberLabel => GetFieldLabel(ProjectMetadataField.OutputTrackNumber);
     public string TrackCountLabel => GetFieldLabel(ProjectMetadataField.OutputTrackTotal);
     public string DescriptionLabel => GetFieldLabel(ProjectMetadataField.Description);
+    private string _releaseDateDraft = "";
+    public string ReleaseDateDraft
+    {
+        get => _releaseDateDraft;
+        set
+        {
+            if (_releaseDateDraft == value) return;
+            _releaseDateDraft = value ?? "";
+            OnPropertyChanged();
+        }
+    }
+
     public string ReleaseDateLabel => GetFieldLabel(ProjectMetadataField.ReleaseDate);
 
     public bool IsReleaseDateIncluded
     {
         get => _isReleaseDateIncluded;
-        set => SetPersistentOutputState(
-            ref _isReleaseDateIncluded,
-            value,
-            ProjectMetadataField.ReleaseDate,
-            nameof(IsReleaseDateIncluded),
-            ConceptPublicationReleaseDateComboBox);
+        set
+        {
+            SetPersistentOutputState(ref _isReleaseDateIncluded, value, ProjectMetadataField.ReleaseDate,
+                nameof(IsReleaseDateIncluded), ConceptPublicationReleaseDateComboBox);
+            if (!value) ClearEditableComboBoxDraft(ConceptQuickAccessReleaseDateComboBox);
+        }
     }
 
     public bool IsWorkTypeIncluded
@@ -433,16 +435,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     }
 
 
-    public bool IsYearIncluded
-    {
-        get => YearFieldState.IsOutputEnabled;
-        set
-        {
-            YearFieldState.IsOutputEnabled = value;
-            _isYearIncluded = value;
-            OnPropertyChanged();
-        }
-    }
 
     public bool IsTrackNumberIncluded
     {
@@ -605,7 +597,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
 
 
 
-    public string YearOriginLabel => YearFieldState.OriginLabel;
 
 
     public string DescriptionOriginLabel => DescriptionFieldState?.DescriptionOriginLabel ?? string.Empty;
@@ -822,6 +813,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             nameof(ProjectMetadataState.Author) => ProjectMetadataField.Authors,
             nameof(ProjectMetadataState.Narrator) => ProjectMetadataField.Narrators,
             nameof(ProjectMetadataState.Translators) => ProjectMetadataField.Translators,
+            nameof(ProjectMetadataField.Composers) => ProjectMetadataField.Composers,
             nameof(ProjectMetadataState.Publisher) => ProjectMetadataField.Publisher,
             nameof(ProjectMetadataState.License) => ProjectMetadataField.License,
             nameof(ProjectMetadataState.Genre) => ProjectMetadataField.Genres,
@@ -847,8 +839,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             QueueMetadataCandidateRefresh();
         }
 
-        if (e.PropertyName is nameof(ProjectMetadataState.ReleaseDate) or
-            nameof(ProjectMetadataState.Year))
+        if (e.PropertyName == nameof(ProjectMetadataState.ReleaseDate))
         {
             RefreshCanonicalPublicationFields();
             QueueMetadataCandidateRefresh();
@@ -978,10 +969,11 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
 
         drafts.Add(CreateSpecialDraftDescriptor(
             "ReleaseDate",
-            () => HasEditableComboBoxDraft(ConceptPublicationReleaseDateComboBox),
+            () => !string.IsNullOrWhiteSpace(ReleaseDateDraft),
             () => ReleaseDateLabel,
             ConceptMetadataGroupIds.Publication,
-            () => ClearEditableComboBoxDraft(ConceptPublicationReleaseDateComboBox)));
+            () => { ReleaseDateDraft = ""; ClearEditableComboBoxDraft(ConceptPublicationReleaseDateComboBox); ClearEditableComboBoxDraft(ConceptQuickAccessReleaseDateComboBox); }));
+
         drafts.Add(CreateSpecialDraftDescriptor(
             "AudioWorkType",
             () => SpecialDrafts.WorkType.HasValue,
@@ -1006,12 +998,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             () => SeriesPartLabel,
             ConceptMetadataGroupIds.Work,
             SeriesFieldState.DiscardDraft));
-        drafts.Add(CreateSpecialDraftDescriptor(
-            "Year",
-            () => !string.IsNullOrWhiteSpace(SpecialDrafts.Year),
-            () => YearLabel,
-            ConceptMetadataGroupIds.Publication,
-            () => SpecialDrafts.Year = string.Empty));
         drafts.Add(CreateSpecialDraftDescriptor(
             "OutputTrackNumber",
             () => !string.IsNullOrWhiteSpace(SpecialDrafts.TrackNumber),
@@ -1296,8 +1282,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         if (string.IsNullOrEmpty(value))
             return;
 
-        if (string.Equals(fieldKind, "Year", StringComparison.Ordinal) && !IsFourDigitYear(value))
-            return;
 
         if (values.Count > 0 &&
             AreCanonicalScalarValuesEqual(fieldKind, values[0].Value, value))
@@ -1309,12 +1293,11 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             values.Clear();
             values.Add(new ConceptSingleValue(value));
 
-            if (fieldKind is "Year" or "TrackNumber" or "TrackCount" &&
+            if (fieldKind is "TrackNumber" or "TrackCount" &&
                 int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var integerValue))
             {
                 var field = fieldKind switch
                 {
-                    "Year" => ProjectMetadataField.Year,
                     "TrackNumber" => ProjectMetadataField.OutputTrackNumber,
                     "TrackCount" => ProjectMetadataField.OutputTrackTotal,
                     _ => throw new InvalidOperationException()
@@ -1369,7 +1352,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             if (!MetadataDateParser.TryParse(value, out var releaseDate))
                 return;
 
-            value = releaseDate.ToString();
+            value = MetadataDateParser.FormatDisplay(releaseDate);
         }
 
         if (values.Count > 0 &&
@@ -1393,7 +1376,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             "WorkType" => WorkTypeValues,
             "AbridgedStatus" => AbridgedStatusValues,
             "ReleaseDate" => ReleaseDateValues,
-            "Year" => YearValues,
             "TrackNumber" => TrackNumberValues,
             "TrackCount" => TrackCountValues,
             _ => null
@@ -1405,7 +1387,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             "WorkType" => IsWorkTypeIncluded,
             "AbridgedStatus" => IsAbridgedStatusIncluded,
             "ReleaseDate" => IsReleaseDateIncluded,
-            "Year" => IsYearIncluded,
             "TrackNumber" => IsTrackNumberIncluded,
             "TrackCount" => IsTrackCountIncluded,
             _ => false
@@ -1414,9 +1395,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     private TextBox? GetActiveSingleValueTextBox(string? fieldKind) =>
         fieldKind switch
         {
-            "Year" => ConceptPublicationPanel.Visibility == Visibility.Visible
-                ? ConceptPublicationYearTextBox
-                : ConceptYearTextBox,
             "TrackNumber" => ConceptWorkTrackNumberTextBox,
             "TrackCount" => ConceptWorkTrackCountTextBox,
             _ => null
@@ -1425,7 +1403,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     private ComboBox? GetActiveCandidateComboBox(string? fieldKind) =>
         fieldKind switch
         {
-            "ReleaseDate" => ConceptPublicationReleaseDateComboBox,
+            "ReleaseDate" => ConceptQuickAccessPanel.Visibility == Visibility.Visible ? ConceptQuickAccessReleaseDateComboBox : ConceptPublicationReleaseDateComboBox,
             _ => null
         };
 
@@ -1569,11 +1547,10 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
                 CommitCanonicalScalar(fieldKind, null, MetadataOrigin.None);
             else if (fieldKind is "WorkType" or "AbridgedStatus")
                 CommitCanonicalEnum(fieldKind, null, MetadataOrigin.None);
-            else if (fieldKind is "Year" or "TrackNumber" or "TrackCount")
+            else if (fieldKind is "TrackNumber" or "TrackCount")
             {
                 var field = fieldKind switch
                 {
-                    "Year" => ProjectMetadataField.Year,
                     "TrackNumber" => ProjectMetadataField.OutputTrackNumber,
                     "TrackCount" => ProjectMetadataField.OutputTrackTotal,
                     _ => throw new InvalidOperationException()
@@ -1583,61 +1560,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         }
 
         e.Handled = true;
-    }
-
-    private static bool IsFourDigitYear(string value)
-    {
-        if (value.Length != 4)
-            return false;
-
-        foreach (var character in value)
-        {
-            if (!char.IsDigit(character))
-                return false;
-        }
-
-        return true;
-    }
-
-    private void ConceptYearTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
-    {
-        foreach (var character in e.Text)
-        {
-            if (char.IsDigit(character))
-                continue;
-
-            e.Handled = true;
-            return;
-        }
-    }
-
-    private void ConceptYearTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
-    {
-        if (sender is not TextBox textBox ||
-            !e.DataObject.GetDataPresent(DataFormats.UnicodeText) ||
-            e.DataObject.GetData(DataFormats.UnicodeText) is not string pastedText)
-        {
-            e.CancelCommand();
-            return;
-        }
-
-        var candidate = textBox.Text.Remove(textBox.SelectionStart, textBox.SelectionLength)
-            .Insert(textBox.SelectionStart, pastedText);
-
-        if (candidate.Length > 4)
-        {
-            e.CancelCommand();
-            return;
-        }
-
-        foreach (var character in candidate)
-        {
-            if (char.IsDigit(character))
-                continue;
-
-            e.CancelCommand();
-            return;
-        }
     }
 
     private void ConceptNumericTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
@@ -2005,7 +1927,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
                     new ConceptSearchFieldDescriptor("author", CombineSearchTerms(AuthorsField.Values.Select(item => item.Value), AuthorsField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(AuthorsField)),
                     new ConceptSearchFieldDescriptor("speaker", CombineSearchTerms(NarratorsField.Values.Select(item => item.Value), NarratorsField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(NarratorsField)),
                     new ConceptSearchFieldDescriptor("genre", CombineSearchTerms(GenresField.Values.Select(item => item.Value), GenresField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(GenresField)),
-                    new ConceptSearchFieldDescriptor("year", CombineSearchTerms(YearValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Year).SearchTerms.ToArray()), ConceptQuickAccessYearField),
+                    new ConceptSearchFieldDescriptor("release-date", CombineSearchTerms(ReleaseDateValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ReleaseDate).SearchTerms.ToArray()), ConceptQuickAccessReleaseDateField),
                     new ConceptSearchFieldDescriptor("abridged-status", CombineSearchTerms(AbridgedStatusValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.AbridgedStatus).SearchTerms.ToArray()), ConceptQuickAccessAbridgedStatusField),
                     new ConceptSearchFieldDescriptor("work-type", CombineSearchTerms(WorkTypeValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.AudioWorkType).SearchTerms.ToArray()), ConceptQuickAccessWorkTypeField),
                     new ConceptSearchFieldDescriptor(
@@ -2055,7 +1977,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
                 {
                     new ConceptSearchFieldDescriptor("publisher", CombineSearchTerms(PublisherField.Values.Select(item => item.Value), PublisherField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(PublisherField)),
                     new ConceptSearchFieldDescriptor("release-date", CombineSearchTerms(ReleaseDateValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ReleaseDate).SearchTerms.ToArray()), ConceptPublicationReleaseDateField),
-                    new ConceptSearchFieldDescriptor("year", CombineSearchTerms(YearValues.Select(item => item.Value), ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Year).SearchTerms.ToArray()), ConceptPublicationYearField),
                     new ConceptSearchFieldDescriptor("license", CombineSearchTerms(LicenseField.Values.Select(item => item.Value), LicenseField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(LicenseField))
                 }.Concat(BuildGenericSearchFields(PublicationAdditionalFields))
                  .Append(new ConceptSearchFieldDescriptor("edition", CombineSearchTerms(EditionField.Values.Select(item => item.Value), EditionField.Descriptor.SearchTerms.ToArray()), () => CreateConceptFieldSearchView(EditionField)))
@@ -3211,10 +3132,8 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
     {
         SyncSingleValueProjection(
             ReleaseDateValues,
-            _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value?.ToString());
-        YearFieldState.RefreshCanonical();
+            _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value is { } date ? MetadataDateParser.FormatDisplay(date) : null);
         OnPropertyChanged(nameof(ReleaseDateOriginLabel));
-        OnPropertyChanged(nameof(YearOriginLabel));
     }
 
 
@@ -3404,6 +3323,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             ConceptWorkWorkTypeComboBox,
             ConceptAbridgedStatusComboBox,
             ConceptWorkAbridgedStatusComboBox,
+            ConceptQuickAccessReleaseDateComboBox,
             ConceptPublicationReleaseDateComboBox
         })
         {
@@ -3420,6 +3340,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         IReadOnlyList<StateManagedConceptFieldCandidateSet> stateManagedCandidateSets,
         IReadOnlyList<SeriesSourceMetadataAlternative> seriesCandidates)
     {
+        var releaseDateDraft = ReleaseDateDraft;
         var drafts = CaptureCandidateDrafts();
         var workTypeDraft = SpecialDrafts.WorkType;
         var abridgedStatusDraft = SpecialDrafts.AbridgedStatus;
@@ -3430,6 +3351,7 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
             candidateSet.Field.SetCandidates(candidateSet.Candidates);
         SeriesFieldState.SetCandidates(seriesCandidates);
         RestoreCandidateDrafts(drafts);
+        ReleaseDateDraft = releaseDateDraft;
         SpecialDrafts.WorkType = workTypeDraft;
         SpecialDrafts.AbridgedStatus = abridgedStatusDraft;
     }
@@ -3638,11 +3560,6 @@ public partial class MetadataDialog : Window, INotifyPropertyChanged
         int? value,
         MetadataOrigin origin)
     {
-        if (field == ProjectMetadataField.Year)
-        {
-            YearFieldState.CommitValue(value, origin);
-            return;
-        }
 
         _metadataState.CanonicalMetadata.SetValue<int?>(field, value, origin);
 

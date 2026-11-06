@@ -47,17 +47,18 @@ public sealed class OriginalTagMetadata
     public IReadOnlyList<string> Categories { get; init; } = [];
 
     public string ISBN { get; init; } = "";
-    public string Barcode { get; init; } = "";
     public string ASIN { get; init; } = "";
     public string ISRC { get; init; } = "";
     public string GUID { get; init; } = "";
     public IReadOnlyList<string> CatalogNumbers { get; init; } = [];
-    public string MusicBrainzReleaseId { get; init; } = "";
+    public string MusicBrainzWorkId { get; init; } = "";
+    public string GoodreadsUrl { get; init; } = "";
     public string MusicBrainzRecordingId { get; init; } = "";
 
     public string SortTitle { get; init; } = "";
     public IReadOnlyList<string> SortAuthors { get; init; } = [];
     public IReadOnlyList<string> SortNarrators { get; init; } = [];
+    public IReadOnlyList<string> SortComposers { get; init; } = [];
     public string SortAlbum { get; init; } = "";
     public string SortSeries { get; init; } = "";
 

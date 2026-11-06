@@ -175,9 +175,9 @@ public sealed class MetadataDialogStructureTests
         var quickSeriesHost = NamedElement(dialog, "ConceptQuickAccessSeriesHost");
         var workSeriesHost = NamedElement(dialog, "ConceptWorkSeriesHost");
         var seriesEditorHost = NamedElement(seriesControl, "SeriesEditorRowHost");
-        var yearIsbnRow = NamedElement(dialog, "ConceptQuickAccessYearIsbnRow");
+        var yearIsbnRow = NamedElement(dialog, "ConceptQuickAccessDateIsbnRow");
         var content = yearIsbnRow.Elements().First(element => element.Name.LocalName == "Grid" && Attribute(element, "Grid.Column") == "0");
-        var year = NamedElement(dialog, "ConceptQuickAccessYearField");
+        var year = NamedElement(dialog, "ConceptQuickAccessReleaseDateField");
         var isbn = NamedElement(dialog, "ConceptQuickAccessIsbnField");
 
         static string[] Widths(XElement grid) => grid.Elements()

@@ -27,7 +27,8 @@ public sealed class AudioProbeBatchService
         PerformanceExternalProcessContext? performanceContext,
         IProgress<int>? progress = null,
         int initialCompleted = 0,
-        CancellationToken token = default)
+        CancellationToken token = default,
+        AudioEvidenceCache? evidenceCache = null)
     {
         var results = new AudioProbeInfo?[requests.Count == 0 ? 0 : requests.Max(request => request.Index) + 1];
         if (requests.Count == 0)
@@ -60,7 +61,7 @@ public sealed class AudioProbeBatchService
                             request.FilePath,
                             ffprobePath,
                             performanceContext,
-                            cancellationToken)
+                            cancellationToken, evidenceCache)
                         .ConfigureAwait(false);
 
                     var currentCompleted = Interlocked.Increment(ref completed);

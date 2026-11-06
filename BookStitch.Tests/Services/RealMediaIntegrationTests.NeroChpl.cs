@@ -43,7 +43,7 @@ public sealed partial class RealMediaIntegrationTests
         await processing.MergeConvertedTracksAsync(concat, metadata, output, segments[0].EndMicroseconds * 10,
             tools.FfmpegPath, CancellationToken.None, _ => { });
         var tags = new FinalAudioTagData { Title = "Book", Album = "Book", Author = "Author", Narrator = "Narrator",
-            Publisher = "Publisher", Comment = "Comment", Copyright = "Copyright", Genre = "Audiobook", Year = 2026,
+            Publisher = "Publisher", Comment = "Comment", Copyright = "Copyright", Genre = "Audiobook", ReleaseDate = new MetadataDate(2026),
             CoverPath = WriteTinyJpeg(temp, "cover.jpg") };
         Assert.Null(ReadNeroForTest(output));
         var quickTimeBefore = ReadQuickTimeSampleHashes(output);
@@ -144,7 +144,7 @@ public sealed partial class RealMediaIntegrationTests
             {
                 tagger.WriteFinalTags(output, new FinalAudioTagData
                 { Title = new string('T', 2000 * update + 1), Album = "Metadata update " + update,
-                  Author = "One author", Narrator = "One narrator", Genre = "Audiobook", Year = 2026 });
+                  Author = "One author", Narrator = "One narrator", Genre = "Audiobook", ReleaseDate = new MetadataDate(2026) });
                 Assert.Equal(expected, ReadNeroForTest(output));
                 Assert.Equal(audioBefore, await ProbePacketsAsync(output, tools.FfprobePath));
                 Assert.Equal(quickTimeBefore, ReadQuickTimeSampleHashes(output));

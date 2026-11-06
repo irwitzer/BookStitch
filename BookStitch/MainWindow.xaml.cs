@@ -194,7 +194,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public BulkObservableCollection<TrackInfo> Tracks { get; } = [];
     public ObservableCollection<ProjectIndexItem> ResumeProjects { get; } = [];
 
-    public IReadOnlyList<string> ExportPresets { get; } = ExportPreset.AvailableDisplayNames;
+    public ObservableCollection<string> ExportPresets { get; } = new(ExportPreset.AvailableDisplayNames);
 
     public bool IsBusy
     {
@@ -209,8 +209,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
 
             _presentationState.IsBusy = change.Value;
-            if (change.Value)
-                StopTrackGridAutoScroll();
 
             OnPropertyChanged();
             NotifyExportUiStateChanged();
@@ -859,6 +857,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset) &&
                 !string.Equals(NormalizeComboBoxValue(value), _lockedDiscResumePreset, StringComparison.OrdinalIgnoreCase))
                 return;
+            if (!_aacPreflightRunning && !_isWorkspaceTransitioning && !_isLoadingSettings &&
+                value != _selectedExportPreset && ExportPreset.Parse(value).IsPassThrough && !IsOriginalModeAvailable())
+            {
+                AppDialogService.Info(this, LocalizationText.Get("Aac.Plan.Title"), LocalizationText.Get("Aac.Plan.InvalidOriginal"));
+                Dispatcher.BeginInvoke(() => ApplyExportPresetSelectionToUi(_selectedExportPreset));
+                return;
+            }
             var change = ExportSettingsNormalizationService.CreatePresetChange(
                 _selectedExportPreset,
                 NormalizeComboBoxValue(value),
@@ -877,7 +882,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (!ProjectReviewState.IsWaitingForManualMergeReview)
                 UpdateFinalStatus(Tracks.Count);
 
-            _settings.SelectedExportPreset = _selectedExportPreset;
+            if (!ExportPreset.Parse(_selectedExportPreset).IsPassThrough) _settings.SelectedExportPreset = _selectedExportPreset;
             SaveSettingsIfReady();
         }
     }
@@ -1160,8 +1165,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _currentProjectWorkFolder,
                 SelectedExportPreset,
                 IsBusy || IsExporting || IsDiscImporting,
-                IsDiscImporting || _isDiscStopSaveInProgress,
-                ProjectReviewState.Phase),
+                _isDiscStopSaveInProgress,
+                ProjectReviewState.Phase,
+                PreparedOnly: IsDiscImporting),
             RefreshAfterTrackStateUpdate);
 
         Tracks.CollectionChanged += Tracks_CollectionChanged;
@@ -1274,6 +1280,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         elapsed.TotalMilliseconds.ToString("0.0", CultureInfo.InvariantCulture);
     private void RefreshTrackPresentationViews()
     {
+        ApplyAutomaticAudioColumnVisibility();
+        QueuePreparedAudioColumns();
         TracksGrid?.Items.Refresh();
         _developmentMetadataDialog?.RefreshChapterPresentationView();
     }
@@ -1480,6 +1488,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        _aacPreviewCancellation?.Cancel();
+        _aacPreviewKey = null;
         CancelCoverImport();
         _ = _maintenanceCoordinator?.StopAsync();
         PipelineUiTransition? transitionOwner = null;
@@ -1801,6 +1811,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         _windowCloseCleanupCompleted = true;
+        _preparedAudioColumnCancellation.Cancel();
         EnsureShutdownPerformanceStarted();
         var cleanupPerformancePhase = StartShutdownPerformancePhase("shutdown.cleanup");
 
@@ -2160,9 +2171,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void SetPipelineState(ProjectPipelineState state)
     {
-        if (state is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or
-            ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Merging or ProjectPipelineState.Completed)
-            SetOriginalAudioColumnsVisible(false);
+        if (state is ProjectPipelineState.AcquiringSources or ProjectPipelineState.Converting or ProjectPipelineState.ReviewBeforeMerge or ProjectPipelineState.Merging or ProjectPipelineState.Completed)
+            SetAudioColumnMode(_audioColumnMode == AudioColumnMode.Both ? AudioColumnMode.Both : AudioColumnMode.Output);
         if (ProjectReviewState.Phase == state)
         {
             RefreshSystemSleepPrevention();
@@ -2632,6 +2642,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     _transientMp3DiscChapterPreview = null;
                     _sessionProject.Clear();
                     _currentProjectWorkFolder = plan.ProjectFolder;
+                    RestoreAacOriginalPreset(plan.ProjectFolder);
                     _pendingDiscProjectSourceFolder = string.Empty;
                     _pendingAudioDisc = null;
                     ApplyLoadedProjectState(
@@ -2715,7 +2726,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 });
                 MeasureResumePhase("resume.cover", () => LoadResumeCover(plan));
                 MeasureResumePhase("resume.track-replace", () => Tracks.ReplaceAll(loadResult.Tracks));
-                SetOriginalAudioColumnsVisible(false, force: true);
+                SetAudioColumnMode(AudioColumnMode.Output);
+
             }
             finally
             {
@@ -2952,7 +2964,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         Tracks.ReplaceAll(loadResult.Tracks);
-        SetOriginalAudioColumnsVisible(false, force: true);
+        SetAudioColumnMode(_audioColumnMode == AudioColumnMode.Both ? AudioColumnMode.Both : AudioColumnMode.Output);
         UpdateIndexes();
     }
 
@@ -3031,10 +3043,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return string.Empty;
     }
 
-    private static void ApplySourceIdFromCopiedFile(TrackInfo track, LocalProjectCopiedFile copiedFile)
+    private void ApplySourceIdFromCopiedFile(TrackInfo track, LocalProjectCopiedFile copiedFile)
     {
         if (copiedFile.SourceIdentity?.SourceId is { } sourceId && sourceId != Guid.Empty)
             track.SourceId = sourceId;
+        if (_aacPlanningEnabled)
+            _folderAudioEvidence.RebindVerifiedCopy(copiedFile.SourceFile, copiedFile.TargetFile, track.SourceId);
     }
 
     private static void ApplySourceIdFromCopiedFile(TrackInfo track, DiscCopiedFile copiedFile)
@@ -3451,7 +3465,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         progress.Report(value);
                 }),
                 completed,
-                token);
+                token, evidenceCache: _aacPlanningEnabled ? _folderAudioEvidence : null);
 
             if (token.IsCancellationRequested)
                 return false;
@@ -3487,6 +3501,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 markAudioValidationPassed: false);
         }
 
+        if (_aacPlanningEnabled && !string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
+            _folderAudioEvidence.Save(_currentProjectWorkFolder);
         UpdateIndexes();
 
         if (failed > 0)
@@ -3803,13 +3819,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string ConfirmPresetBitrateIfNeeded(string requestedPreset)
     {
         var maxSourceBitrate = GetMaxTrackBitrateKbps();
-        if (maxSourceBitrate is null)
+        if (maxSourceBitrate is null || !PresetBitrateWarningService.ShouldWarnAfterLoad(Tracks, requestedPreset, false))
             return requestedPreset;
 
         var requested = ExportPreset.Parse(requestedPreset);
-        if (requested.BitrateKbps <= maxSourceBitrate.Value)
-            return requestedPreset;
-
         var recommendedPreset = FindBestPresetForSourceBitrate(maxSourceBitrate.Value, requested.Channels);
         var recommended = ExportPreset.Parse(recommendedPreset);
 
@@ -3841,6 +3854,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ConfirmLoadedPresetBitrateIfNeeded()
     {
+        if (_aacPlanningEnabled && (_acceptedAacPlan is null ||
+            (_acceptedAacPlan.EffectivePreset == SelectedExportPreset &&
+                (_acceptedAacPlan.ReusedCount > 0 || _acceptedAacPlan.ForceEncodeAll)))) return;
         if (IsBusy || IsExporting || IsDiscImporting || _isResumeLoading || _isLoadingSettings ||
             _isShutdownInProgress || _allowWindowClose || !string.IsNullOrWhiteSpace(_lockedDiscResumePreset))
             return;
@@ -3885,7 +3901,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ExportPresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_isLoadingSettings || _suppressPresetBitrateWarning || _isApplyingExportPresetSelectionToUi || Tracks.Count == 0)
+        if (_aacPlanningEnabled || _isLoadingSettings || _suppressPresetBitrateWarning || _isApplyingExportPresetSelectionToUi || Tracks.Count == 0)
             return;
 
         if (sender is not ComboBox comboBox || comboBox.SelectedItem is not string requestedPreset)
@@ -4529,10 +4545,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetProjectSourceModeStateForNewSource()
     {
+        SetAudioColumnMode(AudioColumnMode.Input);
         CancelCoverImport();
-        SetOriginalAudioColumnsVisible(true);
-        _folderRatePreview = new();
         _sessionProject.Clear();
+        _acceptedAacPlan = null;
+        ResetAacEvidence();
+        RemoveAacOriginalPresets();
         _activeLocalPreparation = null;
         ClearPendingMp3DiscPreparation();
         _resumeDiscPreview.Clear();
@@ -4853,7 +4871,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return false;
 
         ResetMetadataForNewDiscProject();
-        SetOriginalAudioColumnsVisible(true);
         _pendingAudioDisc = result.Disc;
 
         const AudioDiscWorkingFormat previewWorkingFormat = AudioDiscWorkingFormat.Flac;
@@ -5045,6 +5062,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (IsBusy)
             return;
+        SetAudioColumnMode(AudioColumnMode.Both);
 
         if (LoadedProjectState.IsLocal)
         {
@@ -5407,6 +5425,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        var combinedAacTracks = Tracks.Concat(newTracks).ToArray();
+        if (!await EnsureAacDecisionAsync(combinedAacTracks, extension: true)) return;
+        preset = ExportPreset.Parse(SelectedExportPreset);
+        folderTargetRate = _acceptedAacPlan?.SampleRateHz ?? folderTargetRate;
+        convertedFolder = ProjectFolderLayout.GetConvertedPresetFolder(projectFolder, preset.GetFolderName());
+        Directory.CreateDirectory(convertedFolder);
+
         var trackBySourcePath = newTracks
             .Select((track, index) => new
             {
@@ -5424,6 +5449,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var snapshot = CaptureAdditionalSourcesBaseline(projectFolder);
         if (snapshot is null) return;
+        if (_acceptedAacPlan is not null) new FolderProjectManifestService().SavePlan(projectFolder, _acceptedAacPlan);
         manifest = _services.Foundation.WorkManifestService.LoadOrCreate(manifestPath, ProjectManifestTypes.FolderProject,
             projectFolder, originalsFolder, preset.DisplayName);
         _services.Workflows.TrackPreparedStateRefreshService.RefreshForCurrentPreset(Tracks, projectFolder, SelectedExportPreset);
@@ -5499,7 +5525,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     var probeInfo = await _services.Media.AudioInfoService.ProbeAsync(
                         copiedFile.TargetFile,
                         _ffmpegStatus.FfprobePath,
-                        token: token);
+                        token: token, evidenceCache: _aacPlanningEnabled ? _folderAudioEvidence : null);
                     token.ThrowIfCancellationRequested();
                     if (probeInfo.HasPlausibleAudioProperties)
                     {
@@ -5568,8 +5594,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                 ex);
                         }
 
-                        preparedLifecycle.Complete(trackIndex, mappedTrack.Track,
+                        var completed = preparedLifecycle.Complete(trackIndex, mappedTrack.Track,
                             copiedFile.TargetFile, convertedPath, preset, token);
+                        await PublishPreparedTrackCompletionAsync(mappedTrack.Track, completed, projectFolder, preset.DisplayName);
+                    }
+                    else
+                    {
+                        ExportWorkManifestTrack? completed;
+                        lock (manifestSyncRoot) completed = manifest.Tracks.FirstOrDefault(entry => entry.TrackIndex == trackIndex + 1 &&
+                            string.Equals(entry.Preset, preset.DisplayName, StringComparison.OrdinalIgnoreCase) &&
+                            TrackPathService.PathEquals(entry.ConvertedPath, convertedPath));
+                        if (completed is not null) await PublishPreparedTrackCompletionAsync(mappedTrack.Track, completed, projectFolder, preset.DisplayName);
                     }
                 },
                 new Progress<LocalProjectLivePreparationProgress>(progress =>
@@ -5652,6 +5687,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 extensionSourceProbes,
                 preset);
             _currentFolderPath = originalsFolder;
+            PersistRebasedAacPlan(combinedAacTracks, Tracks.ToArray(), originalsFolder);
             SelectedFolder = scanRoot;
             ApplyLoadedProjectState(LoadedProjectState.WithLocalState(true));
             _projectReviewState = ProjectReviewState.WithCompletion(false);
@@ -5715,6 +5751,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         bool returnCompletedState)
     {
         _services.Pipeline.ProjectExtensionRollbackService.Rollback(snapshot);
+        RestoreAacOriginalPreset(projectFolder);
+        if (_acceptedAacPlan is not null) SetSelectedExportPresetSilently(_acceptedAacPlan.EffectivePreset);
         ReloadCanonicalMetadataSessionAfterRollback(projectFolder);
         ClearProjectExtensionPauseContext();
         _services.Foundation.ConvertedFileCleanupService.DeletePartFiles(projectFolder);
@@ -7756,6 +7794,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetMetadataForNewDiscProject()
     {
+        _acceptedAacPlan = null;
+        ResetAacEvidence();
+        RemoveAacOriginalPresets();
         CancelCoverImport();
         _resumeDiscPreview.Clear();
         _mp3DiscChapterSourceCatalog.Clear();
@@ -9043,6 +9084,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private DiscProjectSetupDialog CreateProjectSetupDialog(ProjectSetupDialogRequest request)
     {
+        if (request.SourceKind != ProjectSetupSourceKind.Folder)
+            request = request with { ExportPresets = ExportPreset.AvailableDisplayNames,
+                SelectedExportPreset = ExportPreset.Parse(request.SelectedExportPreset).IsPassThrough ? _settings.SelectedExportPreset : request.SelectedExportPreset };
         if (!string.IsNullOrWhiteSpace(_lockedDiscResumePreset) && request.SourceKind != ProjectSetupSourceKind.Folder)
             request = request with { IsDiscResume = true, SelectedExportPreset = _lockedDiscResumePreset };
         _previewEffectiveTotalDiscs = request.SourceKind == ProjectSetupSourceKind.Folder
@@ -9139,13 +9183,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Owner = this
         };
 
-        if (request.SourceKind == ProjectSetupSourceKind.Folder && string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
-        {
-            dialog.AcceptedPresetChanged += preset => ShowFolderPassThroughNotice(dialog, preset);
-            dialog.Loaded += (_, _) => _folderSetupPreviewOwner = dialog;
-            dialog.Closed += (_, _) => _folderSetupPreviewOwner = null;
-            dialog.Loaded += (_, _) => ShowFolderPassThroughNotice(dialog, dialog.PresetComboBox.SelectedItem?.ToString());
-        }
         ApplyProjectSetupDialogInitialWidth(dialog);
         AttachDebugWindowPlacement(dialog, DebugWindowPlacementTarget.ProjectSetup);
         return dialog;
@@ -9509,6 +9546,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Action<List<TrackInfo>>? prepareScannedTracksBeforeIndexUpdate = null)
     {
         var loadSucceeded = false;
+        if (captureLocalImportPerformance)
+        {
+            _acceptedAacPlan = null;
+            ResetAacEvidence();
+            _aacPlanningEnabled = true;
+        }
         IsBusy = true;
         using var analysisCancellation = analysisCancellationScope == TrackAnalysisCancellationScope.None
             ? null
@@ -9740,6 +9783,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 RecalculateProcessingActionsForCurrentPreset();
             AutoFitTrackColumnsAfterRender();
             RefreshOpenDevelopmentMetadataForExternalChanges();
+            if (captureLocalImportPerformance && _ffmpegStatus.IsComplete && Tracks.Count > 0 &&
+                Tracks.Where(track => !track.IsExcluded).All(track => track.AudioValidationPassed == true))
+                await EnsureAacDecisionAsync(cancellationToken: analysisCancellation?.Token ?? CancellationToken.None, newFolderImport: true);
             localImportPerformanceScope.Complete();
             localImportPerformanceScope = default;
             loadSucceeded = true;
@@ -9915,7 +9961,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 });
             }),
             initialCompleted: total - probeRequests.Count,
-            token: token);
+            token: token, evidenceCache: _aacPlanningEnabled && ResolveCurrentChapterProjectType() == ProjectManifestTypes.FolderProject ? _folderAudioEvidence : null);
 
             if (token.IsCancellationRequested)
             {
@@ -9946,12 +9992,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 Success = false,
                 ErrorMessage = LocalizationText.Get("MainWindow.AudioCheck.Warning")
             };
-            var decodeConfirmed = (!probeInfo.IsAac && probeInfo.HasPlausibleAudioProperties) ||
-                                  await _services.Media.AudioInfoService.CanDecodeAudioAsync(
-                                      trackPath,
-                                      _ffmpegStatus.FfmpegPath,
-                                      token,
-                                      performanceContext);
+            var decodeConfirmed = _aacPlanningEnabled && ResolveCurrentChapterProjectType() == ProjectManifestTypes.FolderProject
+                ? probeInfo.HasPlausibleAudioProperties && !probeInfo.HasProbeErrors
+                : (!probeInfo.IsAac && probeInfo.HasPlausibleAudioProperties) ||
+                    await _services.Media.AudioInfoService.CanDecodeAudioAsync(trackPath, _ffmpegStatus.FfmpegPath, token, performanceContext);
 
             if (!decodeConfirmed)
             {
@@ -11491,6 +11535,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 IsDiscImporting);
         ApplyPipelineTransition(exportStartTransition);
         projectType = ResolveCurrentProjectType(projectType);
+        if (projectType == ProjectManifestTypes.FolderProject && !await EnsureAacDecisionAsync()) return;
 
         var presetReconversionProjectFolder =
             string.IsNullOrWhiteSpace(projectWorkFolderOverride)
@@ -11624,7 +11669,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return false;
         }
 
-        if (!ShowFolderPassThroughNotice(requireAcceptance: true)) return false;
+        if (!await EnsureAacDecisionAsync()) return false;
         ApplyFolderSampleRateContext();
         var sourceFolder = Path.GetFullPath(_currentFolderPath);
         var trackSnapshot = Tracks.ToList();
@@ -11639,8 +11684,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : _services.Pipeline.LocalProjectImportService.CreateProjectFolder(
                 GetProjectFolderStructure().LocalProjectsFolder,
                 sourceFolder,
-                targetSampleRateHz: _folderRatePreview.EffectiveRate,
-                allowAacReuse: _folderRatePreview.Decision.Qualified);
+                targetSampleRateHz: _acceptedAacPlan?.SampleRateHz ?? SampleRateSettingsService.Normalize(_settings.DefaultSampleRateHz),
+                allowAacReuse: _acceptedAacPlan is not null);
+
+        if (_acceptedAacPlan is not null) new FolderProjectManifestService().SavePlan(projectFolder, _acceptedAacPlan);
 
         if (createsNewProject)
         {
@@ -11787,8 +11834,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                                 ex);
                         }
 
-                        preparedLifecycle.Complete(mappedTrack.Index, mappedTrack.Track,
+                        var completed = preparedLifecycle.Complete(mappedTrack.Index, mappedTrack.Track,
                             copiedFile.TargetFile, convertedPath, preset, token);
+                        await PublishPreparedTrackCompletionAsync(mappedTrack.Track, completed, projectFolder, preset.DisplayName);
+                    }
+                    else
+                    {
+                        ExportWorkManifestTrack? completed;
+                        lock (manifestSyncRoot) completed = manifest.Tracks.FirstOrDefault(entry => entry.TrackIndex == mappedTrack.Index + 1 &&
+                            string.Equals(entry.Preset, preset.DisplayName, StringComparison.OrdinalIgnoreCase) &&
+                            TrackPathService.PathEquals(entry.ConvertedPath, convertedPath));
+                        if (completed is not null) await PublishPreparedTrackCompletionAsync(mappedTrack.Track, completed, projectFolder, preset.DisplayName);
                     }
                 },
                 new Progress<LocalProjectLivePreparationProgress>(snapshot =>
@@ -11820,6 +11876,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (result.ImportResult.WasCanceled || result.WasCanceled)
             {
+                if (result.ImportResult.CompletedFiles == sourceFiles.Length)
+                    PreserveAacPlanAfterAcquisitionPause(trackSnapshot, sourceFolder, originalsFolder);
                 PublishWorkflowStatus(
                     workflowOperationId,
                     _services.Status.LocalWorkflowStatusAdapter.CreateRunningSnapshot(
@@ -11867,6 +11925,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 CreateLocalFolderAggregationOptions(sourceFolder, sourceFiles));
 
             _currentFolderPath = originalsFolder;
+            PersistRebasedAacPlan(trackSnapshot, trackSnapshot, originalsFolder);
             SelectedFolder = sourceFolder;
             ApplyLoadedProjectState(LoadedProjectState.WithLocalState(true));
             ApplyLoadedProjectState(LoadedProjectState.WithMp3DiscState(false));
@@ -14134,47 +14193,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Tracks.Remove(track);
     }
 
-    private AacSampleRatePreviewState _folderRatePreview = new();
-    private DiscProjectSetupDialog? _folderSetupPreviewOwner;
-    private bool _isFolderRateDialogOpen;
-
-    private bool ShowFolderPassThroughNotice(Window? owner = null, string? selectedPreset = null, bool requireAcceptance = false)
-    {
-        if (_isFolderRateDialogOpen) return !requireAcceptance;
-        if ((!IsVisible || IsBusy || IsExporting || _isLoadingSettings) && !requireAcceptance) return true;
-        if (!string.IsNullOrWhiteSpace(_currentProjectWorkFolder) ||
-            ResolveCurrentChapterProjectType() != ProjectManifestTypes.FolderProject) return true;
-        if (owner is null && _folderSetupPreviewOwner is { IsVisible: true } setup)
-        { owner = setup; selectedPreset = setup.PresetComboBox.SelectedItem?.ToString(); }
-        if (owner is not null && !owner.IsVisible) return true;
-        var presetName = selectedPreset ?? SelectedExportPreset;
-        var preset = ExportPreset.Parse(presetName);
-        var decision = FolderSampleRateService.Decide(Tracks, preset, _settings.DefaultSampleRateHz);
-        _folderRatePreview.Refresh(FolderSampleRateService.DecisionKey(Tracks, preset, decision.StandardRate), decision);
-        if (!_folderRatePreview.ShouldPresent && !(requireAcceptance && _folderRatePreview.NeedsAcceptance)) return true;
-        _folderRatePreview.Presented();
-        _isFolderRateDialogOpen = true;
-        try
-        {
-            var dialog = new AacSampleRateDialog(decision, presetName);
-            ModalDialogService.ShowDialog(dialog, owner ?? this);
-            if (dialog.Result != AppDialogResult.Ok) return false;
-            _folderRatePreview.Accept(dialog.PreferStandard);
-            return true;
-        }
-        finally { _isFolderRateDialogOpen = false; }
-    }
-
     private void ApplyFolderSampleRateContext()
     {
         if (ResolveCurrentChapterProjectType() != ProjectManifestTypes.FolderProject) return;
+        if (_acceptedAacPlan is not null && _acceptedAacPlan.EffectivePreset == SelectedExportPreset)
+        {
+            // A source edit is checked at the start boundary before any audio job.
+            foreach (var track in Tracks) track.TargetSampleRateHz = _acceptedAacPlan.SampleRateHz;
+            return;
+        }
         if (string.IsNullOrWhiteSpace(_currentProjectWorkFolder))
         {
-            var preset = ExportPreset.Parse(SelectedExportPreset);
-            var decision = FolderSampleRateService.Decide(Tracks, preset, _settings.DefaultSampleRateHz);
-            _folderRatePreview.Refresh(FolderSampleRateService.DecisionKey(Tracks, preset, decision.StandardRate), decision);
-            FolderSampleRateService.Apply(Tracks, _folderRatePreview.EffectiveRate);
-            foreach (var track in Tracks) track.AllowAacReuse = decision.Qualified;
+            FolderSampleRateService.Apply(Tracks, SampleRateSettingsService.Normalize(_settings.DefaultSampleRateHz));
+            foreach (var track in Tracks) track.AllowAacReuse = true;
         }
         else
         {
@@ -14209,7 +14240,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RefreshTrackPresentationViews();
         OnExportPreviewChanged();
         if (requestTrackStateRefresh) _trackStateUpdateQueueService.RequestRefresh();
-        Dispatcher.BeginInvoke(() => ShowFolderPassThroughNotice(), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
 
@@ -14459,7 +14489,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private bool CanStartTrackGridAutoScroll()
     {
-        if (IsBusy || IsExporting || IsDiscImporting || Tracks.Count == 0 || TracksGrid is null)
+        if (_isShutdownInProgress || Tracks.Count == 0 || TracksGrid is null)
             return false;
 
         var scrollViewer = FindVisualChild<ScrollViewer>(TracksGrid);
@@ -14617,12 +14647,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void TracksGrid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var header = FindVisualAncestor<DataGridColumnHeader>(e.OriginalSource as DependencyObject);
-        _trackGridContextMenuForHeader = header?.Column is not null;
+        _trackGridContextMenuForHeader = IsTrackGridColumnMenuOrigin(e.OriginalSource as DependencyObject);
     }
+
+    internal static bool IsTrackGridColumnMenuOrigin(DependencyObject? source) =>
+        FindVisualAncestor<DataGridColumnHeader>(source) is not null || FindVisualAncestor<DataGridCell>(source) is null;
 
     private void TracksGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
+        if (!TracksGrid.Columns.Any(column => column.Visibility == Visibility.Visible))
+            _trackGridContextMenuForHeader = true;
         if (!_trackGridContextMenuForHeader && !CanEditTrackOrder)
         {
             e.Handled = true;
@@ -15154,13 +15188,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private static FrameworkElement CreateTrackGridColumnMenuHeader(DataGridColumn column)
     {
         return CreateTrackGridCheckedMenuHeader(
-            GetTrackGridColumnKey(column) switch
-            {
-                "BitrateKbps" => LocalizationText.Get("UiOriginalBitrate"),
-                "SampleRateHz" => LocalizationText.Get("UiOriginalSampleRate"),
-                "Channels" => LocalizationText.Get("UiOriginalMonoStereo"),
-                _ => column.Header?.ToString() ?? GetTrackGridColumnKey(column)
-            },
+            column.Header?.ToString() ?? GetTrackGridColumnKey(column),
             column.Visibility == Visibility.Visible);
     }
 
@@ -15190,30 +15218,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return panel;
     }
 
-    private bool _showOriginalAudioColumns = true;
-
-    private void SetOriginalAudioColumnsVisible(bool showOriginal, bool force = false)
-    {
-        if (!force && !showOriginal && !_showOriginalAudioColumns) return;
-        _showOriginalAudioColumns = showOriginal;
-        if (TracksGrid is null) return;
-        var applyingLayout = _isApplyingTrackGridColumnLayout;
-        _isApplyingTrackGridColumnLayout = true;
-        try
-        {
-            TrackGridOriginalBitrateColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
-            TrackGridOriginalSampleRateColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
-            TrackGridOriginalChannelLayoutColumn.Visibility = showOriginal ? Visibility.Visible : Visibility.Collapsed;
-            TrackGridBitrateColumn.Visibility = showOriginal ? Visibility.Collapsed : Visibility.Visible;
-            TrackGridChannelLayoutColumn.Visibility = showOriginal ? Visibility.Collapsed : Visibility.Visible;
-        }
-        finally { _isApplyingTrackGridColumnLayout = applyingLayout; }
-        AutoFitTrackColumnsAfterRender();
-        RefreshEmbeddedChapterRowColumnLayouts(force: true);
-    }
-
     private void ToggleTrackGridColumnVisibility(DataGridColumn column)
     {
+        _settings.TrackGridCustomColumnVisibility = true;
         column.Visibility = column.Visibility == Visibility.Visible
             ? Visibility.Collapsed
             : Visibility.Visible;
@@ -15235,6 +15242,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ResetTrackGridColumnLayout()
     {
+        _settings.TrackGridCustomColumnVisibility = false;
         _settings.TrackGridColumns = new List<TrackGridColumnLayoutItem>();
         _settings.TrackGridAutoFitEnabled = true;
 
@@ -15272,7 +15280,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         if (saved.Count == 0)
+        {
+            _settings.TrackGridAudioColumnsVersion = 1;
+            ApplyDefaultTrackGridColumnOrder();
+            ApplyAutomaticAudioColumnVisibility();
             return;
+        }
 
         var shouldPersistMigratedStatusIndicator = !saved.ContainsKey("StatusIndicator");
         var statusIndicatorDisplayIndex = ResolveMigratedStatusIndicatorDisplayIndex(saved);
@@ -15309,7 +15322,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     item.Column.Visibility = GetDefaultTrackGridColumnVisibility(item.Column);
                 }
-                if (GetTrackGridColumnKey(item.Column) is "BitrateKbps" or "SampleRateHz" or "Channels" or "DisplayPreparedBitrateKbps" or "DisplayPreparedChannelLayout")
+                if (_settings.TrackGridAudioColumnsVersion < 1 && IsAudioTechnicalColumn(item.Column))
                     item.Column.Visibility = GetDefaultTrackGridColumnVisibility(item.Column);
             }
 
@@ -15320,9 +15333,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             _isApplyingTrackGridColumnLayout = false;
         }
 
+        if (_settings.TrackGridAudioColumnsVersion < 1)
+        {
+            _settings.TrackGridAudioColumnsVersion = 1;
+            shouldPersistMigratedStatusIndicator = true;
+        }
         if (shouldPersistMigratedStatusIndicator)
             SaveTrackGridColumnLayout();
 
+        ApplyAutomaticAudioColumnVisibility();
         RefreshEmbeddedChapterRowColumnLayouts(force: true);
     }
 
@@ -15380,39 +15399,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ApplyPinnedTrackGridColumnOrder()
     {
-        if (TracksGrid is null)
-            return;
-
-        var fileColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "FileName", StringComparison.Ordinal));
-        var startColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "Start", StringComparison.Ordinal));
-        var chapterColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "ChapterProposal", StringComparison.Ordinal));
-        if (fileColumn is null || startColumn is null || chapterColumn is null)
-            return;
-
-        var audioColumns = TracksGrid.Columns.OrderBy(column => column.DisplayIndex)
-            .Where(column => column != TrackGridOriginalBitrateColumn && column != TrackGridOriginalSampleRateColumn && column != TrackGridOriginalChannelLayoutColumn).ToList();
-        var bitrateIndex = audioColumns.IndexOf(TrackGridBitrateColumn);
-        audioColumns.Insert(bitrateIndex, TrackGridOriginalBitrateColumn);
-        audioColumns.Insert(bitrateIndex + 1, TrackGridOriginalSampleRateColumn);
-        audioColumns.Insert(bitrateIndex + 2, TrackGridOriginalChannelLayoutColumn);
-        for (var index = 0; index < audioColumns.Count; index++)
-            audioColumns[index].DisplayIndex = index;
-
-        startColumn.DisplayIndex = Math.Min(fileColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
-        chapterColumn.DisplayIndex = Math.Min(startColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
+        if (TracksGrid is null) return;
+        // Preserve user order. Each output partner occupies its input partner's slot when toggled.
+        foreach (var pair in new[] { ("BitrateKbps", "DisplayPreparedBitrateKbps"), ("SampleRateHz", "PreparedSampleRateHz"),
+                     ("Channels", "DisplayPreparedChannelLayout"), ("AudioProfile", "DisplayPreparedProfile") })
+        {
+            var input = TracksGrid.Columns.FirstOrDefault(column => GetTrackGridColumnKey(column) == pair.Item1);
+            var output = TracksGrid.Columns.FirstOrDefault(column => GetTrackGridColumnKey(column) == pair.Item2);
+            if (input is null || output is null) continue;
+            var order = TracksGrid.Columns.OrderBy(column => column.DisplayIndex).Where(column => column != output).ToList();
+            order.Insert(order.IndexOf(input) + 1, output);
+            for (var index = 0; index < order.Count; index++) order[index].DisplayIndex = index;
+        }
     }
 
     private void ApplyDefaultTrackGridColumnOrder()
     {
-        if (TracksGrid is null)
-            return;
-
-        var autoColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "AutomaticOrderPosition", StringComparison.Ordinal));
-        var statusColumn = TracksGrid.Columns.FirstOrDefault(column => string.Equals(GetTrackGridColumnKey(column), "StatusIndicator", StringComparison.Ordinal));
-        if (autoColumn is not null && statusColumn is not null)
-            statusColumn.DisplayIndex = Math.Min(autoColumn.DisplayIndex + 1, TracksGrid.Columns.Count - 1);
-
-        ApplyPinnedTrackGridColumnOrder();
+        if (TracksGrid is not null) TrackGridDefaultLayoutService.Apply(TracksGrid.Columns, GetTrackGridColumnKey);
     }
 
     private static double? GetTrackGridColumnWidth(DataGridColumn column)
@@ -15435,14 +15438,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return 0;
     }
 
+    private static bool IsAudioTechnicalColumn(DataGridColumn column) => GetTrackGridColumnKey(column) is
+        "BitrateKbps" or "SampleRateHz" or "Channels" or "AudioProfile" or "DisplayPreparedBitrateKbps" or
+        "PreparedSampleRateHz" or "DisplayPreparedChannelLayout" or "DisplayPreparedProfile";
+
     private Visibility GetDefaultTrackGridColumnVisibility(DataGridColumn column)
     {
-        var key = GetTrackGridColumnKey(column);
-        if (key is "BitrateKbps" or "SampleRateHz" or "Channels")
-            return _showOriginalAudioColumns ? Visibility.Visible : Visibility.Collapsed;
-        if (key is "DisplayPreparedBitrateKbps" or "DisplayPreparedChannelLayout")
-            return _showOriginalAudioColumns ? Visibility.Collapsed : Visibility.Visible;
-        return string.Equals(GetTrackGridColumnKey(column), "Extension", StringComparison.Ordinal)
+        if (IsAudioTechnicalColumn(column)) return AudioColumnVisibility(column);
+        return string.Equals(GetTrackGridColumnKey(column), "Start", StringComparison.Ordinal)
             ? Visibility.Collapsed
             : Visibility.Visible;
     }
@@ -16029,25 +16032,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             TracksGrid.UpdateLayout();
 
+            _trackGridAutoFitTextWidths.Clear();
             foreach (var column in TracksGrid.Columns)
             {
                 var header = column.Header?.ToString() ?? "";
 
-                var width = Math.Max(column.ActualWidth + 12, EstimateTrackColumnWidth(GetTrackGridColumnKey(column), header, allTracks));
+                var width = Math.Max(column.ActualWidth, EstimateTrackColumnWidth(GetTrackGridColumnKey(column), header, allTracks, column.SortDirection.HasValue));
                 column.Width = new DataGridLength(width);
             }
         });
     }
 
 
-    private static double EstimateTrackColumnWidth(string key, string header, IReadOnlyList<TrackInfo> tracks)
+    private double EstimateTrackColumnWidth(string key, string header, IReadOnlyList<TrackInfo> tracks, bool sorted)
     {
-        var maxTextLength = EstimateTextWidth(header) + 28;
+        var maxTextLength = EstimateTextWidth(header, bold: true) + 13 + (sorted ? 12 : 0);
 
         foreach (var track in tracks)
         {
             var text = key switch
             {
+                "AutomaticOrderPosition" => track.DisplayAutomaticOrderPosition,
                 "DiscNumber" => track.DiscNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
                 "TrackNumber" => track.TrackNumber?.ToString(CultureInfo.InvariantCulture) ?? "",
                 "FileName" => track.FileName,
@@ -16059,6 +16064,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 "BitrateKbps" => track.BitrateKbps?.ToString(CultureInfo.InvariantCulture) ?? "",
                 "SampleRateHz" => track.DisplayOriginalSampleRateHz,
                 "Channels" => track.DisplayOriginalChannelLayout,
+                "AudioProfile" => track.DisplayOriginalProfile,
+                "PreparedSampleRateHz" => track.DisplayPreparedSampleRateHz,
+                "DisplayPreparedProfile" => track.DisplayPreparedProfile,
                 "DisplayPreparedChannelLayout" => track.DisplayPreparedChannelLayout,
                 "DisplayPreparedBitrateKbps" => track.DisplayPreparedBitrateKbps?.ToString(CultureInfo.InvariantCulture) ?? "",
                 "ChannelLayout" => track.ChannelLayout,
@@ -16071,32 +16079,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _ => ""
             };
 
-            maxTextLength = Math.Max(maxTextLength, EstimateTextWidth(text) + 28);
+            maxTextLength = Math.Max(maxTextLength, EstimateTextWidth(text, bold: key == "FileName") + 9 + (key == "ChapterProposal" ? 22 : 0));
         }
 
         return maxTextLength;
     }
 
-    private static double EstimateTextWidth(string? text)
+    private readonly Dictionary<(string Text, bool Bold), double> _trackGridAutoFitTextWidths = new();
+
+    private double EstimateTextWidth(string? text, bool bold)
     {
-        if (string.IsNullOrEmpty(text))
-            return 0;
-
-        var width = 0.0;
-
-        foreach (var character in text)
-        {
-            width += character switch
-            {
-                'i' or 'l' or 'I' or '.' or ',' or ':' or ';' or '!' or '|' => 4.0,
-                'm' or 'w' or 'M' or 'W' or '@' or '#' => 10.0,
-                >= '0' and <= '9' => 7.0,
-                >= 'A' and <= 'Z' => 8.0,
-                ' ' => 4.0,
-                _ => 7.0
-            };
-        }
-
+        if (string.IsNullOrEmpty(text)) return 0;
+        if (_trackGridAutoFitTextWidths.TryGetValue((text, bold), out var cached)) return cached;
+        var formatted = new FormattedText(text, CultureInfo.CurrentUICulture, TracksGrid.FlowDirection,
+            new Typeface(TracksGrid.FontFamily, TracksGrid.FontStyle, bold ? FontWeights.SemiBold : TracksGrid.FontWeight, TracksGrid.FontStretch),
+            TracksGrid.FontSize, Brushes.Black, VisualTreeHelper.GetDpi(TracksGrid).PixelsPerDip);
+        var width = Math.Ceiling(formatted.WidthIncludingTrailingWhitespace);
+        _trackGridAutoFitTextWidths[(text, bold)] = width;
         return width;
     }
 
@@ -16153,6 +16152,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void OnExportPreviewChanged()
     {
+        QueueAacPreview();
         OnPropertyChanged(nameof(ExportPreviewFileName));
         OnPropertyChanged(nameof(ExportPreviewCodecSummary));
         OnPropertyChanged(nameof(ExportPreviewTrackCount));
@@ -16290,6 +16290,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void NotifyExportUiStateChanged()
     {
+        QueuePreparedAudioColumns();
         // Producer-finally paths also cover fast normal completion and cancellation failures.
         if (!IsBusy && !IsExporting && !IsDiscImporting &&
             _exportCancellation is null && _discImportCancellation is null && _trackAnalysisCancellation is null &&

@@ -26,7 +26,7 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
         Action<MetadataPreferences> savePreferences,
         ConceptCandidateSessionService? candidateSession = null)
     {
-        if (field is not (ProjectMetadataField.AudioWorkType or ProjectMetadataField.AbridgedStatus or ProjectMetadataField.Year))
+        if (field is not (ProjectMetadataField.AudioWorkType or ProjectMetadataField.AbridgedStatus or ProjectMetadataField.ReleaseDate))
             throw new ArgumentOutOfRangeException(nameof(field), field, "Unsupported special metadata field.");
 
         _metadataState = metadataState ?? throw new ArgumentNullException(nameof(metadataState));
@@ -44,7 +44,7 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
     public string Label => ConceptMetadataFieldCatalog.Get(Field).GetDisplayName(_showTechnicalFieldNames);
     public string OriginLabel => MetadataOriginEvidenceLabels.FormatOptional(GetOrigin());
     public bool IsEnum => Field is ProjectMetadataField.AudioWorkType or ProjectMetadataField.AbridgedStatus;
-    public bool IsYear => Field == ProjectMetadataField.Year;
+    public bool IsDate => Field == ProjectMetadataField.ReleaseDate;
     public bool IsLockable => Field == ProjectMetadataField.AudioWorkType;
     public string LockToggleAutomationName => LocalizationText.Format("Metadata.Automation.Lock", Label);
     public string OutputToggleAutomationName => LocalizationText.Format("Metadata.Automation.Output", Label);
@@ -210,12 +210,11 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
         if (!CanEditValues)
             return false;
 
-        if (IsYear)
+        if (IsDate)
         {
-            if (DraftText.Length != 4 ||
-                !int.TryParse(DraftText, NumberStyles.None, CultureInfo.InvariantCulture, out var year))
+            if (!MetadataDateParser.TryParse(DraftText, out var date))
                 return false;
-            CommitValue(year, MetadataOrigin.User);
+            CommitValue(date, MetadataOrigin.User);
             return true;
         }
 
@@ -247,20 +246,13 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
                 if (origin == MetadataOrigin.User && status.HasValue)
                     _candidateSession?.RetainUserValue(Field, status.Value, MetadataDisplayLabels.AbridgedStatus(status.Value));
                 break;
-            case ProjectMetadataField.Year:
-                var year = value as int?;
-                if (!year.HasValue && origin == MetadataOrigin.None &&
-                    _metadataState.CanonicalMetadata.GetValue<int?>(Field).Value is { } removedYear)
-                {
-                    _metadataState.CanonicalMetadata.SuppressValue(
-                        Field, removedYear.ToString(CultureInfo.InvariantCulture));
-                }
-                else if (year.HasValue && origin == MetadataOrigin.User)
-                {
-                    _metadataState.CanonicalMetadata.UnsuppressValue(
-                        Field, year.Value.ToString(CultureInfo.InvariantCulture));
-                }
-                _metadataState.CanonicalMetadata.SetValue<int?>(Field, year, year.HasValue ? origin : MetadataOrigin.None);
+            case ProjectMetadataField.ReleaseDate:
+                var date = value is MetadataDate actualDate ? actualDate : (MetadataDate?)null;
+                if (date is null && _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(Field).Value is { } removed)
+                    _metadataState.CanonicalMetadata.SuppressValue(Field, removed.ToString());
+                else if (date is { } restored && origin == MetadataOrigin.User)
+                    _metadataState.CanonicalMetadata.UnsuppressValue(Field, restored.ToString());
+                _metadataState.CanonicalMetadata.SetValue<MetadataDate?>(Field, date, date.HasValue ? origin : MetadataOrigin.None);
                 break;
         }
 
@@ -281,8 +273,8 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
             case ProjectMetadataField.AbridgedStatus:
                 DraftValue = _metadataState.CanonicalMetadata.GetValue<AbridgedStatus?>(Field).Value;
                 break;
-            case ProjectMetadataField.Year:
-                DraftText = _metadataState.CanonicalMetadata.GetValue<int?>(Field).Value?.ToString("0000", CultureInfo.InvariantCulture) ?? string.Empty;
+            case ProjectMetadataField.ReleaseDate:
+                DraftText = _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(Field).Value is { } date ? MetadataDateParser.FormatDisplay(date) : string.Empty;
                 break;
         }
     }
@@ -313,7 +305,7 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
     {
         ProjectMetadataField.AudioWorkType => _metadataState.CanonicalMetadata.GetValue<AudioWorkType?>(Field).Origin,
         ProjectMetadataField.AbridgedStatus => _metadataState.CanonicalMetadata.GetValue<AbridgedStatus?>(Field).Origin,
-        ProjectMetadataField.Year => _metadataState.CanonicalMetadata.GetValue<int?>(Field).Origin,
+        ProjectMetadataField.ReleaseDate => _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(Field).Origin,
         _ => MetadataOrigin.None
     };
 
@@ -325,7 +317,7 @@ public sealed class ConceptSpecialMetadataFieldState : INotifyPropertyChanged, I
         ProjectMetadataField.AbridgedStatus => _metadataState.CanonicalMetadata.GetValue<AbridgedStatus?>(Field).Value is { } status && status != AbridgedStatus.Unknown
             ? MetadataDisplayLabels.AbridgedStatus(status)
             : string.Empty,
-        ProjectMetadataField.Year => _metadataState.CanonicalMetadata.GetValue<int?>(Field).Value?.ToString("0000", CultureInfo.InvariantCulture) ?? string.Empty,
+        ProjectMetadataField.ReleaseDate => _metadataState.CanonicalMetadata.GetValue<MetadataDate?>(Field).Value is { } date ? MetadataDateParser.FormatDisplay(date) : string.Empty,
         _ => string.Empty
     };
 

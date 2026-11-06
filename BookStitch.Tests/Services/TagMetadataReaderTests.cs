@@ -70,7 +70,6 @@ public sealed class TagMetadataReaderTests
 
         Assert.Equal(["Müller; Muller / Mueller"], metadata.Authors);
         Assert.Equal(["Drama; Hörbuch"], metadata.Genres);
-        Assert.Equal("9781234567890", metadata.Barcode);
         var raw = Assert.Single(metadata.RawTagEntries, entry => entry.OriginalKey == "AUTHOR");
         Assert.Equal(MetadataTagFormat.Xiph, raw.TagFormat);
         Assert.Equal("Xiph", raw.Namespace);
@@ -156,7 +155,6 @@ public sealed class TagMetadataReaderTests
             });
 
         Assert.Equal(["Sprecherin"], metadata.Narrators);
-        Assert.Equal("9781234567890", metadata.Barcode);
         Assert.Equal([new SeriesEntry("Reihe", "2")], metadata.Series);
 
         Assert.Equal(["Sprecherin, Die"], metadata.SortNarrators);
@@ -205,7 +203,6 @@ public sealed class TagMetadataReaderTests
                 ["CATALOGNUMBER"] = ["CAT-1", "CAT-2"]
             });
 
-        Assert.Equal("9781234567890", metadata.Barcode);
         Assert.Equal(["CAT-1", "CAT-2"], metadata.CatalogNumbers);
         Assert.Contains(metadata.RawTagEntries, entry => entry.OriginalKey == "EAN");
     }

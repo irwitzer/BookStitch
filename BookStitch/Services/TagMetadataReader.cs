@@ -255,6 +255,7 @@ public class TagMetadataReader
                 case "TPOS": builder.AddSourceDisc(values, "ID3v2:TPOS"); break;
                 case "TSOT": builder.AddCandidate(ProjectMetadataField.SortTitle, First(values), quality, "ID3v2:TSOT"); break;
                 case "TSO2": builder.AddCandidate(ProjectMetadataField.SortAuthors, CleanList(values), quality, "ID3v2:TSO2"); break;
+                case "TSOC": builder.AddCandidate(ProjectMetadataField.SortComposers, CleanList(values), quality, "ID3v2:TSOC"); break;
                 case "TSOA": builder.AddCandidate(ProjectMetadataField.SortAlbum, First(values), quality, "ID3v2:TSOA"); break;
             }
         }
@@ -264,6 +265,7 @@ public class TagMetadataReader
     {
         private static readonly string[] FreeformNames =
         [
+            "ORIGINALTITLE", "SORTTITLE", "SORTALBUM", "SORTAUTHORS", "SORTNARRATORS", "GOODREADSURL", "MusicBrainz Work Id",
             "SUBTITLE", "NARRATOR", "LANGUAGE", "ORIGINALLANGUAGE", "TARGETLANGUAGE",
             "SERIES", "SERIES-PART", "SERIESSORT", "ISBN", "BARCODE", "ASIN", "AUDIBLE_ASIN",
             "CATALOGNUMBER", "RELEASEDATE", "ABRIDGED",
@@ -280,6 +282,9 @@ public class TagMetadataReader
             if (file.GetTag(TagTypes.Apple) is not AppleTag tag)
                 return;
 
+            AddMp4Text(builder, tag, "©st3", ProjectMetadataField.Subtitle, MetadataCandidateQuality.Exact);
+            AddMp4Text(builder, tag, "subt", ProjectMetadataField.Subtitle, MetadataCandidateQuality.CompatibleAlias);
+            AddMp4Text(builder, tag, "©day", ProjectMetadataField.ReleaseDate, MetadataCandidateQuality.Exact);
             MapCommonTag(builder, tag, MetadataTagFormat.Mp4, "MP4");
             builder.AddStructuredSourceTrack(tag.Track, tag.TrackCount);
             builder.AddStructuredSourceDisc(tag.Disc, tag.DiscCount);
@@ -294,7 +299,20 @@ public class TagMetadataReader
             builder.AddCandidate(ProjectMetadataField.SortAlbum, Clean(tag.AlbumSort), MetadataCandidateQuality.Exact, "MP4:soal");
 
             AddMp4Text(builder, tag, "©nrt", ProjectMetadataField.Narrators, MetadataCandidateQuality.Exact);
-            AddMp4Text(builder, tag, "©mvn", ProjectMetadataField.Series, MetadataCandidateQuality.CompatibleAlias);
+            foreach (var atom in new[] { "©mvn", "©mvi" })
+            {
+                // Foreign movement data is evidence only, never an inferred book series.
+                try
+                {
+                    builder.AddRaw(atom, CleanList(tag.GetText(ByteVector.FromString(atom, StringType.Latin1))), MetadataTagFormat.Mp4, atom);
+                }
+                catch
+                {
+                    builder.AddDiagnostic("Ein MP4-Movement-Atom konnte nicht gelesen werden und wurde übersprungen.");
+                }
+            }
+            builder.AddCandidate(ProjectMetadataField.SortAuthors, CleanList(tag.PerformersSort), MetadataCandidateQuality.CompatibleAlias, "MP4:soar");
+            builder.AddCandidate(ProjectMetadataField.SortComposers, CleanList(tag.ComposersSort), MetadataCandidateQuality.Exact, "MP4:soco");
 
             var freeforms = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var name in FreeformNames)
@@ -302,7 +320,7 @@ public class TagMetadataReader
                 IReadOnlyList<string> values;
                 try
                 {
-                    values = CleanList(tag.GetDashBoxes("com.apple.iTunes", name));
+                    values = tag.GetDashBoxes("com.apple.iTunes", name) ?? [];
                 }
                 catch
                 {
@@ -331,12 +349,15 @@ public class TagMetadataReader
         {
             try
             {
-                var values = CleanList(tag.GetText(new ByteVector(atom)));
+                var values = CleanList(tag.GetText(ByteVector.FromString(atom, StringType.Latin1)));
                 if (values.Count == 0)
                     return;
 
                 builder.AddRaw(atom, values, MetadataTagFormat.Mp4, atom);
-                builder.AddCandidate(field, values, quality, "MP4:" + atom);
+                if (ProjectMetadataFields.GetValueKind(field) == ProjectMetadataFieldValueKind.StringList)
+                    builder.AddCandidate(field, values, quality, "MP4:" + atom);
+                else
+                    builder.AddCandidate(field, First(values), quality, "MP4:" + atom);
             }
             catch
             {
@@ -415,7 +436,7 @@ public class TagMetadataReader
 
             foreach (var key in tag)
             {
-                var values = CleanList(tag.GetField(key));
+                IReadOnlyList<string> values = tag.GetField(key);
                 if (values.Count == 0)
                     continue;
 
@@ -441,7 +462,7 @@ public class TagMetadataReader
             foreach (var descriptor in tag)
             {
                 var value = descriptor.ToString();
-                if (string.IsNullOrWhiteSpace(value))
+                if (string.IsNullOrWhiteSpace(value) && NormalizeKey(descriptor.Name) is not ("SERIES" or "SERIESPART"))
                     continue;
 
                 builder.AddRaw(descriptor.Name, [value], MetadataTagFormat.Asf, "ASF");
@@ -478,7 +499,7 @@ public class TagMetadataReader
                 if (item is null || item.IsEmpty || item.Type != TagLib.Ape.ItemType.Text)
                     continue;
 
-                var values = CleanList(item.ToStringArray());
+                IReadOnlyList<string> values = item.ToStringArray();
                 if (values.Count == 0)
                     continue;
 
@@ -758,13 +779,14 @@ public class TagMetadataReader
                 Genres = BestList(ProjectMetadataField.Genres),
                 Categories = BestList(ProjectMetadataField.Categories),
                 ISBN = BestString(ProjectMetadataField.ISBN),
-                Barcode = BestString(ProjectMetadataField.Barcode),
                 ASIN = BestString(ProjectMetadataField.ASIN),
                 CatalogNumbers = BestList(ProjectMetadataField.CatalogNumbers),
-                MusicBrainzReleaseId = BestString(ProjectMetadataField.MusicBrainzReleaseId),
+                MusicBrainzWorkId = BestString(ProjectMetadataField.MusicBrainzWorkId),
                 SortTitle = BestString(ProjectMetadataField.SortTitle),
                 SortAuthors = BestList(ProjectMetadataField.SortAuthors),
                 SortNarrators = BestList(ProjectMetadataField.SortNarrators),
+                SortComposers = BestList(ProjectMetadataField.SortComposers),
+                GoodreadsUrl = BestString(ProjectMetadataField.GoodreadsUrl),
                 SortAlbum = BestString(ProjectMetadataField.SortAlbum),
                 SortSeries = BestString(ProjectMetadataField.SortSeries),
                 Website = BestString(ProjectMetadataField.Website),
@@ -774,24 +796,65 @@ public class TagMetadataReader
             };
         }
 
-        private string BestString(ProjectMetadataField field) =>
-            BestCandidate(field)?.Value as string ?? string.Empty;
+        private string BestString(ProjectMetadataField field)
+        {
+            if (field != ProjectMetadataField.ReleaseDate)
+                return BestCandidate(field)?.Value as string ?? string.Empty;
+            return _candidates.Where(candidate => candidate.Field == field && candidate.Value is string text &&
+                    MetadataDateParser.TryParse(text, out _))
+                .OrderBy(candidate => candidate.Quality)
+                .ThenByDescending(candidate => MetadataDateParser.TryParse((string)candidate.Value!, out var date)
+                    ? date.Day.HasValue ? 3 : date.Month.HasValue ? 2 : 1 : 0)
+                .Select(candidate => (string)candidate.Value!).FirstOrDefault() ?? string.Empty;
+        }
+
+        private string _sourceYear = "";
+        public void AddSourceYear(string value)
+        {
+            if (_sourceYear.Length == 0 && uint.TryParse(value, out var year) && year is > 0 and <= 9999) _sourceYear = value;
+        }
 
         private uint BestYear()
         {
-            var value = BestString(ProjectMetadataField.Year);
+            var value = _sourceYear;
             return uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var year)
                 ? year
                 : 0;
         }
 
-        private IReadOnlyList<string> BestList(ProjectMetadataField field) =>
-            BestCandidate(field)?.Value is IEnumerable<string> values
-                ? values.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()).ToArray()
-                : [];
+        private IReadOnlyList<string> BestList(ProjectMetadataField field)
+        {
+            var best = BestCandidate(field);
+            if (best is null) return [];
+            return _candidates.Where(candidate => candidate.Field == field && candidate.Quality == best.Quality &&
+                    candidate.SourceKey == best.SourceKey)
+                .SelectMany(candidate => candidate.Value is IEnumerable<string> values ? values : [])
+                .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim())
+                .Distinct(StringComparer.Ordinal).ToArray();
+        }
+
+        private readonly Dictionary<string, List<string>> _seriesNames = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, List<string>> _seriesParts = new(StringComparer.Ordinal);
+
+        public void AddSeriesValues(IReadOnlyList<string> values, bool parts, string sourceKey)
+        {
+            var separator = sourceKey.LastIndexOf(':');
+            var family = separator >= 0 ? sourceKey[..separator] : sourceKey;
+            var target = parts ? _seriesParts : _seriesNames;
+            if (!target.TryGetValue(family, out var entries)) target[family] = entries = [];
+            entries.AddRange(values.Select(value => value?.Trim() ?? string.Empty));
+        }
 
         private IReadOnlyList<SeriesEntry> BestSeriesList()
         {
+            foreach (var family in _seriesNames)
+            {
+                _seriesParts.TryGetValue(family.Key, out var parts);
+                var pairs = family.Value.Select((name, index) => new SeriesEntry(name,
+                    parts is not null && index < parts.Count ? parts[index] : string.Empty))
+                    .Where(entry => entry.Name.Length > 0).ToArray();
+                AddCandidate(ProjectMetadataField.Series, pairs, MetadataCandidateQuality.Exact, family.Key + ":SERIES");
+            }
             var candidates = _candidates
                 .Where(candidate => candidate.Field == ProjectMetadataField.Series)
                 .OrderBy(candidate => candidate.Quality)
@@ -804,29 +867,25 @@ public class TagMetadataReader
             if (best.Count == 0)
                 return [];
 
-            // BOOKSTITCH_SERIES may preserve additional ordered series that do not fit into
-            // the conventional primary SERIES/SERIES-PART pair. Exact external values stay
-            // authoritative; compatible preservation data may only fill matching/missing detail
-            // and append additional entries.
             if (bestQuality == MetadataCandidateQuality.Exact)
             {
                 var preserved = CleanSeriesCandidates(candidates.Where(candidate =>
                     candidate.SourceKey.Equals("MP4:BOOKSTITCH_SERIES", StringComparison.Ordinal)));
-                if (preserved.Count > 0 && SeriesNamesMatch(best[0], preserved[0]))
+                var merged = best.ToList();
+                var matchedExplicit = new HashSet<int>();
+                foreach (var item in preserved)
                 {
-                    var first = new SeriesEntry(
-                        best[0].Name,
-                        string.IsNullOrWhiteSpace(best[0].Part) ? preserved[0].Part : best[0].Part);
-                    var merged = new List<SeriesEntry> { first };
-                    merged.AddRange(best.Skip(1));
-                    foreach (var item in preserved.Skip(1))
+                    var index = Enumerable.Range(0, best.Count)
+                        .FirstOrDefault(index => !matchedExplicit.Contains(index) && SeriesNamesMatch(best[index], item), -1);
+                    if (index >= 0)
                     {
-                        if (!merged.Contains(item))
-                            merged.Add(item);
+                        matchedExplicit.Add(index);
+                        if (string.IsNullOrWhiteSpace(merged[index].Part))
+                            merged[index] = new SeriesEntry(merged[index].Name, item.Part);
                     }
-
-                    return merged;
+                    else if (!merged.Contains(item)) merged.Add(item);
                 }
+                return merged;
             }
 
             return best;
@@ -846,12 +905,6 @@ public class TagMetadataReader
                 .ToList();
             if (named.Count == 0)
                 return [];
-
-            var orphanPart = flattened
-                .FirstOrDefault(value => string.IsNullOrWhiteSpace(value.Name) && !string.IsNullOrWhiteSpace(value.Part))
-                ?.Part ?? string.Empty;
-            if (named.Count == 1 && string.IsNullOrWhiteSpace(named[0].Part) && !string.IsNullOrWhiteSpace(orphanPart))
-                named[0] = new SeriesEntry(named[0].Name, orphanPart);
 
             return named.Distinct().ToArray();
         }
@@ -892,8 +945,9 @@ public class TagMetadataReader
         builder.AddCandidate(ProjectMetadataField.SortAlbum, Clean(tag.AlbumSort), MetadataCandidateQuality.Exact, prefix + ":AlbumSort");
         builder.AddCandidate(ProjectMetadataField.Narrators, ExtractNarrators(tag.Comment), MetadataCandidateQuality.LegacyHeuristic, prefix + ":Comment");
 
+        if (tag.Year > 0) builder.AddSourceYear(tag.Year.ToString(CultureInfo.InvariantCulture));
         if (tag.Year > 0)
-            builder.AddCandidate(ProjectMetadataField.Year, tag.Year.ToString(CultureInfo.InvariantCulture), MetadataCandidateQuality.Exact, prefix + ":Year");
+            builder.AddCandidate(ProjectMetadataField.ReleaseDate, tag.Year.ToString(CultureInfo.InvariantCulture), MetadataCandidateQuality.LegacyHeuristic, prefix + ":Year");
     }
 
     private static void AddCommonRaw(
@@ -925,93 +979,96 @@ public class TagMetadataReader
         string sourceKey)
     {
         var normalized = NormalizeKey(key);
+        var exact = sourceKey.StartsWith("MP4:----:", StringComparison.Ordinal) &&
+            normalized is "SORTTITLE" or "SORTALBUM" or "SORTAUTHORS" or "SUBTITLE" or "RELEASEDATE"
+            ? MetadataCandidateQuality.LegacyHeuristic : MetadataCandidateQuality.Exact;
         switch (normalized)
         {
-            case "TITLE": builder.AddCandidate(ProjectMetadataField.Title, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
-            case "SUBTITLE": builder.AddCandidate(ProjectMetadataField.Subtitle, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+            case "TITLE": builder.AddCandidate(ProjectMetadataField.Title, First(values), exact, sourceKey); break;
+            case "SUBTITLE": builder.AddCandidate(ProjectMetadataField.Subtitle, First(values), exact, sourceKey); break;
             // Original work title is independent of the current title and the original album (TOAL).
-            case "ORIGINALTITLE": builder.AddCandidate(ProjectMetadataField.OriginalTitle, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+            case "ORIGINALTITLE": builder.AddCandidate(ProjectMetadataField.OriginalTitle, First(values), exact, sourceKey); break;
             case "ORIGTITLE": builder.AddCandidate(ProjectMetadataField.OriginalTitle, First(values), MetadataCandidateQuality.CompatibleAlias, sourceKey); break;
-            case "ALBUM": builder.AddCandidate(ProjectMetadataField.Album, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
-            case "DESCRIPTION": builder.AddCandidate(ProjectMetadataField.Description, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
-            case "COMMENT": builder.AddCandidate(ProjectMetadataField.Comment, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
-            case "AUTHOR": builder.AddCandidate(ProjectMetadataField.Authors, values, MetadataCandidateQuality.Exact, sourceKey); break;
+            case "ALBUM": builder.AddCandidate(ProjectMetadataField.Album, First(values), exact, sourceKey); break;
+            case "DESCRIPTION": builder.AddCandidate(ProjectMetadataField.Description, First(values), exact, sourceKey); break;
+            case "COMMENT": builder.AddCandidate(ProjectMetadataField.Comment, First(values), exact, sourceKey); break;
+            case "AUTHOR": builder.AddCandidate(ProjectMetadataField.Authors, values, exact, sourceKey); break;
             case "ARTIST": builder.AddCandidate(ProjectMetadataField.Authors, values, MetadataCandidateQuality.CompatibleAlias, sourceKey); break;
             case "ALBUMARTIST":
             case "ALBUMARTISTS":
-                builder.AddCandidate(ProjectMetadataField.Authors, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Authors, values, exact, sourceKey); break;
             case "NARRATOR":
             case "NARRATORS":
             case "READBY":
             case "READ_BY":
-                builder.AddCandidate(ProjectMetadataField.Narrators, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Narrators, values, exact, sourceKey); break;
             case "PERFORMER":
-                builder.AddCandidate(ProjectMetadataField.Narrators, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Narrators, values, exact, sourceKey); break;
             case "COMPOSER":
             case "COMPOSERS":
             case "TCOM":
-                builder.AddCandidate(ProjectMetadataField.Composers, values, MetadataCandidateQuality.Exact, sourceKey);
+                builder.AddCandidate(ProjectMetadataField.Composers, values, exact, sourceKey);
                 builder.AddCandidate(ProjectMetadataField.Narrators, values, MetadataCandidateQuality.CompatibleAlias, sourceKey);
                 break;
             case "TRANSLATOR":
             case "TRANSLATORS":
-                builder.AddCandidate(ProjectMetadataField.Translators, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Translators, values, exact, sourceKey); break;
             case "PERFORMERS":
-                builder.AddCandidate(ProjectMetadataField.Performers, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Performers, values, exact, sourceKey); break;
             case "CONTRIBUTOR":
             case "CONTRIBUTORS":
-                builder.AddCandidate(ProjectMetadataField.Contributors, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Contributors, values, exact, sourceKey); break;
             case "HOST":
             case "HOSTS":
-                builder.AddCandidate(ProjectMetadataField.Hosts, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Hosts, values, exact, sourceKey); break;
             case "GUEST":
             case "GUESTS":
-                builder.AddCandidate(ProjectMetadataField.Guests, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Guests, values, exact, sourceKey); break;
             case "SPEAKER":
             case "SPEAKERS":
-                builder.AddCandidate(ProjectMetadataField.Speakers, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Speakers, values, exact, sourceKey); break;
             case "GENRE":
-                builder.AddCandidate(ProjectMetadataField.Genres, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Genres, values, exact, sourceKey); break;
             case "LANGUAGE":
-                builder.AddCandidate(ProjectMetadataField.Languages, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Languages, values, exact, sourceKey); break;
             case "ORIGINALLANGUAGE":
-                builder.AddCandidate(ProjectMetadataField.OriginalLanguages, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.OriginalLanguages, values, exact, sourceKey); break;
             case "TARGETLANGUAGE":
-                builder.AddCandidate(ProjectMetadataField.TargetLanguages, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.TargetLanguages, values, exact, sourceKey); break;
             case "SERIES":
-                builder.AddCandidate(ProjectMetadataField.Series, [new SeriesEntry(First(values), string.Empty)], MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddSeriesValues(values, false, sourceKey); break;
             case "SERIESPART":
             case "SERIES_PART":
-                builder.AddCandidate(ProjectMetadataField.Series, [new SeriesEntry(string.Empty, First(values))], MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddSeriesValues(values, true, sourceKey); break;
             case "SERIESSORT":
-                builder.AddCandidate(ProjectMetadataField.SortSeries, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.SortSeries, First(values), exact, sourceKey); break;
             case "ISBN":
-                builder.AddCandidate(ProjectMetadataField.ISBN, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
-            case "BARCODE":
-            case "EAN":
-                builder.AddCandidate(ProjectMetadataField.Barcode, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.ISBN, First(values), exact, sourceKey); break;
             case "ASIN":
             case "AUDIBLEASIN":
-                builder.AddCandidate(ProjectMetadataField.ASIN, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.ASIN, First(values), exact, sourceKey); break;
             case "CATALOGNUMBER":
             case "CATALOGNUMBERS":
-                builder.AddCandidate(ProjectMetadataField.CatalogNumbers, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.CatalogNumbers, values, exact, sourceKey); break;
             case "RELEASEDATE":
-                builder.AddCandidate(ProjectMetadataField.ReleaseDate, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.ReleaseDate, First(values), exact, sourceKey); break;
             case "YEAR":
-                builder.AddCandidate(ProjectMetadataField.Year, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddSourceYear(First(values));
+                builder.AddCandidate(ProjectMetadataField.ReleaseDate, First(values), MetadataCandidateQuality.CompatibleAlias, sourceKey); break;
+            case "DATE":
+                builder.AddCandidate(ProjectMetadataField.ReleaseDate, First(values), MetadataCandidateQuality.CompatibleAlias, sourceKey); break;
             case "CONTENTTYPE":
-                builder.AddCandidate(ProjectMetadataField.ContentType, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.ContentType, First(values), exact, sourceKey); break;
             case "ABRIDGED":
             case "ABRIDGEDSTATUS":
-                builder.AddCandidate(ProjectMetadataField.AbridgedStatus, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.AbridgedStatus, First(values), exact, sourceKey); break;
             case "AUDIOWORKTYPE":
             case "WORKTYPE":
-                builder.AddCandidate(ProjectMetadataField.AudioWorkType, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.AudioWorkType, First(values), exact, sourceKey); break;
             case "EDITION":
-                builder.AddCandidate(ProjectMetadataField.Edition, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Edition, First(values), exact, sourceKey); break;
             case "VOLUME":
-                builder.AddCandidate(ProjectMetadataField.Volume, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Volume, First(values), exact, sourceKey); break;
             case "TRCK":
             case "TRKN":
             case "TRACK":
@@ -1032,38 +1089,43 @@ public class TagMetadataReader
             case "TOTALDISCS":
                 builder.AddSourceDiscTotal(values, sourceKey); break;
             case "SCRIPT":
-                builder.AddCandidate(ProjectMetadataField.Script, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Script, First(values), exact, sourceKey); break;
             case "PUBLISHER":
-                builder.AddCandidate(ProjectMetadataField.Publisher, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Publisher, First(values), exact, sourceKey); break;
             case "COPYRIGHT":
-                builder.AddCandidate(ProjectMetadataField.Copyright, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Copyright, First(values), exact, sourceKey); break;
             case "PHONOGRAMCOPYRIGHT":
-                builder.AddCandidate(ProjectMetadataField.PhonogramCopyright, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.PhonogramCopyright, First(values), exact, sourceKey); break;
             case "LICENSE":
-                builder.AddCandidate(ProjectMetadataField.License, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.License, First(values), exact, sourceKey); break;
             case "CATEGORY":
             case "CATEGORIES":
-                builder.AddCandidate(ProjectMetadataField.Categories, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Categories, values, exact, sourceKey); break;
             case "KEYWORD":
             case "KEYWORDS":
-                builder.AddCandidate(ProjectMetadataField.Keywords, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Keywords, values, exact, sourceKey); break;
             case "SORTTITLE":
-                builder.AddCandidate(ProjectMetadataField.SortTitle, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.SortTitle, First(values), exact, sourceKey); break;
             case "SORTALBUM":
-                builder.AddCandidate(ProjectMetadataField.SortAlbum, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.SortAlbum, First(values), exact, sourceKey); break;
             case "SORTAUTHOR":
             case "SORTAUTHORS":
-                builder.AddCandidate(ProjectMetadataField.SortAuthors, values, MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.SortAuthors, values, exact, sourceKey); break;
             case "NARRATORSORT":
             case "SORTNARRATOR":
             case "SORTNARRATORS":
-                builder.AddCandidate(ProjectMetadataField.SortNarrators, values, MetadataCandidateQuality.Exact, sourceKey); break;
-            case "MUSICBRAINZRELEASEID":
-                builder.AddCandidate(ProjectMetadataField.MusicBrainzReleaseId, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.SortNarrators, values, exact, sourceKey); break;
+            case "MUSICBRAINZWORKID":
+                builder.AddCandidate(ProjectMetadataField.MusicBrainzWorkId, First(values), exact, sourceKey); break;
+            case "GOODREADSURL":
+                builder.AddCandidate(ProjectMetadataField.GoodreadsUrl, First(values), exact, sourceKey); break;
+            case "COMPOSERSORT":
+            case "SORTCOMPOSERS":
+                builder.AddCandidate(ProjectMetadataField.SortComposers, values, exact, sourceKey); break;
             case "WEBSITE":
-                builder.AddCandidate(ProjectMetadataField.Website, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Website, First(values), exact, sourceKey); break;
             case "SOURCE":
-                builder.AddCandidate(ProjectMetadataField.Source, First(values), MetadataCandidateQuality.Exact, sourceKey); break;
+                builder.AddCandidate(ProjectMetadataField.Source, First(values), exact, sourceKey); break;
         }
     }
 

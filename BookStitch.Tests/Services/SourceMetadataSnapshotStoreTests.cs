@@ -25,7 +25,7 @@ public sealed class SourceMetadataSnapshotStoreTests
         Assert.Equal(AbridgedStatus.Abridged, loaded.CanonicalFields.AbridgedStatus);
         Assert.Equal(AudioWorkType.Audiobook, loaded.CanonicalFields.AudioWorkType);
         Assert.Equal(new MetadataDate(2026, 1, 31), loaded.CanonicalFields.ReleaseDate);
-        Assert.Equal(1997, loaded.CanonicalFields.Year);
+        Assert.Equal(new MetadataDate(2026, 1, 31), loaded.CanonicalFields.ReleaseDate);
         Assert.Equal("TXXX:ASIN", loaded.RawTags[0].OriginalKey);
         Assert.Equal("Kapitel 1", loaded.OriginalChapters[0].Title);
         Assert.Equal("Warnung", loaded.ReadDiagnostics[0]);
@@ -165,8 +165,6 @@ public sealed class SourceMetadataSnapshotStoreTests
                 AbridgedStatus = AbridgedStatus.Abridged,
                 AudioWorkType = AudioWorkType.Audiobook,
                 ReleaseDate = new MetadataDate(2026, 1, 31),
-                Year = 1997,
-                Barcode = "9781234567890",
                 CatalogNumbers = ["CAT-1"]
             },
             RawTags =

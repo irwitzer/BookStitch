@@ -82,19 +82,19 @@ public sealed record SourceMetadataCanonicalFields
     public string Script { get; init; } = string.Empty;
     public string Publisher { get; init; } = string.Empty;
     public MetadataDate? ReleaseDate { get; init; }
-    public int? Year { get; init; }
     public string Copyright { get; init; } = string.Empty;
     public string PhonogramCopyright { get; init; } = string.Empty;
     public string License { get; init; } = string.Empty;
     public IReadOnlyList<string> Categories { get; init; } = [];
     public string ISBN { get; init; } = string.Empty;
-    public string Barcode { get; init; } = string.Empty;
     public string ASIN { get; init; } = string.Empty;
     public IReadOnlyList<string> CatalogNumbers { get; init; } = [];
-    public string MusicBrainzReleaseId { get; init; } = string.Empty;
+    public string MusicBrainzWorkId { get; init; } = string.Empty;
+    public string GoodreadsUrl { get; init; } = string.Empty;
     public string SortTitle { get; init; } = string.Empty;
     public IReadOnlyList<string> SortAuthors { get; init; } = [];
     public IReadOnlyList<string> SortNarrators { get; init; } = [];
+    public IReadOnlyList<string> SortComposers { get; init; } = [];
     public string SortAlbum { get; init; } = string.Empty;
     public string SortSeries { get; init; } = string.Empty;
     public string Website { get; init; } = string.Empty;
@@ -109,6 +109,7 @@ public sealed record SourceTechnicalInfo
     public int? Channels { get; init; }
     public string Codec { get; init; } = string.Empty;
     public string Container { get; init; } = string.Empty;
+    public string? AudioProfile { get; init; }
 }
 
 public sealed record SourceCoverCandidateInfo

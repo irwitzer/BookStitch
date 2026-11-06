@@ -10,6 +10,9 @@ public static class AudioProcessingService
 {
     public static string DetermineProcessingAction(TrackInfo track, ExportPreset preset)
     {
+        if (track.AacForceEncodeAll) return ProcessingActionIds.Convert;
+        if (track.AacPlanAction is not null && track.AacPlanPreset == preset.DisplayName) return track.AacPlanAction;
+        if (preset.IsPassThrough) return ProcessingActionIds.Inspect;
         if (!track.AllowAacReuse) return ProcessingActionIds.Convert;
         var codec = (track.Codec ?? "").Trim();
         var extension = (track.Extension ?? "").Trim().TrimStart('.');

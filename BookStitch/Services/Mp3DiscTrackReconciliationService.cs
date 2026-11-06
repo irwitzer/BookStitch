@@ -38,6 +38,7 @@ public sealed class Mp3DiscTrackReconciliationService
                     : $"{duration.Minutes:00}:{duration.Seconds:00}";
             }
             track.BitrateKbps ??= snapshot.TechnicalInfo.BitrateKbps;
+            track.AudioProfile ??= snapshot.TechnicalInfo.AudioProfile;
             track.Channels ??= snapshot.TechnicalInfo.Channels;
             if (string.IsNullOrWhiteSpace(track.ChannelLayout) && track.Channels.HasValue)
                 track.ChannelLayout = AudioProcessingService.FormatChannelLayout(track.Channels);

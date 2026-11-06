@@ -6,6 +6,21 @@ namespace BookStitch.Services;
 
 public sealed class FolderProjectManifestService
 {
+    public void SavePlan(string projectFolder, AacDecisionPlan plan)
+    {
+        var path = ProjectFolderLayout.GetFolderManifestPath(projectFolder);
+        lock (AtomicJsonStore.ForPath(path))
+        {
+            var main = Read(projectFolder) ?? throw new IOException("Folder project manifest missing.");
+            plan.PlanIntegrity = AacDecisionPlanner.Integrity(plan);
+            main.AacPlan = plan;
+            if (plan.IsOriginal) main.OriginalAacPlan = plan;
+            main.TargetSampleRateHz = FolderSampleRateService.RequireSupported(plan.SampleRateHz);
+            main.AllowAacReuse = true;
+            main.UpdatedUtc = DateTime.UtcNow;
+            _store.Save(path, main, Options);
+        }
+    }
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     private readonly AtomicJsonStore _store = new();
 

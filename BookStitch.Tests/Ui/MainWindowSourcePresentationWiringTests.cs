@@ -311,7 +311,7 @@ public sealed class MainWindowSourcePresentationWiringTests
             Assert.Equal($"{{Binding {enabled}}}", Attribute(button, "IsEnabled"));
             Assert.Equal($"{{Binding {visible}}}", Attribute(button, "Visibility"));
         }
-        Assert.Single(bar.Descendants(), element => Attribute(element, "Style") == "{StaticResource AccentOpenOutputFolderButtonStyle}");
+        Assert.Single(bar.Descendants(), element => Attribute(element, "Style") == "{StaticResource OpenOutputFolderButtonStyle}");
         Assert.Equal("2", Attribute(folder, "Grid.Column"));
         Assert.Equal("Right", Attribute(folder, "HorizontalAlignment"));
         Assert.Equal("{Binding CanOpenOutputFolder}", Attribute(folder, "IsEnabled"));

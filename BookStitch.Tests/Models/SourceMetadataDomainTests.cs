@@ -68,11 +68,9 @@ public sealed class SourceMetadataDomainTests
     {
         var fields = new SourceMetadataCanonicalFields
         {
-            Barcode = "9781234567890",
             CatalogNumbers = ["ABC-1", "ABC-2"]
         };
 
-        Assert.Equal("9781234567890", fields.Barcode);
         Assert.Equal(["ABC-1", "ABC-2"], fields.CatalogNumbers);
         Assert.DoesNotContain(
             "EAN",

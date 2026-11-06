@@ -223,14 +223,14 @@ public sealed partial class WpfDialogRuntimeTests
                 () => metadata,
                 new MetadataPreferences(),
                 new MetadataNormalizationService(),
-                ProjectMetadataField.Barcode,
-                ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Barcode),
+                ProjectMetadataField.ASIN,
+                ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ASIN),
                 _ => { },
                 _ => { });
             field.SetCandidates(
             [
                 new ConceptMetadataCandidate(
-                    ProjectMetadataField.Barcode,
+                    ProjectMetadataField.ASIN,
                     "Hallo",
                     "Hallo",
                     1,
@@ -395,14 +395,14 @@ public sealed partial class WpfDialogRuntimeTests
                 () => metadata,
                 new MetadataPreferences(),
                 new MetadataNormalizationService(),
-                ProjectMetadataField.Barcode,
-                ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Barcode),
+                ProjectMetadataField.ASIN,
+                ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ASIN),
                 _ => { },
                 _ => { });
             field.SetCandidates(
             [
                 new ConceptMetadataCandidate(
-                    ProjectMetadataField.Barcode,
+                    ProjectMetadataField.ASIN,
                     "Hallo",
                     "Hallo",
                     1,
@@ -418,7 +418,7 @@ public sealed partial class WpfDialogRuntimeTests
             field.SetCandidates(
             [
                 new ConceptMetadataCandidate(
-                    ProjectMetadataField.Barcode,
+                    ProjectMetadataField.ASIN,
                     "Hallo",
                     "Hallo",
                     4,
@@ -466,7 +466,7 @@ public sealed partial class WpfDialogRuntimeTests
     }
 
     [Theory]
-    [InlineData(ProjectMetadataField.Barcode, false)]
+    [InlineData(ProjectMetadataField.ASIN, false)]
     [InlineData(ProjectMetadataField.SortNarrators, true)]
     public void Generic_candidate_refresh_preserves_explicit_edit_draft_and_caret(
         ProjectMetadataField fieldId,

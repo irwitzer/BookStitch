@@ -6,6 +6,30 @@ namespace BookStitch.Tests.Ui;
 public sealed class MainWindowLifecycleWiringTests
 {
     [Fact]
+    public void Local_completion_publishes_the_checkpoint_to_the_existing_ui_row_before_the_run_finishes()
+    {
+        var prepare = SourceContract.ExtractMember(MainWindowSource, "private async Task<bool> PrepareCurrentLocalProjectSourcesAsync()");
+        SourceContract.AssertInOrder(prepare, "var completed = preparedLifecycle.Complete", "await PublishPreparedTrackCompletionAsync(mappedTrack.Track, completed", "new Progress<LocalProjectLivePreparationProgress>");
+        var publish = RepositorySource.Read(["BookStitch", "MainWindow.PreparedTrackCompletion.cs"]);
+        Assert.Contains("Dispatcher.InvokeAsync", publish);
+        Assert.Contains("Tracks.Contains(track)", publish);
+        Assert.Contains("_currentProjectWorkFolder != project", publish);
+        Assert.Contains("ApplyCompletedCheckpoint(track, completed, preset)", publish);
+    }
+
+    [Fact]
+    public void New_folder_import_resets_aac_consent_and_requires_its_own_choice()
+    {
+        var import = SourceContract.ExtractMember(MainWindowSource, "private async Task LoadFolderAsync(");
+        SourceContract.AssertInOrder(import, "if (captureLocalImportPerformance)", "_acceptedAacPlan = null;", "ResetAacEvidence();", "_aacPlanningEnabled = true;", "newFolderImport: true");
+        var advisory = SourceContract.ExtractMember(MainWindowSource, "private void ConfirmLoadedPresetBitrateIfNeeded()");
+        SourceContract.AssertInOrder(advisory, "_acceptedAacPlan.ReusedCount > 0 || _acceptedAacPlan.ForceEncodeAll", "ConfirmPresetBitrateIfNeeded(");
+        var aac = RepositorySource.Read(["BookStitch", "MainWindow.AacDecision.cs"]);
+        Assert.Contains("requireReuseConfirmation: newFolderImport", aac);
+        Assert.Contains("if (!newFolderImport && !extension", aac);
+    }
+
+    [Fact]
     public void Failed_disc_close_saves_through_window_cross_or_deletes_through_drained_managed_workspace()
     {
         var close = SourceContract.ExtractMember(MainWindowSource, "private async Task CloseFailedDiscProjectAsync()");

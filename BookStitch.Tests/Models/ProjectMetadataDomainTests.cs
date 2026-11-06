@@ -115,17 +115,17 @@ public sealed class ProjectMetadataDomainTests
     }
 
     [Fact]
-    public void ProjectMetadataField_DateModelContainsOnlyReleaseDateAndYear()
+    public void ProjectMetadataField_DateModelContainsOnlyReleaseDateAndRetiresYearId()
     {
         var names = Enum.GetNames<ProjectMetadataField>();
 
         Assert.Contains(nameof(ProjectMetadataField.ReleaseDate), names);
-        Assert.Contains(nameof(ProjectMetadataField.Year), names);
+        Assert.DoesNotContain("Year", names);
         Assert.DoesNotContain("OriginalReleaseDate", names);
         Assert.DoesNotContain("PublicationDate", names);
         Assert.Equal(ProjectMetadataFieldValueKind.MetadataDate, ProjectMetadataFields.GetValueKind(ProjectMetadataField.ReleaseDate));
-        Assert.Equal(ProjectMetadataFieldValueKind.Integer, ProjectMetadataFields.GetValueKind(ProjectMetadataField.Year));
-        Assert.Equal(28, (int)ProjectMetadataField.Year);
+        Assert.DoesNotContain(ProjectMetadataField.ReservedYear, ProjectMetadataFields.OutputFields);
+        Assert.Equal(28, (int)ProjectMetadataField.ReservedYear);
         Assert.Equal(47, (int)ProjectMetadataField.OutputTrackTotal);
         Assert.Equal(48, (int)ProjectMetadataField.Composers);
         Assert.Equal(ProjectMetadataFieldValueKind.StringList, ProjectMetadataFields.GetValueKind(ProjectMetadataField.Composers));
@@ -134,7 +134,7 @@ public sealed class ProjectMetadataDomainTests
     [Fact]
     public void ProjectMetadataField_OutputFieldsExposeStableEnumIds()
     {
-        Assert.Contains(ProjectMetadataField.Barcode, ProjectMetadataFields.OutputFields);
+        Assert.Contains(ProjectMetadataField.ASIN, ProjectMetadataFields.OutputFields);
         Assert.Contains(ProjectMetadataField.CatalogNumbers, ProjectMetadataFields.OutputFields);
         Assert.DoesNotContain("EAN", ProjectMetadataFields.OutputFields.Select(field => field.ToString()));
         Assert.Equal(ProjectMetadataFields.OutputFields.Count, ProjectMetadataFields.OutputFields.Distinct().Count());

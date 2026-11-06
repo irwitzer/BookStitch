@@ -318,10 +318,9 @@ public sealed partial class RealMediaIntegrationTests
                 Series = [new SeriesEntry("Saga 零", "2"), new SeriesEntry("Nebenreihe", "β")],
                 ISBN = "978-3-16-148410-0",
                 ASIN = "B00TESTΩ",
-                Barcode = "9783161484100",
                 CatalogNumbers = ["CAT-Ω", "目録-2"],
                 ReleaseDate = new MetadataDate(2024),
-                Year = 2024,
+
                 Publisher = "Verlag 世界",
                 Copyright = "© 2024 Autor Ω",
                 PhonogramCopyright = "℗ 2024 Studio Ω",
@@ -342,7 +341,7 @@ public sealed partial class RealMediaIntegrationTests
         using var file = TagLibFile.Create(audioPath);
         var tag = Assert.IsType<AppleTag>(file.GetTag(TagLib.TagTypes.Apple));
         Assert.Equal("Книга 你好 e\u0301", tag.Title);
-        Assert.Equal("Untertitel Ω", tag.Subtitle);
+        Assert.Equal(["Untertitel Ω"], tag.GetText(TagLib.ByteVector.FromString("©st3", TagLib.StringType.Latin1)));
         Assert.Equal("Album 世界", tag.Album);
         Assert.Equal(["Anaïs Nin", "李雷", "Мария"], tag.AlbumArtists);
         Assert.Equal(["Anaïs Nin", "李雷", "Мария"], tag.Performers);
@@ -361,9 +360,9 @@ public sealed partial class RealMediaIntegrationTests
         Assert.Equal(["2"], tag.GetDashBoxes("com.apple.iTunes", "SERIES-PART"));
         Assert.Equal(["978-3-16-148410-0"], tag.GetDashBoxes("com.apple.iTunes", "ISBN"));
         Assert.Equal(["B00TESTΩ"], tag.GetDashBoxes("com.apple.iTunes", "ASIN"));
-        Assert.Equal(["9783161484100"], tag.GetDashBoxes("com.apple.iTunes", "BARCODE"));
+        Assert.Null(tag.GetDashBoxes("com.apple.iTunes", "BARCODE"));
         Assert.Equal(["CAT-Ω", "目録-2"], tag.GetDashBoxes("com.apple.iTunes", "CATALOGNUMBER"));
-        Assert.Equal(["2024"], tag.GetDashBoxes("com.apple.iTunes", "RELEASEDATE"));
+        Assert.Null(tag.GetDashBoxes("com.apple.iTunes", "RELEASEDATE"));
         Assert.Null(tag.GetDashBoxes("com.apple.iTunes", "ORIGINALDATE"));
         Assert.Null(tag.GetDashBoxes("com.apple.iTunes", "PUBLICATIONDATE"));
         Assert.Contains("Title: Книга 你好 e\u0301", tag.Description);
@@ -381,7 +380,6 @@ public sealed partial class RealMediaIntegrationTests
             readBack.Original.Series);
         Assert.Equal("978-3-16-148410-0", readBack.Original.ISBN);
         Assert.Equal("B00TESTΩ", readBack.Original.ASIN);
-        Assert.Equal("9783161484100", readBack.Original.Barcode);
         Assert.Equal(["CAT-Ω", "目録-2"], readBack.Original.CatalogNumbers);
         Assert.Equal("Klappentext mit Unicode: Добрый день / 你好 / e\u0301", readBack.Original.Description);
     }

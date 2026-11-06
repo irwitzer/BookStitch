@@ -25,10 +25,12 @@ public static class ConceptMetadataFieldCandidateComposer
         ArgumentNullException.ThrowIfNull(candidateService);
         ArgumentNullException.ThrowIfNull(bindings);
 
+        var bindingStates = bindings.ToArray();
         var retainedBindingTargetCandidates = BuildRetainedBindingTargetCandidates(
             field.Field,
             metadataState,
-            bindings);
+            bindingStates);
+        retainedBindingTargetCandidates = (retainedBindingTargetCandidates ?? []).Concat(BuildSortSuggestions(field.Field, metadataState, bindingStates));
 
         if (field.ValueKind == ProjectMetadataFieldValueKind.StringList)
         {
@@ -80,6 +82,32 @@ public static class ConceptMetadataFieldCandidateComposer
         }
 
         return [];
+    }
+
+    private static IEnumerable<ConceptMetadataCandidate> BuildSortSuggestions(
+        ProjectMetadataField field,
+        ProjectMetadataState state,
+        IReadOnlyList<ConceptMetadataFieldBindingState> bindings)
+    {
+        var source = field switch
+        {
+            ProjectMetadataField.SortTitle => ProjectMetadataField.Title,
+            ProjectMetadataField.SortAuthors => ProjectMetadataField.Authors,
+            ProjectMetadataField.SortNarrators => ProjectMetadataField.Narrators,
+            ProjectMetadataField.SortAlbum => ProjectMetadataField.Album,
+            ProjectMetadataField.SortSeries => ProjectMetadataField.Series,
+            ProjectMetadataField.SortComposers => ProjectMetadataField.Composers,
+            _ => (ProjectMetadataField?)null
+        };
+        if (source is null) return [];
+        // An active binding projects its source without storing a second target value.
+        var effectiveSource = bindings.SingleOrDefault(binding => binding.TargetFieldId == source && binding.IsActive)
+            ?.SourceFieldId ?? source.Value;
+        IEnumerable<string> values = effectiveSource == ProjectMetadataField.Series
+            ? (state.CanonicalMetadata.GetValue<IReadOnlyList<SeriesEntry>>(effectiveSource).Value ?? []).Select(entry => entry.Name)
+            : new ProjectMetadataFieldBindingProjectionService().ReadTextValues(state.CanonicalMetadata, effectiveSource);
+        return values.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(value => new ConceptMetadataCandidate(field, value, value, 0, MetadataOrigin.Derived));
     }
 
     private static IEnumerable<ConceptMetadataCandidate>? BuildRetainedBindingTargetCandidates(

@@ -21,6 +21,7 @@ public sealed class FfmpegRunnerService
         if (string.IsNullOrWhiteSpace(ffmpegPath))
             throw new InvalidOperationException(LocalizationText.Get("Tools.Ffmpeg.NotConfigured"));
 
+        using var measurement = PerformanceMeasurement.Start("process.ffmpeg");
         using var process = new Process();
         var stderr = new StringBuilder();
         var stdout = new StringBuilder();
@@ -96,6 +97,10 @@ public sealed class FfmpegRunnerService
         {
             token.ThrowIfCancellationRequested();
             process.Start();
+            measurement?.Add("Calls");
+            if (arguments.Contains("0.5")) measurement?.Add("DecodeTests");
+            if (arguments.Contains("aac_adtstoasc")) measurement?.Add("AdtsRemuxes");
+            if (arguments.Any(argument => argument.StartsWith("anullsrc=", StringComparison.Ordinal))) measurement?.Add("Calibrations");
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 

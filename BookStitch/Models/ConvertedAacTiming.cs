@@ -9,6 +9,8 @@ public sealed record ConvertedAacTiming(
     long TimeBaseNumerator,
     long TimeBaseDenominator)
 {
+    public AudioStreamDetails? Audio { get; init; }
+
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsValid => Version == 1 && Length > 0 &&
         SpanUnits > 0 && TimeBaseNumerator > 0 && TimeBaseDenominator > 0;

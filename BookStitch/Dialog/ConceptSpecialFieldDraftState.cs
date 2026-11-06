@@ -12,27 +12,13 @@ public interface IConceptSpecialMetadataDraft : INotifyPropertyChanged
 
 public sealed class ConceptSpecialFieldDraftState : INotifyPropertyChanged
 {
-    private string _year = string.Empty;
     private string _trackNumber = string.Empty;
     private string _trackCount = string.Empty;
     private AudioWorkType? _workType;
     private AbridgedStatus? _abridgedStatus;
-    private IConceptSpecialMetadataDraft? _yearState;
     private IConceptSpecialMetadataDraft? _workTypeState;
     private IConceptSpecialMetadataDraft? _abridgedStatusState;
 
-    public string Year
-    {
-        get => _yearState?.DraftText ?? _year;
-        set
-        {
-            if (_yearState is not null)
-                _yearState.DraftText = value ?? string.Empty;
-            else
-                SetField(ref _year, value ?? string.Empty);
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Year)));
-        }
-    }
     public string TrackNumber { get => _trackNumber; set => SetField(ref _trackNumber, value ?? string.Empty); }
     public string TrackCount { get => _trackCount; set => SetField(ref _trackCount, value ?? string.Empty); }
     public AudioWorkType? WorkType
@@ -65,20 +51,15 @@ public sealed class ConceptSpecialFieldDraftState : INotifyPropertyChanged
     }
 
     public void Attach(
-        IConceptSpecialMetadataDraft yearState,
         IConceptSpecialMetadataDraft workTypeState,
         IConceptSpecialMetadataDraft abridgedStatusState)
     {
-        _yearState = yearState;
         _workTypeState = workTypeState;
         _abridgedStatusState = abridgedStatusState;
-        _yearState.PropertyChanged += SpecialState_PropertyChanged;
         _workTypeState.PropertyChanged += SpecialState_PropertyChanged;
         _abridgedStatusState.PropertyChanged += SpecialState_PropertyChanged;
-        Year = _year;
         WorkType = _workType;
         AbridgedStatus = _abridgedStatus;
-        _year = string.Empty;
         _workType = null;
         _abridgedStatus = null;
     }
@@ -88,9 +69,7 @@ public sealed class ConceptSpecialFieldDraftState : INotifyPropertyChanged
         if (e.PropertyName is not (nameof(IConceptSpecialMetadataDraft.DraftText) or nameof(IConceptSpecialMetadataDraft.DraftValue)))
             return;
 
-        if (ReferenceEquals(sender, _yearState))
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Year)));
-        else if (ReferenceEquals(sender, _workTypeState))
+        if (ReferenceEquals(sender, _workTypeState))
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WorkType)));
         else if (ReferenceEquals(sender, _abridgedStatusState))
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AbridgedStatus)));
@@ -98,7 +77,6 @@ public sealed class ConceptSpecialFieldDraftState : INotifyPropertyChanged
 
     public void Clear()
     {
-        Year = string.Empty;
         TrackNumber = string.Empty;
         TrackCount = string.Empty;
         WorkType = null;

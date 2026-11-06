@@ -204,6 +204,7 @@ public sealed class TrackPreparedStateRefreshServiceTests
         var manifestPath = ProjectFolderLayout.GetExportManifestPath(folder.Path);
         File.WriteAllText(Converted(tracks[0]), "prepared");
         store.UpdateTrack(manifest, 0, tracks[0], tracks[0].FilePath, Converted(tracks[0]), ExportPreset.Parse(selected));
+        manifest.Tracks[0].AacTiming = new(1, new FileInfo(Converted(tracks[0])).Length, File.GetLastWriteTimeUtc(Converted(tracks[0])).Ticks, 44100, 1, 44100) { Audio = new("aac", "LC", 44100, 1, 64000m) };
         store.Save(manifestPath, manifest);
         var service = new TrackPreparedStateRefreshService();
         service.RefreshForCurrentPreset(tracks, folder.Path, selected);
@@ -214,6 +215,7 @@ public sealed class TrackPreparedStateRefreshServiceTests
         Assert.All(tracks, track => Assert.Null(track.DisplayPreparedBitrateKbps));
         File.WriteAllText(Converted(tracks[1]), "prepared");
         store.UpdateTrack(manifest, 1, tracks[1], tracks[1].FilePath, Converted(tracks[1]), ExportPreset.Parse(selected));
+        manifest.Tracks[1].AacTiming = new(1, new FileInfo(Converted(tracks[1])).Length, File.GetLastWriteTimeUtc(Converted(tracks[1])).Ticks, 44100, 1, 44100) { Audio = new("aac", "LC", 44100, 1, 64000m) };
         store.Save(manifestPath, manifest);
         service.RefreshForCurrentPreset(tracks, folder.Path, selected);
         Assert.All(tracks, track => Assert.Equal(64, track.DisplayPreparedBitrateKbps));

@@ -19,7 +19,7 @@ public sealed partial class WpfDialogRuntimeTests
             var source = RepositorySource.LoadXaml(["BookStitch", "MainWindow.xaml"]);
             XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-            var names = new[] { "TrackGridOriginalBitrateColumn", "TrackGridOriginalSampleRateColumn", "TrackGridOriginalChannelLayoutColumn", "TrackGridBitrateColumn", "TrackGridChannelLayoutColumn" };
+            var names = new[] { "TrackGridOriginalBitrateColumn", "TrackGridBitrateColumn", "TrackGridOriginalSampleRateColumn", "TrackGridSampleRateColumn", "TrackGridOriginalChannelLayoutColumn", "TrackGridChannelLayoutColumn", "TrackGridOriginalProfileColumn", "TrackGridProfileColumn" };
             var columns = names.Select(name => new XElement(source.Descendants(wpf + "DataGridTextColumn")
                 .Single(element => (string?)element.Attribute(x + "Name") == name))).ToArray();
             var markup = new XElement(wpf + "DataGrid",
@@ -28,50 +28,37 @@ public sealed partial class WpfDialogRuntimeTests
                 new XAttribute("AutoGenerateColumns", "False"),
                 new XElement(wpf + "DataGrid.Columns", columns));
             var grid = (DataGrid)XamlReader.Parse(markup.ToString());
-            var track = new TrackInfo { BitrateKbps = 256, SampleRateHz = 44100, Channels = 2,
-                PreparedConvertedPreset = "AAC Mono 64 kbps", HasReusableConvertedFile = true };
+            var track = new TrackInfo { BitrateKbps = 256, SampleRateHz = 44100, Channels = 2, Codec = "AAC", AudioProfile = "HE-AAC",
+                PreparedConvertedPreset = "AAC Mono 64 kbps", HasReusableConvertedFile = true,
+                PreparedAudio = new("aac", "LC", 48000, 1, 63123m) };
             grid.Items.Add(track);
-            var window = new Window { Content = grid, Width = 650, Height = 180, ShowInTaskbar = false };
+            var window = new Window { Content = grid, Width = 1500, Height = 180, ShowInTaskbar = false };
             try
             {
-                window.Show();
+                window.Show(); DrainDispatcher();
+                string Cell(int index) => Assert.IsType<TextBlock>(grid.Columns[index].GetCellContent(track)).Text;
+                Assert.Equal(new[] { "256", "63", "44.100", "48.000", "Stereo", "Mono", "HE-AAC v1", "AAC-LC" }, Enumerable.Range(0, 8).Select(Cell));
+                Assert.All(grid.Columns, column => Assert.Equal(Visibility.Visible, column.Visibility));
+                track.BitrateKbps = 192; track.SampleRateHz = 48000; track.Channels = 1; track.AudioProfile = "HE-AACv2";
                 DrainDispatcher();
-                Assert.Equal("256", Assert.IsType<TextBlock>(grid.Columns[0].GetCellContent(track)).Text);
-                Assert.Equal(track.DisplayOriginalSampleRateHz,
-                    Assert.IsType<TextBlock>(grid.Columns[1].GetCellContent(track)).Text);
-                Assert.Equal("Stereo", Assert.IsType<TextBlock>(grid.Columns[2].GetCellContent(track)).Text);
-                Assert.Equal(Visibility.Collapsed, grid.Columns[3].Visibility);
-                Assert.Equal(Visibility.Collapsed, grid.Columns[4].Visibility);
-                track.BitrateKbps = 192;
-                track.SampleRateHz = 48000;
-                track.Channels = 1;
-                DrainDispatcher();
-                Assert.Equal("192", Assert.IsType<TextBlock>(grid.Columns[0].GetCellContent(track)).Text);
-                Assert.Equal("48.000", Assert.IsType<TextBlock>(grid.Columns[1].GetCellContent(track)).Text);
-                Assert.Equal("Mono", Assert.IsType<TextBlock>(grid.Columns[2].GetCellContent(track)).Text);
-                var headerKeys = new[] { "UiOriginalBitrate", "UiOriginalSampleRate", "UiOriginalMonoStereo" };
-                for (var index = 0; index < 3; index++)
-                {
-                    var header = new System.Windows.Controls.Primitives.DataGridColumnHeader
-                    { Style = grid.Columns[index].HeaderStyle };
-                    Assert.Equal(LocalizationText.Get(headerKeys[index]),
-                        System.Windows.Automation.AutomationProperties.GetName(header));
-                }
-                grid.Columns[0].Visibility = Visibility.Collapsed;
-                grid.Columns[1].Visibility = Visibility.Collapsed;
-                grid.Columns[2].Visibility = Visibility.Collapsed;
-                grid.Columns[3].Visibility = Visibility.Visible;
-                grid.Columns[4].Visibility = Visibility.Visible;
-                DrainDispatcher();
-                Assert.Equal("64", Assert.IsType<TextBlock>(grid.Columns[3].GetCellContent(track)).Text);
-                Assert.Equal("Mono", Assert.IsType<TextBlock>(grid.Columns[4].GetCellContent(track)).Text);
-                track.Channels = 2;
-                grid.Columns[0].Visibility = Visibility.Visible;
-                grid.Columns[2].Visibility = Visibility.Visible;
-                DrainDispatcher();
-                Assert.Equal("192", Assert.IsType<TextBlock>(grid.Columns[0].GetCellContent(track)).Text);
-                Assert.Equal("Stereo", Assert.IsType<TextBlock>(grid.Columns[2].GetCellContent(track)).Text);
-                Assert.Equal("Mono", Assert.IsType<TextBlock>(grid.Columns[4].GetCellContent(track)).Text);
+                Assert.Equal("192", Cell(0)); Assert.Equal("48.000", Cell(2)); Assert.Equal("Mono", Cell(4)); Assert.Equal("HE-AAC v2", Cell(6));
+                Assert.Equal("63", Cell(1)); // Actual prepared bitrate, not the nominal 64-kbit preset.
+                var keys = new[] { "BitrateIn", "BitrateOut", "SampleRateIn", "SampleRateOut", "ChannelsIn", "ChannelsOut", "ProfileIn", "ProfileOut" };
+                foreach (var locale in new[] { "bn-BD", "cs", "da", "de", "en", "es", "fi", "fr", "gsw-CH", "it", "ja", "nb", "nl", "pl", "pt-BR", "ru", "sv", "tr", "vi", "zh-CN", "zh-HK" })
+                    WithSettingsCulture(locale, () =>
+                    {
+                        var localizedGrid = (DataGrid)XamlReader.Parse(markup.ToString());
+                        for (var index = 0; index < 8; index++)
+                        {
+                            var header = new System.Windows.Controls.Primitives.DataGridColumnHeader { Style = localizedGrid.Columns[index].HeaderStyle };
+                            var expected = LocalizationText.Get("Tracks.Audio." + keys[index]);
+                            Assert.EndsWith(index % 2 == 0 ? " IN" : " OUT", expected);
+                            Assert.Equal(expected, System.Windows.Automation.AutomationProperties.GetName(header));
+                        }
+                    });
+                track.HasReusableConvertedFile = false; DrainDispatcher();
+                Assert.All(new[] { 1, 3, 5, 7 }, index => Assert.Empty(Cell(index)));
+                Assert.Equal("192", Cell(0));
             }
             finally { window.Close(); }
         });

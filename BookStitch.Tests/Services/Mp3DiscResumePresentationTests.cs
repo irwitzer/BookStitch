@@ -75,6 +75,7 @@ public sealed class Mp3DiscResumePresentationTests
                 SourceId = id, SourcePath = imported, ConvertedPath = converted, Preset = "AAC Stereo 128 kbps",
                 SourceSizeBytes = new FileInfo(imported).Length, SourceLastWriteUtcTicks = File.GetLastWriteTimeUtc(imported).Ticks,
                 ConvertedSizeBytes = new FileInfo(converted).Length, ConvertedLastWriteUtcTicks = File.GetLastWriteTimeUtc(converted).Ticks,
+                AacTiming = new(1, new FileInfo(converted).Length, File.GetLastWriteTimeUtc(converted).Ticks, 48000, 1, 48000) { Audio = new("aac", "LC", 48000, 2, 128000m) },
                 PreparationVersion = 1, PreparationId = validPreparation ? Guid.NewGuid() : Guid.Empty,
                 TargetSampleRateHz = 48000, Status = "Converted"
             }]

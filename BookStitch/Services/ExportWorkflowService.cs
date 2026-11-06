@@ -312,6 +312,11 @@ public sealed class ExportWorkflowService
             await lifecycle.DrainAsync();
             token.ThrowIfCancellationRequested();
 
+            if (exportPlan.ProjectType == ProjectManifestTypes.FolderProject)
+                requiresPreparation |= await AacMergeSafetyService.ValidateOrFallbackAsync(
+                    _aacExportProcessingService, exportPlan.ProjectWorkFolder, preparationPlan.Items,
+                    preset, exportPlan.TargetSampleRateHz, request.FfmpegPath, request.FfprobePath, lifecycle, token);
+
             lock (manifestLock)
             {
                 _projectSnapshotService.SaveExportSnapshot(

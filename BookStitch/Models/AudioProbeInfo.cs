@@ -21,6 +21,8 @@ public class AudioProbeInfo
         !string.IsNullOrWhiteSpace(AacConfigurationId);
 
     public bool Success { get; set; }
+    public bool HasProbeErrors { get; set; }
+    public List<string> AttachedPictureCodecs { get; set; } = [];
 
     public string? ErrorMessage { get; set; }
 
@@ -37,12 +39,16 @@ public class AudioProbeInfo
     public string? CodecType { get; set; }
 
     public int? BitrateKbps { get; set; }
+    public decimal? AudioBitrateBitsPerSecond { get; set; }
 
     public int? SampleRateHz { get; set; }
 
     public int? Channels { get; set; }
 
     public TimeSpan? Duration { get; set; }
+    public TimeSpan? AudioStreamDuration { get; set; }
+    public bool IsDurationEstimated { get; set; }
+    public string DurationPrecision { get; set; } = "Unknown";
 
     public List<TrackEmbeddedChapterInfo> Chapters { get; set; } = [];
 

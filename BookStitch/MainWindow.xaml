@@ -419,6 +419,7 @@
                               ItemsSource="{Binding ExportPresets}"
                               SelectedItem="{Binding SelectedExportPreset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                               SelectionChanged="ExportPresetComboBox_SelectionChanged"
+                              DropDownOpened="AacPresetDropDownOpened"
                               IsEnabled="{Binding CanChangeExportPreset}"
                               IsEditable="False"/>
 
@@ -669,48 +670,48 @@
 
                     </StackPanel>
                     <StackPanel x:Name="TrackOrderButtons" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom">
-                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource TrackOrderButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedUp_Click"
                             Margin="0,0,2,0">
                         <controls:TrackOrderIcon Width="32" Height="32" Direction="Up"
-                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                             VectorMode="{DynamicResource TrackOrderVectorMode}"
                             Theme="{DynamicResource TrackOrderIconTheme}"
                             UseLayoutRounding="True" SnapsToDevicePixels="True"
                             RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
-                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource TrackOrderButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedDown_Click"
                             Margin="0,0,2,0">
                         <controls:TrackOrderIcon Width="32" Height="32" Direction="Down"
-                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                             VectorMode="{DynamicResource TrackOrderVectorMode}"
                             Theme="{DynamicResource TrackOrderIconTheme}"
                             UseLayoutRounding="True" SnapsToDevicePixels="True"
                             RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
-                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource TrackOrderButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedToTop_Click"
                             Margin="0,0,2,0">
                         <controls:TrackOrderIcon Width="32" Height="32" Direction="Top"
-                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                             VectorMode="{DynamicResource TrackOrderVectorMode}"
                             Theme="{DynamicResource TrackOrderIconTheme}"
                             UseLayoutRounding="True" SnapsToDevicePixels="True"
                             RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
                     </Button>
 
-                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource IconButtonStyle}"
+                    <Button Width="34.5" Height="34.125" MinHeight="34.125" Style="{StaticResource TrackOrderButtonStyle}"
                             IsEnabled="{Binding CanEditTrackOrder}"
                             Click="MoveSelectedToBottom_Click"
                             Margin="0,0,16,0">
                         <controls:TrackOrderIcon Width="32" Height="32" Direction="Bottom"
-                            Foreground="{DynamicResource PrimaryButtonBackgroundBrush}"
+                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                             VectorMode="{DynamicResource TrackOrderVectorMode}"
                             Theme="{DynamicResource TrackOrderIconTheme}"
                             UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -720,7 +721,7 @@
                     </StackPanel>
                     <Button x:Name="ActionBarOpenOutputFolderButton" Grid.Column="2"
                             Width="36" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Style="{StaticResource AccentOpenOutputFolderButtonStyle}"
+                            Style="{StaticResource OpenOutputFolderButtonStyle}"
                             IsEnabled="{Binding CanOpenOutputFolder}"
                             AutomationProperties.Name="{services:LocalizedText Key=MainWindow.Export.OpenFolder}"
                             Click="OutputFolderStateChip_Click"/>
@@ -1126,29 +1127,62 @@
                 </DataGridTemplateColumn>
                 <DataGridTextColumn x:Name="TrackGridTagTitleColumn" Header="{services:LocalizedText Key=UiTagTitel}" Binding="{Binding TagTitle}" SortMemberPath="TagTitle" Width="Auto"/>
                 <DataGridTextColumn x:Name="TrackGridDurationColumn" local:TrackGridChildColumn.Key="Duration" Header="{services:LocalizedText Key=UiDauer}" Binding="{Binding Duration}" SortMemberPath="Duration" Width="Auto"/>
-                <DataGridTextColumn x:Name="TrackGridOriginalBitrateColumn" Header="{services:LocalizedText Key=UiOriginalBitrateCompact}" Binding="{Binding BitrateKbps}" SortMemberPath="BitrateKbps" Width="Auto">
+                <DataGridTextColumn x:Name="TrackGridOriginalBitrateColumn" Header="{services:LocalizedText Key=Tracks.Audio.BitrateIn}" Binding="{Binding BitrateKbps}" SortMemberPath="BitrateKbps" Width="Auto">
                     <DataGridTextColumn.HeaderStyle>
                         <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalBitrate}"/>
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.BitrateIn}"/>
                         </Style>
                     </DataGridTextColumn.HeaderStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn x:Name="TrackGridOriginalSampleRateColumn" Header="{services:LocalizedText Key=UiOriginalSampleRateCompact}" Binding="{Binding DisplayOriginalSampleRateHz}" SortMemberPath="SampleRateHz" Width="Auto">
+                <DataGridTextColumn x:Name="TrackGridBitrateColumn" Header="{services:LocalizedText Key=Tracks.Audio.BitrateOut}" Binding="{Binding DisplayPreparedBitrateKbps}" SortMemberPath="DisplayPreparedBitrateKbps" Width="Auto">
                     <DataGridTextColumn.HeaderStyle>
                         <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalSampleRate}"/>
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.BitrateOut}"/>
                         </Style>
                     </DataGridTextColumn.HeaderStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn x:Name="TrackGridOriginalChannelLayoutColumn" Header="{services:LocalizedText Key=UiOriginalMonoStereo}" Binding="{Binding DisplayOriginalChannelLayout}" SortMemberPath="Channels" Width="Auto">
+                <DataGridTextColumn x:Name="TrackGridOriginalSampleRateColumn" Header="{services:LocalizedText Key=Tracks.Audio.SampleRateIn}" Binding="{Binding DisplayOriginalSampleRateHz}" SortMemberPath="SampleRateHz" Width="Auto">
                     <DataGridTextColumn.HeaderStyle>
                         <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=UiOriginalMonoStereo}"/>
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.SampleRateIn}"/>
                         </Style>
                     </DataGridTextColumn.HeaderStyle>
                 </DataGridTextColumn>
-                <DataGridTextColumn x:Name="TrackGridBitrateColumn" Header="{services:LocalizedText Key=UiBitrate}" Binding="{Binding DisplayPreparedBitrateKbps}" SortMemberPath="DisplayPreparedBitrateKbps" Visibility="Collapsed" Width="Auto"/>
-                <DataGridTextColumn x:Name="TrackGridChannelLayoutColumn" Header="{services:LocalizedText Key=UiMonoStereo}" Binding="{Binding DisplayPreparedChannelLayout}" SortMemberPath="DisplayPreparedChannelLayout" Visibility="Collapsed" Width="Auto"/>
+                <DataGridTextColumn x:Name="TrackGridSampleRateColumn" Header="{services:LocalizedText Key=Tracks.Audio.SampleRateOut}" Binding="{Binding DisplayPreparedSampleRateHz}" SortMemberPath="PreparedSampleRateHz" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.SampleRateOut}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridOriginalChannelLayoutColumn" Header="{services:LocalizedText Key=Tracks.Audio.ChannelsIn}" Binding="{Binding DisplayOriginalChannelLayout}" SortMemberPath="Channels" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.ChannelsIn}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridChannelLayoutColumn" Header="{services:LocalizedText Key=Tracks.Audio.ChannelsOut}" Binding="{Binding DisplayPreparedChannelLayout}" SortMemberPath="DisplayPreparedChannelLayout" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.ChannelsOut}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridOriginalProfileColumn" Header="{services:LocalizedText Key=Tracks.Audio.ProfileIn}" Binding="{Binding DisplayOriginalProfile}" SortMemberPath="AudioProfile" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.ProfileIn}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn x:Name="TrackGridProfileColumn" Header="{services:LocalizedText Key=Tracks.Audio.ProfileOut}" Binding="{Binding DisplayPreparedProfile}" SortMemberPath="DisplayPreparedProfile" Width="Auto">
+                    <DataGridTextColumn.HeaderStyle>
+                        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                            <Setter Property="AutomationProperties.Name" Value="{services:LocalizedText Key=Tracks.Audio.ProfileOut}"/>
+                        </Style>
+                    </DataGridTextColumn.HeaderStyle>
+                </DataGridTextColumn>
                 <DataGridTemplateColumn Header="{services:LocalizedText Key=UiDateiwarnung}" SortMemberPath="FileWarningText" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>

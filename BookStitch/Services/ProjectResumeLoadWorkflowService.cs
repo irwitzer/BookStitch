@@ -310,6 +310,7 @@ public sealed class ProjectResumeLoadWorkflowService
             Artist = sourceMetadata?.CanonicalFields.Authors.FirstOrDefault()
                 ?? sourceMetadata?.CanonicalFields.Performers.FirstOrDefault()
                 ?? string.Empty,
+            AudioProfile = sourceMetadata?.TechnicalInfo.AudioProfile,
             SourceMetadataFields = sourceMetadata?.CanonicalFields,
             SourceTrackNumber = sourceMetadata?.CanonicalFields.SourceTrackNumber,
             SourceTrackTotal = sourceMetadata?.CanonicalFields.SourceTrackTotal,

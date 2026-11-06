@@ -20,20 +20,20 @@ public sealed partial class WpfDialogRuntimeTests
             using var folder = new BookStitch.Tests.TestHelpers.TemporaryFolder();
             var metadataState = new ProjectMetadataState();
             var store = new ProjectMetadataStore();
-            metadataState.CanonicalMetadata.SetValue<int?>(ProjectMetadataField.Year, 2026, MetadataOrigin.SourceAggregation);
+            metadataState.CanonicalMetadata.SetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate, new MetadataDate(2026), MetadataOrigin.SourceAggregation);
             var state = new ConceptSpecialMetadataFieldState(
-                metadataState, new MetadataPreferences(), ProjectMetadataField.Year,
+                metadataState, new MetadataPreferences(), ProjectMetadataField.ReleaseDate,
                 metadata => store.Save(folder.Path, metadata), _ => { });
 
             state.RemoveValue();
             var restored = store.LoadOrCreate(folder.Path);
-            Assert.Null(restored.GetValue<int?>(ProjectMetadataField.Year).Value);
-            Assert.Equal(new[] { "2026" }, restored.GetSuppressedValues(ProjectMetadataField.Year));
+            Assert.Null(restored.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
+            Assert.Equal(new[] { "2026" }, restored.GetSuppressedValues(ProjectMetadataField.ReleaseDate));
 
-            state.CommitValue(2026, MetadataOrigin.User);
+            state.CommitValue(new MetadataDate(2026), MetadataOrigin.User);
             restored = store.LoadOrCreate(folder.Path);
-            Assert.Equal(2026, restored.GetValue<int?>(ProjectMetadataField.Year).Value);
-            Assert.Empty(restored.GetSuppressedValues(ProjectMetadataField.Year));
+            Assert.Equal(new MetadataDate(2026), restored.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
+            Assert.Empty(restored.GetSuppressedValues(ProjectMetadataField.ReleaseDate));
         });
     }
 
@@ -294,7 +294,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.False(setup.SetupSeriesField is IConceptMinimalPresentationParticipant);
 
                 var abridgedStatus = Assert.IsType<ConceptSpecialMetadataFieldState>(setup.SetupAbridgedStatusField.DataContext);
-                var year = Assert.IsType<ConceptSpecialMetadataFieldState>(setup.SetupYearField.DataContext);
+                var year = Assert.IsType<ConceptSpecialMetadataFieldState>(setup.SetupReleaseDateField.DataContext);
                 var workType = Assert.IsType<ConceptSpecialMetadataFieldState>(setup.SetupWorkTypeField.DataContext);
                 var isbn = Assert.IsType<ConceptMetadataFieldViewModel>(setup.SetupIsbnField.DataContext);
                 abridgedStatus.DraftValue = AbridgedStatus.Abridged;
@@ -314,14 +314,14 @@ public sealed partial class WpfDialogRuntimeTests
                     Assert.Equal(
                         MetadataDisplayLabels.AbridgedStatus(AbridgedStatus.Abridged),
                         Assert.Single(metadataDialog.AbridgedStatusValues).Value);
-                    Assert.Equal("2027", Assert.Single(metadataDialog.YearValues).Value);
+                    Assert.Equal("2027", Assert.Single(metadataDialog.ReleaseDateValues).Value);
                     Assert.Equal("Hörspiel", Assert.Single(metadataDialog.WorkTypeValues).Value);
                     Assert.Equal(
                         "978-3-16-148410-0",
                         metadataDialog.CatalogDataFields.Single(field => field.Field == ProjectMetadataField.ISBN).Values.Single().Value);
 
                     metadataDialog.AbridgedStatusFieldState.CommitValue(AbridgedStatus.Unabridged, MetadataOrigin.User);
-                    metadataDialog.YearFieldState.CommitValue(2028, MetadataOrigin.User);
+                    metadataState.ReleaseDate = new MetadataDate(2028);
                     metadataDialog.WorkTypeFieldState.CommitValue(AudioWorkType.Audiobook, MetadataOrigin.User);
                     metadataState.CanonicalMetadata.SetValue(ProjectMetadataField.ISBN, "978-1-4028-9462-6", MetadataOrigin.User);
                     DrainDispatcher();

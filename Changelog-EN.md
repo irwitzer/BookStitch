@@ -1,13 +1,29 @@
 # BookStitch – Changelog (English)
 
-BookStitch for Windows version history, newest release first.
+BookStitch for Windows development history, newest version first. Version 1.0.0 was the initial public release. Versions 2.0.0 through 2.3.0 were unpublished development states consolidated into the 2.4.0 release.
 
-## [2.3.0] – Unreleased
+## [2.4.0] – 6 November 2026
+
+Includes all previously unpublished development states documented below, including 2.3.0.
+
+- Field-specific external multi-value import with semicolon and eligible slash separators, preserved raw source evidence and correctly paired structured series/part values. Manual multi-value entry continues to use semicolons.
+- Added Sort Composers, Goodreads URL and MusicBrainz Work ID; removed active Barcode and MusicBrainz Release ID fields without confusing release IDs with work IDs.
+- Unified Year and Publication into a precise Release Date with native MP4 date output; improved native subtitle and sorting fields while preserving year, month or full-date precision.
+- Unconfirmed source-value suggestions for every sort field, including dynamically inherited Album/Composer values. Suggestions require explicit acceptance before output.
+- Compact AAC pass-through decision immediately after every eligible new folder import, showing the recommended profile and preserved/re-encoded track durations. Explicit mono/stereo alternatives and a project-specific original-bitrate mode; HE-AAC remains excluded and Re-encode all remains binding.
+- Project-scoped reuse of complete audio-probe evidence, targeted invalidation and fewer redundant probes, decoding checks, remuxes and encoder calibrations. Valid confirmed plans are reused at Start; final stream/timing checks and safety fallbacks remain in place.
+- New default track-column layout with Start hidden and corresponding IN/OUT values in the same position. Four localized technical pairs show bitrate, sample rate (Hz), channels and AAC profile; prepared OUT values update live, including after pause/resume, with measured stream properties taking priority.
+- More compact track columns with font- and DPI-aware AutoFit, sort-indicator space only when needed, and column-menu access even when columns are hidden. Manual visibility choices take precedence over automatic IN/OUT switching until the default layout is restored.
+- Track rows update as local copy/conversion checkpoints complete; middle-click scrolling remains available during preparation. Every eligible new import gets its own pass-through choice, without a duplicate preset warning after confirmation; the general bitrate advisory now allows differences of up to 15 kbit/s.
+- Embedded-cover decoder errors no longer invalidate otherwise valid audio or hide existing chapters. Removed the extra profile status row while retaining progress feedback.
+- Updated application/Start-menu icons and packaging assets; harmonized metadata, sorting and AAC labels across all 21 UI languages.
+
+## [2.3.0] – Unreleased development state
 
 - Improved saving and closure of failed MP3-CD/audio-CD projects: choose Save for disc-boundary recovery or Delete for complete managed-project cleanup and an empty workspace. Metadata and cover survive saving; external original media are preserved.
 - Consolidates the unpublished 2.2.1 development improvements documented below, including more precise chapter warnings and robust audio analysis and optical-drive handling. Updated release notes and documentation for 2.3.0.
 
-## [2.2.1] – Unreleased
+## [2.2.1] – Unreleased development state
 
 - After a failed MP3-CD or audio-CD import, Close project now offers Save or Delete. Saving uses the same disc-boundary recovery as closing the window; deleting removes the managed project and resets the workspace. Dialog translated and checked in all 21 UI languages.
 
@@ -15,7 +31,7 @@ BookStitch for Windows version history, newest release first.
 - Drain FFprobe output streams directly before accepting results and wait asynchronously for optical-drive access; preserve cancellation and the completion boundary of running native operations.
 - Avoid false duplicate-chapter warnings for proven, consecutive zero-padded filename families when every source track tag contains the same number. Keep one representative metadata conflict per family; preserve source tags, ordering and chapter proposals.
 
-## [2.2.0] – Unreleased
+## [2.2.0] – Unreleased development state
 
 Includes the unpublished 2.1.7 development state; neither 2.1.7 nor 2.2.0 has been released.
 
@@ -41,88 +57,108 @@ Includes the unpublished 2.1.7 development state; neither 2.1.7 nor 2.2.0 has be
 - Choose Automatic, White or Black for transparent cover backgrounds in global metadata settings. The choice applies to newly imported covers.
 - Bundled WebP decoding works without an installed Windows WebP extension. Cover processing also handles image orientation and color profiles; ImageSharp is no longer required.
 
-## [2.0.0] – October 2026
+## [2.0.0] – Unreleased development state (notes from October 2026)
 
 ### Added
 
 #### Architecture and engineering
-- Substantial software architecture overhaul: more modular code, clearer separation of UI, project state, media analysis, export and processing workflows, with centralized lifecycle and error handling.
-- Windows test suite extensively reorganized and rebuilt with stronger focused regression coverage for UI, metadata, chapters, disc import, resumption and export.
+- Substantial architecture overhaul: more modular code, clearer separation of UI, project data, media analysis, export and processing workflows, and centralized state and error handling.
+- Windows test suite thoroughly reorganized and expanded with stronger focused regression tests for UI, metadata, chapters, disc import, project resumption and export.
 
 #### Formats, covers and export
-- Local audio support for M4A, M4B, MP3, WAV, FLAC, OGG, AIFF and legacy WMA (subject to the installed FFmpeg capabilities).
-- AAC-based M4A or M4B output, selectable mono/stereo presets up to 256 kbps, and configurable parallel processing.
-- JPEG, PNG and WebP cover import, cover preview, and improved cover preparation and embedding.
-- Optional automatic merge or manual review before merging; reuse of prepared audio when compatible with the selected preset.
-- New exports write QuickTime chapter markers. Existing Nero chapter structures in previously created files are preserved during supported editing paths; **new exports do not write both chapter formats simultaneously**.
-- More precise chapter timing through improved duration arithmetic and AAC padding handling; exact tolerances depend on source and container timing resolution.
+- Local audio support for M4A, M4B, MP3, WAV, FLAC, OGG, AIFF and legacy WMA, subject to the installed FFmpeg capabilities.
+- AAC-based M4A/M4B output, selectable mono/stereo bitrates up to 256 kbps and configurable parallel processing.
+- JPEG, PNG and WebP cover import, preview, preparation and embedding.
+- Automatic or manually confirmed merge after preparation; compatible prepared audio can be reused.
+- New exports write chapter markers in the QuickTime format.
+- More accurate chapter timing through improved duration calculations and AAC padding handling; accuracy depends on the source and container time resolution.
 
-#### Track management and projects
-- Automatic and manual track ordering, reorder, exclude and restore actions, improved technical track-number recognition, and duplicate/gap warnings.
-- Embedded chapter hierarchy and start-time display within the track grid.
-- Improved project resumption and re-export, including safe rollback of interrupted source additions, reconversions and merge attempts.
-
+#### Track management and project workflows
+- Automatic and manual track ordering, including reordering, exclusion and restoration; improved technical track-number recognition and gap/duplicate warnings.
+- Expanded display of nested embedded chapters and their start times directly in the track list.
+- Improved project resumption and re-export with controlled rollback of interrupted additions, reconversions and merge attempts.
 
 #### Metadata and tagging
-- Comprehensive metadata editor with drafts, confirmed values and candidate suggestions.
-- Clear distinction between values extracted from source media, automatically suggested values and manually entered metadata.
-- Multi-value editing, ordering and output controls for metadata fields that support multiple entries.
-- Autocomplete, field search, source evidence and source-occurrence information.
-- Expanded audiobook fields, including structured series/part information and original title.
-- Localized catalogue of 74 genres, with configurable catalogue and personal-genre preferences.
-- Player interoperability options: compatible information in Description; optional Narrator-to-Composer and Title-to-Album mappings when enabled.
+- Comprehensive metadata editor with drafts, confirmed values and suggestions.
+- Distinction between values obtained from sources, automatically suggested values and manually entered metadata.
+- Multi-value processing for supported metadata fields, including editing, ordering and output options.
+- Candidate-based entry, autocomplete, source evidence and cross-field search.
+- Expanded metadata fields, including structured series/series number, original title and other audiobook information.
+- Localized genre catalogue with 74 entries and configurable genre selection.
+- Additional audiobook player compatibility options: information in Description, Narrator → Composer and Title → Album, where enabled.
 
-#### Chapters and track organization
-- Substantially expanded automatic chapter analysis and candidate normalization.
-- Multilingual chapter markers and number-word recognition with conservative removal of technical numbering.
-- Enhanced chapter previews and editing, including embedded chapter children and timeline start positions.
-- Chapter modes including explicit no-chapters output.
+#### Chapters
+- Significantly expanded analysis and normalization of chapter candidates.
+- Multilingual technical chapter markers and number words, with conservative removal of purely technical numbering.
+- Expanded chapter preview and editing, including embedded subchapters and timeline information.
+- Configurable chapter modes, including intentional output without chapters.
 
-#### Audio and performance
-- Parallel FFprobe analysis to accelerate initial inspection of large multi-track projects.
-- More rigorous AAC pass-through checks for codec, channels, audio streams, bitrate/preset and sample rate.
-- Project-specific sample-rate decisions and configurable target sample-rate preferences.
-- Original source bitrate, sample rate and mono/stereo information shown in the track grid.
-- Per-track and overall progress indicators.
+#### Audio analysis, output and performance
+- Parallelized FFprobe calls for faster analysis of large projects.
+- Expanded AAC pass-through checks of actual codec, channel, stream and sample-rate properties.
+- Project-specific sample-rate management and additional target sample-rate options.
+- Display of original source bitrate, sample rate and mono/stereo properties.
+- Expanded progress feedback, including per-track progress.
 
-#### CD and project features
-- **Drive Circle is an integrated, standard feature**, coordinating up to five configured optical drives, including drive order and disc changes.
-- Improved disc recognition, selected-drive persistence, resumption and duplicate-disc protection.
-- Project integrity inspection, guarded repair/rebuild from intact original data, versioned project layouts and migration support.
-- Extended project retention, cleanup and management options.
+#### CD workflows and projects
+- Fully integrated **Drive Circle** for up to five configured optical drives; not an experimental feature.
+- Expanded disc recognition and drive management, including persistence of selected drives and recognition of required media.
+- More robust multi-disc project resumption with disc identification and protection against accidental duplicate imports.
+- Project integrity inspection with guarded repair options and reconstruction of derived data from intact originals.
+- Versioned project layout and controlled migration of older project states.
+- Improved project management with retention periods, deletion functions and safe automatic maintenance.
 
-#### User interface and languages
-- UI support for **21 language variants**, including Bernese Swiss German, Japanese and both Chinese variants.
-- Reworked main window, project setup, metadata editing, project browser and settings.
+#### User interface and localization
+- **21 UI languages**, including Bernese Swiss German and simplified and traditional Chinese.
+- Reworked main view, metadata editor, project preparation, settings and project continuation.
 - New interactive FAQ/help section.
-- More accessible UI labels and multilingual metadata search, including Unicode and CJK input.
+- Expanded accessibility labels and improved multilingual search, including Unicode and CJK input.
 
 ### Changed
-- Significantly improved extraction, aggregation and selection of metadata from local files and disc projects, with user-confirmed values taking precedence.
-- More consistent source provenance, metadata persistence, cover selection, suppression and output-field policies.
-- Better automatic track ordering, chapter proposals, embedded-chapter handling and chapter timestamp calculations.
-- Better reuse of eligible existing AAC audio, safer treatment of mixed sample rates and prepared caches.
-- Faster, more responsive analysis and track-grid handling for large projects; clearer errors and review dialogs.
-- More reliable pausing, stopping, saving, resuming and re-exporting, including multi-disc and merge operations.
-- Guarded rollback for adding sources, reconversion and interrupted merge/export attempts.
-- More responsive optical-drive refresh and safer switching between projects.
+
+#### Metadata
+- Thoroughly revised reading, evaluation and consolidation of metadata from local audio, MP3/data CDs and audio CDs.
+- More reliable prioritization of source values and user-confirmed values.
+- More reliable metadata persistence, cover selection, output policies and suppression of deliberately removed values.
+- Improved M4A/M4B tag output and preservation; clearer compatibility options for different players.
+
+#### Chapters and ordering
+- Improved automatic track ordering and more robust treatment of disc and track numbers.
+- More accurate chapter detection from filenames, tags and existing chapter markers.
+- More reliable timestamps, including long track lists and mixed embedded chapters.
+- Better preview, display and editing of chapter suggestions.
+
+#### Conversion and export
+- Improved reuse of eligible AAC audio without re-encoding when technical requirements are met.
+- More robust checks and handling of mixed sample rates.
+- Optimized processing of already prepared and cached AAC tracks.
+- Faster, more responsive loading, display and analysis of large projects.
+- Clearer export warnings, error details and dialogs.
+
+#### Project and CD workflows
+- More reliable pausing, resumption and saving, including interrupted disc and merge operations.
+- Improved rollback protection when adding more sources, reconverting and interrupting exports.
+- More responsive drive detection and targeted refresh on media changes.
+- Safer switching between projects and protection against inconsistent intermediate states.
 
 ### Fixed
-- Cumulative chapter drift related to duration rounding and AAC padding.
-- Technical chapter-number transitions such as 099/100 and 999/1000 without destroying meaningful numeric titles.
-- Audio-CD raw-sector addressing that could truncate beginnings or corrupt last-track extraction.
-- Several MP3-disc identity, duplicate-import, resume and failure-recovery cases.
-- Final-output conflict and cancelled-export recovery, preserving pre-existing output and source data.
-- Metadata dropdown, candidate selection, Unicode search and field-persistence issues.
-- Maximized-window bounds, UI states and FFmpeg progress callback handling.
+- Cumulative chapter timing deviations caused by AAC padding and rounding reduced or resolved.
+- Chapter numbering issues at transitions such as 099/100 and 999/1000 resolved.
+- Technical chapter numbers are less likely to be taken for actual chapter titles; meaningful numeric titles are protected.
+- Fixed audio-CD sector access to prevent truncated track beginnings and incorrectly read final tracks.
+- Improved MP3-CD disc association, duplicate detection and recovery after import errors.
+- Fixes to resumption, project state and protection of existing source and output files.
+- Fixed multiple metadata dropdown, candidate selection and Unicode search issues.
+- Improved window and dialog presentation, including maximizing within the usable screen area.
+- More robust FFmpeg progress callback and background error handling.
 
 ### Verification
 - Real-media checks covered large track sets, multi-disc work, decoding, chapter positioning and unchanged originals. These are reported test results, not a guarantee for every hardware configuration.
 
 ### Unchanged principles
-- Local processing; no account required for audiobook creation.
-- Source audio is neither renamed nor overwritten.
-- AAC-based M4A and M4B export.
+- Local audio processing without a cloud account.
+- Original audio files are not overwritten or renamed.
+- AAC-based M4A or M4B output.
 
 ## [1.0.0] – 26 July 2026
 

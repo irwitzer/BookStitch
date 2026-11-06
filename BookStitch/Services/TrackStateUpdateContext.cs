@@ -8,4 +8,5 @@ public sealed record TrackStateUpdateContext(
     string SelectedPreset,
     bool IsWorkflowActive,
     bool IsRefreshSuspended = false,
-    ProjectPipelineState PipelineState = ProjectPipelineState.Preparing);
+    ProjectPipelineState PipelineState = ProjectPipelineState.Preparing,
+    bool PreparedOnly = false);

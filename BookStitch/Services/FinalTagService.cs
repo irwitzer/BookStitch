@@ -45,19 +45,19 @@ public sealed class FinalAudioTagData
     public string Script { get; init; } = "";
     public string Publisher { get; init; } = "";
     public MetadataDate? ReleaseDate { get; init; }
-    public int? Year { get; init; }
     public string Copyright { get; init; } = "";
     public string PhonogramCopyright { get; init; } = "";
     public string License { get; init; } = "";
     public IReadOnlyList<string> Categories { get; init; } = [];
     public string ISBN { get; init; } = "";
-    public string Barcode { get; init; } = "";
     public string ASIN { get; init; } = "";
     public IReadOnlyList<string> CatalogNumbers { get; init; } = [];
-    public string MusicBrainzReleaseId { get; init; } = "";
+    public string MusicBrainzWorkId { get; init; } = "";
+    public string GoodreadsUrl { get; init; } = "";
     public string SortTitle { get; init; } = "";
     public IReadOnlyList<string> SortAuthors { get; init; } = [];
     public IReadOnlyList<string> SortNarrators { get; init; } = [];
+    public IReadOnlyList<string> SortComposers { get; init; } = [];
     public string SortAlbum { get; init; } = "";
     public string SortSeries { get; init; } = "";
     public string Website { get; init; } = "";
@@ -110,19 +110,19 @@ public sealed class FinalAudioTagData
         Script = Script,
         Publisher = Publisher,
         ReleaseDate = ReleaseDate,
-        Year = Year,
         Copyright = Copyright,
         PhonogramCopyright = PhonogramCopyright,
         License = License,
         Categories = Categories.ToArray(),
         ISBN = ISBN,
-        Barcode = Barcode,
         ASIN = ASIN,
         CatalogNumbers = CatalogNumbers.ToArray(),
-        MusicBrainzReleaseId = MusicBrainzReleaseId,
+        MusicBrainzWorkId = MusicBrainzWorkId,
+        GoodreadsUrl = GoodreadsUrl,
         SortTitle = SortTitle,
         SortAuthors = SortAuthors.ToArray(),
         SortNarrators = SortNarrators.ToArray(),
+        SortComposers = SortComposers.ToArray(),
         SortAlbum = SortAlbum,
         SortSeries = SortSeries,
         Website = Website,
@@ -297,7 +297,6 @@ public sealed class Mp4MetadataWriter
         sink.AlbumSort = ActiveString(data, ProjectMetadataField.SortAlbum, data.SortAlbum);
         sink.AlbumArtistsSort = ActiveList(data, ProjectMetadataField.SortAuthors, data.SortAuthors);
         sink.PerformersSort = ActiveList(data, ProjectMetadataField.SortAuthors, data.SortAuthors);
-        sink.Year = data.IsFieldEnabled(ProjectMetadataField.Year) ? SafeYear(data.Year) : 0;
 
         if (data.IsFieldEnabled(ProjectMetadataField.OutputTrackNumber) &&
             data.OutputTrackNumber is > 0)
@@ -312,7 +311,6 @@ public sealed class Mp4MetadataWriter
         sink.SetTextAtom("©mvn", ActiveSeriesText(data, primarySeries?.Name));
         sink.SetTextAtom("©mvi", ActiveSeriesPartInteger(data, primarySeries?.Part));
 
-        SetFreeform(sink, data, ProjectMetadataField.Subtitle, "SUBTITLE", data.Subtitle);
         SetFreeform(sink, data, ProjectMetadataField.OriginalTitle, "ORIGINALTITLE", data.OriginalTitle);
         SetFreeform(sink, data, ProjectMetadataField.Narrators, "NARRATOR", narrators);
         SetFreeform(sink, data, ProjectMetadataField.Languages, "LANGUAGE", data.Languages);
@@ -322,10 +320,10 @@ public sealed class Mp4MetadataWriter
         SetFreeform(sink, data, ProjectMetadataField.Series, "SERIES-PART", primarySeries?.Part);
         SetFreeform(sink, data, ProjectMetadataField.SortSeries, "SERIESSORT", data.SortSeries);
         SetFreeform(sink, data, ProjectMetadataField.ISBN, "ISBN", data.ISBN);
-        SetFreeform(sink, data, ProjectMetadataField.Barcode, "BARCODE", data.Barcode);
         SetFreeform(sink, data, ProjectMetadataField.ASIN, "ASIN", data.ASIN);
         SetFreeform(sink, data, ProjectMetadataField.CatalogNumbers, "CATALOGNUMBER", data.CatalogNumbers);
-        SetFreeform(sink, data, ProjectMetadataField.ReleaseDate, "RELEASEDATE", data.ReleaseDate?.ToString());
+        sink.SetTextAtom("©day", data.IsFieldEnabled(ProjectMetadataField.ReleaseDate) && data.ReleaseDate is { } date ? [date.ToString()] : []);
+        sink.SetTextAtom("soco", ActiveList(data, ProjectMetadataField.SortComposers, data.SortComposers));
         SetFreeform(sink, data, ProjectMetadataField.AbridgedStatus, "ABRIDGED", Display(data.AbridgedStatus));
         SetFreeform(sink, data, ProjectMetadataField.AudioWorkType, "AUDIOWORKTYPE", Display(data.AudioWorkType));
         SetFreeform(sink, data, ProjectMetadataField.ContentType, "CONTENTTYPE", data.ContentType);
@@ -338,7 +336,7 @@ public sealed class Mp4MetadataWriter
         SetFreeform(sink, data, ProjectMetadataField.Copyright, "COPYRIGHT", data.Copyright);
         SetFreeform(sink, data, ProjectMetadataField.License, "LICENSE", data.License);
         SetFreeform(sink, data, ProjectMetadataField.PhonogramCopyright, "PHONOGRAMCOPYRIGHT", data.PhonogramCopyright);
-        SetFreeform(sink, data, ProjectMetadataField.MusicBrainzReleaseId, "MUSICBRAINZRELEASEID", data.MusicBrainzReleaseId);
+        SetFreeform(sink, data, ProjectMetadataField.MusicBrainzWorkId, "MusicBrainz Work Id", data.MusicBrainzWorkId);
         SetFreeform(sink, data, ProjectMetadataField.SortTitle, "SORTTITLE", data.SortTitle);
         SetFreeform(sink, data, ProjectMetadataField.SortAlbum, "SORTALBUM", data.SortAlbum);
         SetFreeform(sink, data, ProjectMetadataField.SortAuthors, "SORTAUTHORS", data.SortAuthors);
@@ -349,6 +347,7 @@ public sealed class Mp4MetadataWriter
         SetFreeform(sink, data, ProjectMetadataField.Hosts, "HOST", data.Hosts);
         SetFreeform(sink, data, ProjectMetadataField.Guests, "GUEST", data.Guests);
         SetFreeform(sink, data, ProjectMetadataField.Speakers, "SPEAKER", data.Speakers);
+        SetFreeform(sink, data, ProjectMetadataField.GoodreadsUrl, "GOODREADSURL", data.GoodreadsUrl);
         SetFreeform(sink, data, ProjectMetadataField.Website, "WEBSITE", data.Website);
         SetFreeform(sink, data, ProjectMetadataField.Source, "SOURCE", data.Source);
 
@@ -540,7 +539,16 @@ public sealed class AppleTagMetadataSink(AppleTag tag) : IMp4MetadataSink
         ?? throw new InvalidOperationException("TagLibSharp Apple item list is unavailable.");
 
     public string Title { get => tag.Title ?? ""; set => tag.Title = value; }
-    public string Subtitle { get => tag.Subtitle ?? ""; set => tag.Subtitle = value; }
+    public string Subtitle
+    {
+        get => (tag.GetText(ByteVector.FromString("©st3", StringType.Latin1)) ?? []).FirstOrDefault() ?? "";
+        set
+        {
+            tag.Subtitle = "";
+            SetTextAtom("subt", []);
+            SetTextAtom("©st3", string.IsNullOrWhiteSpace(value) ? [] : [value]);
+        }
+    }
     public string Album { get => tag.Album ?? ""; set => tag.Album = value; }
     public string Description { get => tag.Description ?? ""; set => tag.Description = value; }
     public string Comment { get => tag.Comment ?? ""; set => tag.Comment = value; }

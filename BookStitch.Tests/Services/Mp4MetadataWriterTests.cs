@@ -174,11 +174,11 @@ public sealed class Mp4MetadataWriterTests
             new FinalAudioTagData
             {
                 Title = "Book",
-                MusicBrainzReleaseId = "release-id"
+                MusicBrainzWorkId = "work-id"
             });
 
         Assert.True(sink.StikAudiobookWritten);
-        Assert.Equal(["release-id"], sink.Freeforms["MUSICBRAINZRELEASEID"]);
+        Assert.Equal(["work-id"], sink.Freeforms["MusicBrainz Work Id"]);
         Assert.False(sink.Freeforms.ContainsKey("ISRC"));
         Assert.False(sink.Freeforms.ContainsKey("MUSICBRAINZRECORDINGID"));
         Assert.False(sink.Freeforms.ContainsKey("REPLAYGAIN_TRACK_GAIN"));

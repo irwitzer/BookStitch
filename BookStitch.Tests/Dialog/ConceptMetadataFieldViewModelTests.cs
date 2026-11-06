@@ -90,14 +90,14 @@ public sealed class ConceptMetadataFieldViewModelTests
         var former = new ProjectMetadata();
         var current = former;
         var persisted = new List<ProjectMetadata>();
-        var field = CreateField(() => current, ProjectMetadataField.Barcode, persisted.Add);
+        var field = CreateField(() => current, ProjectMetadataField.ASIN, persisted.Add);
 
         current = new ProjectMetadata();
         field.Draft = "978-3-16-148410-0";
         field.CommitDraft();
 
-        Assert.Null(former.GetValue<string>(ProjectMetadataField.Barcode).Value);
-        Assert.Equal("978-3-16-148410-0", current.GetValue<string>(ProjectMetadataField.Barcode).Value);
+        Assert.Null(former.GetValue<string>(ProjectMetadataField.ASIN).Value);
+        Assert.Equal("978-3-16-148410-0", current.GetValue<string>(ProjectMetadataField.ASIN).Value);
         Assert.Equal([current], persisted);
     }
 
@@ -176,7 +176,7 @@ public sealed class ConceptMetadataFieldViewModelTests
     }
 
     [Theory]
-    [InlineData(ProjectMetadataField.Barcode)]
+    [InlineData(ProjectMetadataField.ASIN)]
     [InlineData(ProjectMetadataField.Keywords)]
     public void CommitDraft_DuplicateValueDoesNotCreateAnotherBadge(ProjectMetadataField metadataField)
     {
@@ -260,8 +260,8 @@ public sealed class ConceptMetadataFieldViewModelTests
     public void CommitDraft_IdentifierComparisonRemainsCaseSensitive()
     {
         var metadata = new ProjectMetadata();
-        metadata.SetValue(ProjectMetadataField.Barcode, "abc", MetadataOrigin.SourceAggregation);
-        var field = CreateField(() => metadata, ProjectMetadataField.Barcode, _ => { });
+        metadata.SetValue(ProjectMetadataField.ASIN, "abc", MetadataOrigin.SourceAggregation);
+        var field = CreateField(() => metadata, ProjectMetadataField.ASIN, _ => { });
 
         field.Draft = "ABC";
         field.CommitDraft();
@@ -269,8 +269,8 @@ public sealed class ConceptMetadataFieldViewModelTests
         var value = Assert.Single(field.Values);
         Assert.Equal("ABC", value.Value);
         Assert.False(value.IsDuplicateHighlighted);
-        Assert.Equal("ABC", metadata.GetValue<string>(ProjectMetadataField.Barcode).Value);
-        Assert.Equal(MetadataOrigin.User, metadata.GetValue<string>(ProjectMetadataField.Barcode).Origin);
+        Assert.Equal("ABC", metadata.GetValue<string>(ProjectMetadataField.ASIN).Value);
+        Assert.Equal(MetadataOrigin.User, metadata.GetValue<string>(ProjectMetadataField.ASIN).Origin);
     }
 
     [Fact]
@@ -656,12 +656,12 @@ public sealed class ConceptMetadataFieldViewModelTests
     public void NonSourceCandidate_RemoveDoesNotCreateSourceSuppression(MetadataOrigin evidenceOrigin)
     {
         var metadata = new ProjectMetadata();
-        metadata.SetValue(ProjectMetadataField.Barcode, "4000000000041", MetadataOrigin.User);
-        var field = CreateField(() => metadata, ProjectMetadataField.Barcode, _ => { });
+        metadata.SetValue(ProjectMetadataField.ASIN, "4000000000041", MetadataOrigin.User);
+        var field = CreateField(() => metadata, ProjectMetadataField.ASIN, _ => { });
         field.SetCandidates(
         [
             new ConceptMetadataCandidate(
-                ProjectMetadataField.Barcode,
+                ProjectMetadataField.ASIN,
                 "4000000000041",
                 "4000000000041",
                 0,
@@ -671,21 +671,21 @@ public sealed class ConceptMetadataFieldViewModelTests
 
         field.RemoveValue(Assert.Single(field.Values));
 
-        Assert.Empty(metadata.GetSuppressedValues(ProjectMetadataField.Barcode));
+        Assert.Empty(metadata.GetSuppressedValues(ProjectMetadataField.ASIN));
     }
 
     [Fact]
     public void SourceBackedGenericValue_RemoveKeepsCandidate_AndExplicitCommitUnsuppresses()
     {
         var metadata = new ProjectMetadata();
-        metadata.SetValue(ProjectMetadataField.Barcode, "4000000000041", MetadataOrigin.SourceAggregation);
+        metadata.SetValue(ProjectMetadataField.ASIN, "4000000000041", MetadataOrigin.SourceAggregation);
         var refreshRequests = 0;
         var field = new ConceptMetadataFieldViewModel(
             () => metadata,
             new MetadataPreferences(),
             new MetadataNormalizationService(),
-            ProjectMetadataField.Barcode,
-            ConceptMetadataFieldCatalog.Get(ProjectMetadataField.Barcode),
+            ProjectMetadataField.ASIN,
+            ConceptMetadataFieldCatalog.Get(ProjectMetadataField.ASIN),
             _ => { },
             _ => { },
             candidateRefreshRequested: _ => refreshRequests++);
@@ -693,7 +693,7 @@ public sealed class ConceptMetadataFieldViewModelTests
         field.SetCandidates(
         [
             new ConceptMetadataCandidate(
-                ProjectMetadataField.Barcode,
+                ProjectMetadataField.ASIN,
                 "4000000000041",
                 "4000000000041",
                 2,
@@ -703,15 +703,15 @@ public sealed class ConceptMetadataFieldViewModelTests
 
         field.RemoveValue(Assert.Single(field.Values));
 
-        Assert.Contains("4000000000041", metadata.GetSuppressedValues(ProjectMetadataField.Barcode));
+        Assert.Contains("4000000000041", metadata.GetSuppressedValues(ProjectMetadataField.ASIN));
         Assert.Single(field.Candidates);
         Assert.True(refreshRequests > 0);
 
         field.Draft = "4000000000041";
         field.CommitDraft();
 
-        Assert.Empty(metadata.GetSuppressedValues(ProjectMetadataField.Barcode));
-        Assert.Equal("4000000000041", metadata.GetValue<string>(ProjectMetadataField.Barcode).Value);
+        Assert.Empty(metadata.GetSuppressedValues(ProjectMetadataField.ASIN));
+        Assert.Equal("4000000000041", metadata.GetValue<string>(ProjectMetadataField.ASIN).Value);
     }
 
 

@@ -57,7 +57,6 @@ public sealed class ProjectMetadataStoreTests
             [new SeriesEntry("Reihe", "1"), new SeriesEntry("Nebenreihe", "A")],
             MetadataOrigin.User);
         metadata.SetValue(ProjectMetadataField.ReleaseDate, new MetadataDate(2024, 7), MetadataOrigin.SourceAggregation);
-        metadata.SetValue(ProjectMetadataField.Year, 2024, MetadataOrigin.Derived);
         metadata.SetValue(ProjectMetadataField.AudioWorkType, AudioWorkType.AudioDrama, MetadataOrigin.User);
         metadata.SetValue(ProjectMetadataField.AbridgedStatus, AbridgedStatus.Unabridged, MetadataOrigin.User);
         metadata.SetCover(@"D:\Cover.png", @"D:\Cover.jpg", MetadataOrigin.User);
@@ -75,7 +74,6 @@ public sealed class ProjectMetadataStoreTests
         Assert.Equal(["Müller", "王"], loaded.GetValue<IReadOnlyList<string>>(ProjectMetadataField.Authors).Value);
         Assert.Equal([new SeriesEntry("Reihe", "1"), new SeriesEntry("Nebenreihe", "A")], loaded.GetValue<IReadOnlyList<SeriesEntry>>(ProjectMetadataField.Series).Value);
         Assert.Equal(new MetadataDate(2024, 7), loaded.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
-        Assert.Equal(2024, loaded.GetValue<int?>(ProjectMetadataField.Year).Value);
         Assert.Equal(AudioWorkType.AudioDrama, loaded.GetValue<AudioWorkType?>(ProjectMetadataField.AudioWorkType).Value);
         Assert.Equal(AbridgedStatus.Unabridged, loaded.GetValue<AbridgedStatus?>(ProjectMetadataField.AbridgedStatus).Value);
         Assert.Equal(@"D:\Cover.png", loaded.Cover.SourcePath);
@@ -165,7 +163,6 @@ public sealed class ProjectMetadataStoreTests
         var metadata = _store.LoadOrCreate(folder.Path);
 
         Assert.Equal(new MetadataDate(2026, 1, 31), metadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
-        Assert.Equal(2026, metadata.GetValue<int?>(ProjectMetadataField.Year).Value);
         Assert.DoesNotContain(metadata.GetExplicitValues().Keys, field => field.ToString() is "OriginalReleaseDate" or "PublicationDate");
     }
 
@@ -183,7 +180,7 @@ public sealed class ProjectMetadataStoreTests
         Assert.Contains(ProjectMetadataField.Translators, canonical);
         Assert.Contains(ProjectMetadataField.Publisher, canonical);
         Assert.Contains(ProjectMetadataField.ReleaseDate, canonical);
-        Assert.Contains(ProjectMetadataField.Year, canonical);
+        Assert.Contains(ProjectMetadataField.ReleaseDate, canonical);
         Assert.Contains(ProjectMetadataField.License, canonical);
         Assert.Contains(ProjectMetadataField.OutputTrackNumber, canonical);
         Assert.Contains(ProjectMetadataField.OutputTrackTotal, canonical);

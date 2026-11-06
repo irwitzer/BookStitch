@@ -78,8 +78,8 @@ public sealed class ConceptMetadataGroupCatalogTests
                  {
                      ProjectMetadataField.Source, ProjectMetadataField.Copyright, ProjectMetadataField.Languages,
                      ProjectMetadataField.OriginalLanguages, ProjectMetadataField.Keywords,
-                     ProjectMetadataField.ISBN, ProjectMetadataField.ASIN, ProjectMetadataField.Barcode,
-                     ProjectMetadataField.MusicBrainzReleaseId
+                     ProjectMetadataField.ISBN, ProjectMetadataField.ASIN, ProjectMetadataField.GoodreadsUrl,
+                     ProjectMetadataField.MusicBrainzWorkId
                  })
         {
             Assert.Equal(ConceptFieldInteractionMode.Standard, ConceptMetadataFieldCatalog.Get(field).InteractionMode);

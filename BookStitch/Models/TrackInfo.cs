@@ -353,6 +353,14 @@ public sealed class TrackInfo : INotifyPropertyChanged
     [System.Text.Json.Serialization.JsonIgnore]
     public bool AacOptimizationEligible { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]
+    public decimal? AudioBitrateBitsPerSecond { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? AacPlanAction { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? AacPlanPreset { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool AacForceEncodeAll { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public string? AacConfigurationId { get; set; }
     public bool AllowAacReuse { get; set; } = true;
     public string ChannelLayout { get; set; } = "";
@@ -364,7 +372,39 @@ public sealed class TrackInfo : INotifyPropertyChanged
         : "";
 
     public bool ConvertedSizeAvailable { get; set; }
-    public string Codec { get; set; } = "";
+    private string _codec = "";
+    public string Codec
+    {
+        get => _codec;
+        set { if (_codec == value) return; _codec = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayCodec)); OnPropertyChanged(nameof(DisplayOriginalProfile)); }
+    }
+    private string? _audioProfile;
+    public string? AudioProfile
+    {
+        get => _audioProfile;
+        set { if (_audioProfile == value) return; _audioProfile = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayOriginalProfile)); }
+    }
+    public string DisplayOriginalProfile => AudioProfilePresentationService.Format(Codec, AudioProfile);
+    public long PreparedAudioLength { get; set; }
+    public long PreparedAudioModified { get; set; }
+    private AudioStreamDetails? _preparedAudio;
+    public AudioStreamDetails? PreparedAudio
+    {
+        get => _preparedAudio;
+        set { if (_preparedAudio == value) return; _preparedAudio = value; OnPropertyChanged(); NotifyPreparedPresentationChanged(); }
+    }
+    private AudioStreamDetails? _preparedAudioPreview;
+    // Display-only completed-output target; measured stream metadata always takes precedence.
+    public AudioStreamDetails? PreparedAudioPreview
+    {
+        get => _preparedAudioPreview;
+        set { if (_preparedAudioPreview == value) return; _preparedAudioPreview = value; NotifyPreparedPresentationChanged(); }
+    }
+    private AudioStreamDetails? DisplayPreparedAudio => PreparedAudio ?? PreparedAudioPreview;
+    public int? PreparedSampleRateHz => HasReusableConvertedFile ? DisplayPreparedAudio?.SampleRateHz : null;
+    public string DisplayPreparedSampleRateHz => PreparedSampleRateHz?.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("de-DE")) ?? "";
+    public string DisplayPreparedProfile => HasReusableConvertedFile && DisplayPreparedAudio is { } audio
+        ? AudioProfilePresentationService.Format(audio.Codec, audio.Profile) : "";
     public string DisplayCodec => CodecIds.IsInvalid(Codec) ? LocalizationText.Get("CodecInvalid") : Codec;
     public string ProcessingAction { get; set; } = "";
     public string PreparedConvertedPath { get; set; } = "";
@@ -392,13 +432,16 @@ public sealed class TrackInfo : INotifyPropertyChanged
             NotifyPreparedPresentationChanged();
         }
     }
-    public int? DisplayPreparedBitrateKbps => HasReusableConvertedFile && !string.IsNullOrWhiteSpace(PreparedConvertedPreset)
-        ? ExportPreset.Parse(PreparedConvertedPreset).BitrateKbps : null;
-    public string DisplayPreparedChannelLayout => DisplayPreparedBitrateKbps.HasValue
-        ? ExportPreset.Parse(PreparedConvertedPreset).Channels == 1 ? "Mono" : "Stereo" : "";
+    public int? DisplayPreparedBitrateKbps => HasReusableConvertedFile && DisplayPreparedAudio?.BitrateBitsPerSecond is > 0
+        ? (int)decimal.Round(DisplayPreparedAudio.BitrateBitsPerSecond.Value / 1000m, 0, MidpointRounding.AwayFromZero) : null;
+    public string DisplayPreparedChannelLayout => HasReusableConvertedFile && DisplayPreparedAudio is { } audio
+        ? AudioProcessingService.FormatChannelLayout(audio.Channels) : "";
 
     private void NotifyPreparedPresentationChanged()
     {
+        OnPropertyChanged(nameof(PreparedSampleRateHz));
+        OnPropertyChanged(nameof(DisplayPreparedSampleRateHz));
+        OnPropertyChanged(nameof(DisplayPreparedProfile));
         OnPropertyChanged(nameof(DisplayPreparedBitrateKbps));
         OnPropertyChanged(nameof(DisplayPreparedChannelLayout));
         OnPropertyChanged(nameof(DisplayProcessingAction));

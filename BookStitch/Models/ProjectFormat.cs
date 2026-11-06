@@ -28,6 +28,8 @@ public sealed class FolderProjectManifest
     // Missing in legacy projects: retain the historical 44.1 kHz contract.
     public int TargetSampleRateHz { get; set; } = 44100;
     public bool AllowAacReuse { get; set; } = true;
+    public AacDecisionPlan? AacPlan { get; set; }
+    public AacDecisionPlan? OriginalAacPlan { get; set; }
     public DateTime CreatedUtc { get; set; }
     public DateTime UpdatedUtc { get; set; }
     public ProjectHealth Health { get; set; } = new();

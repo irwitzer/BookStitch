@@ -7,33 +7,53 @@ namespace BookStitch.Tests.Ui;
 public sealed class TrackGridStructureTests
 {
     [Fact]
-    public void Original_columns_are_distinct_and_precede_prepared_bitrate()
+    public void Autofit_uses_font_metrics_without_cumulative_padding_and_keeps_chapter_controls_room()
+    {
+        var code = LoadMainWindowCode();
+        var fit = SourceContract.ExtractMember(code, "private void AutoFitTrackColumnsAfterRender()");
+        Assert.DoesNotContain("column.ActualWidth +", fit);
+        Assert.Contains("_trackGridAutoFitTextWidths.Clear()", fit);
+        var measure = SourceContract.ExtractMember(code, "private double EstimateTextWidth(");
+        Assert.Contains("new FormattedText", measure); Assert.Contains("VisualTreeHelper.GetDpi(TracksGrid)", measure);
+        var estimate = SourceContract.ExtractMember(code, "private double EstimateTrackColumnWidth(");
+        Assert.Contains("key == \"ChapterProposal\" ? 22 : 0", estimate);
+        Assert.Contains("\"AutomaticOrderPosition\" => track.DisplayAutomaticOrderPosition", estimate);
+    }
+
+    [Fact]
+    public void Autoscroll_remains_navigation_during_work_and_manual_column_choices_override_phase_defaults()
+    {
+        var code = LoadMainWindowCode();
+        var refresh = SourceContract.ExtractBetween(code, "_trackStateUpdateQueueService = new TrackStateUpdateQueueService(", "Tracks.CollectionChanged +=");
+        Assert.DoesNotContain("IsDiscImporting || _isDiscStopSaveInProgress", refresh);
+        Assert.Contains("_isDiscStopSaveInProgress", refresh);
+        var guard = SourceContract.ExtractMember(code, "private bool CanStartTrackGridAutoScroll()");
+        Assert.DoesNotContain("IsBusy", guard); Assert.DoesNotContain("IsExporting", guard); Assert.DoesNotContain("IsDiscImporting", guard);
+        Assert.Contains("_isShutdownInProgress", guard);
+        var toggle = SourceContract.ExtractMember(code, "private void ToggleTrackGridColumnVisibility(");
+        SourceContract.AssertInOrder(toggle, "TrackGridCustomColumnVisibility = true", "SaveTrackGridColumnLayout();");
+        var reset = SourceContract.ExtractMember(code, "private void ResetTrackGridColumnLayout()");
+        SourceContract.AssertInOrder(reset, "TrackGridCustomColumnVisibility = false", "GetDefaultTrackGridColumnVisibility(column)", "SaveSettingsIfReady();");
+        var resume = SourceContract.ExtractMember(code, "private void LoadResumeTracks(");
+        Assert.Contains("AudioColumnMode.Output", resume);
+        Assert.Contains("AudioColumnMode.Both", resume);
+        var add = SourceContract.ExtractMember(code, "private async void AddProjectSources_Click(");
+        Assert.Contains("SetAudioColumnMode(AudioColumnMode.Both)", add);
+    }
+
+    [Fact]
+    public void Audio_columns_are_adjacent_input_output_pairs_with_distinct_data_bindings()
     {
         var document = LoadMainWindowXaml();
-        var bitrate = Single(document, "DataGridTextColumn", "Name", "TrackGridOriginalBitrateColumn");
-        var rate = Single(document, "DataGridTextColumn", "Name", "TrackGridOriginalSampleRateColumn");
-        var channel = Single(document, "DataGridTextColumn", "Name", "TrackGridOriginalChannelLayoutColumn");
-        var target = Single(document, "DataGridTextColumn", "Name", "TrackGridBitrateColumn");
-        var targetChannel = Single(document, "DataGridTextColumn", "Name", "TrackGridChannelLayoutColumn");
-        Assert.Equal("{Binding BitrateKbps}", Attr(bitrate, "Binding"));
-        Assert.Equal("{Binding DisplayOriginalSampleRateHz}", Attr(rate, "Binding"));
-        Assert.Equal("SampleRateHz", Attr(rate, "SortMemberPath"));
-        Assert.Equal("Collapsed", Attr(target, "Visibility"));
-        Assert.Equal("Collapsed", Attr(targetChannel, "Visibility"));
-        Assert.Equal("{Binding DisplayOriginalChannelLayout}", Attr(channel, "Binding"));
-        Assert.Equal("Channels", Attr(channel, "SortMemberPath"));
-        var columns = bitrate.Parent!.Elements().ToList();
-        Assert.Equal(columns.IndexOf(bitrate) + 1, columns.IndexOf(rate));
-        Assert.Equal(columns.IndexOf(rate) + 1, columns.IndexOf(channel));
-        Assert.Equal(columns.IndexOf(channel) + 1, columns.IndexOf(target));
-        var code = LoadMainWindowCode();
-        Assert.Contains("SetOriginalAudioColumnsVisible(false, force: true)", code);
-        Assert.Contains("UiOriginalBitrate", code);
-        Assert.Contains("UiOriginalSampleRate", code);
-        Assert.Contains("SetOriginalAudioColumnsVisible(true)",
-            SourceContract.ExtractMember(code, "private void ResetProjectSourceModeStateForNewSource()"));
-        Assert.Contains("SetOriginalAudioColumnsVisible(false)",
-            SourceContract.ExtractMember(code, "private void SetPipelineState(ProjectPipelineState state)"));
+        var names = new[] { "TrackGridOriginalBitrateColumn", "TrackGridBitrateColumn", "TrackGridOriginalSampleRateColumn", "TrackGridSampleRateColumn", "TrackGridOriginalChannelLayoutColumn", "TrackGridChannelLayoutColumn", "TrackGridOriginalProfileColumn", "TrackGridProfileColumn" };
+        var columns = names.Select(name => Single(document, "DataGridTextColumn", "Name", name)).ToArray();
+        var siblings = columns[0].Parent!.Elements().ToList();
+        for (var index = 0; index < columns.Length; index += 2)
+            Assert.Equal(siblings.IndexOf(columns[index]) + 1, siblings.IndexOf(columns[index + 1]));
+        Assert.Equal(new[] { "{Binding BitrateKbps}", "{Binding DisplayPreparedBitrateKbps}", "{Binding DisplayOriginalSampleRateHz}", "{Binding DisplayPreparedSampleRateHz}", "{Binding DisplayOriginalChannelLayout}", "{Binding DisplayPreparedChannelLayout}", "{Binding DisplayOriginalProfile}", "{Binding DisplayPreparedProfile}" }, columns.Select(c => Attr(c, "Binding")));
+        Assert.All(columns, column => Assert.NotEqual("Collapsed", Attr(column, "Visibility")));
+        Assert.Equal("PreparedSampleRateHz", Attr(columns[3], "SortMemberPath"));
+        Assert.DoesNotContain("SetOriginalAudioColumnsVisible", LoadMainWindowCode());
     }
 
     [Fact]
@@ -78,7 +98,7 @@ public sealed class TrackGridStructureTests
 
         var estimateWidth = SourceContract.ExtractMember(
             LoadMainWindowCode(),
-            "private static double EstimateTrackColumnWidth(string key, string header, IReadOnlyList<TrackInfo> tracks)");
+            "private double EstimateTrackColumnWidth(string key, string header, IReadOnlyList<TrackInfo> tracks, bool sorted)");
         Assert.Contains("\"DisplayFolder\" => track.DisplayFolder", estimateWidth, StringComparison.Ordinal);
     }
 

@@ -7,6 +7,10 @@ namespace BookStitch.Tests.Services;
 public sealed class PresetBitrateWarningServiceTests
 {
     [Theory]
+    [InlineData(125, "AAC Stereo 128 kbps", false)]
+    [InlineData(254, "AAC Stereo 256 kbps", false)]
+    [InlineData(241, "AAC Stereo 256 kbps", false)]
+    [InlineData(240, "AAC Stereo 256 kbps", true)]
     [InlineData(96, "AAC Stereo 160 kbps", true)]
     [InlineData(96, "AAC Stereo 256 kbps", true)]
     [InlineData(96, "AAC Stereo 96 kbps", false)]
@@ -19,6 +23,15 @@ public sealed class PresetBitrateWarningServiceTests
     {
         Assert.Equal(expected, PresetBitrateWarningService.ShouldWarnAfterLoad(
             [new TrackInfo { BitrateKbps = sourceRate }], preset, selectedPresetFullyPrepared: false));
+    }
+
+    [Theory]
+    [InlineData(241000, false)]
+    [InlineData(240999, true)]
+    public void Tolerance_uses_precise_stream_bits_per_second(int bits, bool warn)
+    {
+        Assert.Equal(warn, PresetBitrateWarningService.ShouldWarnAfterLoad(
+            [new() { BitrateKbps = 241, AudioBitrateBitsPerSecond = bits }], "AAC Stereo 256 kbps", false));
     }
 
     [Fact]

@@ -180,19 +180,19 @@ public sealed class ProjectMetadataInitializationService
         AddString(result, ProjectMetadataField.Script, snapshots.Select(snapshot => snapshot.CanonicalFields.Script), diagnostics);
         AddString(result, ProjectMetadataField.Publisher, snapshots.Select(snapshot => snapshot.CanonicalFields.Publisher), diagnostics);
         AddMetadataDate(result, ProjectMetadataField.ReleaseDate, snapshots.Select(snapshot => snapshot.CanonicalFields.ReleaseDate), diagnostics);
-        AddInteger(result, ProjectMetadataField.Year, snapshots.Select(snapshot => snapshot.CanonicalFields.Year), diagnostics);
         AddString(result, ProjectMetadataField.Copyright, snapshots.Select(snapshot => snapshot.CanonicalFields.Copyright), diagnostics);
         AddString(result, ProjectMetadataField.PhonogramCopyright, snapshots.Select(snapshot => snapshot.CanonicalFields.PhonogramCopyright), diagnostics);
         AddString(result, ProjectMetadataField.License, snapshots.Select(snapshot => snapshot.CanonicalFields.License), diagnostics);
         AddStringList(result, ProjectMetadataField.Categories, snapshots.Select(snapshot => snapshot.CanonicalFields.Categories), diagnostics);
         AddString(result, ProjectMetadataField.ISBN, snapshots.Select(snapshot => snapshot.CanonicalFields.ISBN), diagnostics);
-        AddString(result, ProjectMetadataField.Barcode, snapshots.Select(snapshot => snapshot.CanonicalFields.Barcode), diagnostics);
         AddString(result, ProjectMetadataField.ASIN, snapshots.Select(snapshot => snapshot.CanonicalFields.ASIN), diagnostics);
         AddStringList(result, ProjectMetadataField.CatalogNumbers, snapshots.Select(snapshot => snapshot.CanonicalFields.CatalogNumbers), diagnostics);
-        AddString(result, ProjectMetadataField.MusicBrainzReleaseId, snapshots.Select(snapshot => snapshot.CanonicalFields.MusicBrainzReleaseId), diagnostics);
+        AddString(result, ProjectMetadataField.MusicBrainzWorkId, snapshots.Select(snapshot => snapshot.CanonicalFields.MusicBrainzWorkId), diagnostics);
+        AddString(result, ProjectMetadataField.GoodreadsUrl, snapshots.Select(snapshot => snapshot.CanonicalFields.GoodreadsUrl), diagnostics);
         AddString(result, ProjectMetadataField.SortTitle, snapshots.Select(snapshot => snapshot.CanonicalFields.SortTitle), diagnostics);
         AddStringList(result, ProjectMetadataField.SortAuthors, snapshots.Select(snapshot => snapshot.CanonicalFields.SortAuthors), diagnostics);
         AddStringList(result, ProjectMetadataField.SortNarrators, snapshots.Select(snapshot => snapshot.CanonicalFields.SortNarrators), diagnostics);
+        AddStringList(result, ProjectMetadataField.SortComposers, snapshots.Select(snapshot => snapshot.CanonicalFields.SortComposers), diagnostics);
         AddString(result, ProjectMetadataField.SortAlbum, snapshots.Select(snapshot => snapshot.CanonicalFields.SortAlbum), diagnostics);
         AddString(result, ProjectMetadataField.SortSeries, snapshots.Select(snapshot => snapshot.CanonicalFields.SortSeries), diagnostics);
         AddString(result, ProjectMetadataField.Website, snapshots.Select(snapshot => snapshot.CanonicalFields.Website), diagnostics);
@@ -516,9 +516,11 @@ public sealed class ProjectMetadataInitializationService
         IEnumerable<MetadataDate?> values,
         List<MetadataAggregationDiagnostic> diagnostics)
     {
+        var available = values.Where(value => value.HasValue).Select(value => value!.Value).ToArray();
+        var precision = available.Select(value => value.Day.HasValue ? 3 : value.Month.HasValue ? 2 : 1).DefaultIfEmpty(0).Max();
         var selected = TrySelectBestValue(
             field,
-            values.Where(value => value is not null).Cast<object>(),
+            available.Where(value => (value.Day.HasValue ? 3 : value.Month.HasValue ? 2 : 1) == precision).Cast<object>(),
             value => ((MetadataDate)value).ToString(),
             diagnostics);
         if (selected?.Value is MetadataDate date)
@@ -616,6 +618,9 @@ public sealed class ProjectMetadataInitializationService
         {
             return null;
         }
+
+        if (candidate.Value is MetadataDate date && suppressedKeys.Contains(
+                _normalization.NormalizeForComparison(candidate.Field, date.ToString()))) return null;
 
         if (candidate.Value is int integer &&
             suppressedKeys.Contains(_normalization.NormalizeForComparison(
@@ -898,7 +903,6 @@ public sealed class ProjectMetadataInitializationService
         var identifiers = snapshots
             .Select(snapshot => new
             {
-                snapshot.CanonicalFields.Barcode,
                 snapshot.CanonicalFields.ISBN,
                 snapshot.CanonicalFields.ASIN,
                 snapshot.CanonicalFields.Album,
@@ -907,12 +911,11 @@ public sealed class ProjectMetadataInitializationService
             })
             .ToArray();
 
-        foreach (var field in new[] { ProjectMetadataField.Barcode, ProjectMetadataField.ISBN, ProjectMetadataField.ASIN })
+        foreach (var field in new[] { ProjectMetadataField.ISBN, ProjectMetadataField.ASIN })
         {
             var groups = identifiers
                 .Select(item => field switch
                 {
-                    ProjectMetadataField.Barcode => item.Barcode,
                     ProjectMetadataField.ISBN => item.ISBN,
                     ProjectMetadataField.ASIN => item.ASIN,
                     _ => string.Empty

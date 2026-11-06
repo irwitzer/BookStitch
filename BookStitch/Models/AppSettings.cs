@@ -109,6 +109,9 @@ public class AppSettings
 
     public string OutputFolderLayout { get; set; } = "AuthorTitleNested";
 
+    public bool TrackGridCustomColumnVisibility { get; set; }
+    public int TrackGridAudioColumnsVersion { get; set; }
+
     public bool TrackGridAutoFitEnabled { get; set; } = true;
 
     public List<TrackGridColumnLayoutItem> TrackGridColumns { get; set; } = new();

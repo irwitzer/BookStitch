@@ -41,7 +41,10 @@ public sealed class UiLanguageSettingsStructureTests
         var xaml = RepositorySource.Read(["BookStitch", "MainWindow.xaml"]);
         var code = RepositorySource.Read(["BookStitch", "MainWindow.xaml.cs"]);
         Assert.Contains("local:TrackGridChildColumn.Key=\"ChapterProposal\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("GetTrackGridColumnKey(column), \"ChapterProposal\"", code, StringComparison.Ordinal);
+
+        Assert.Contains("TrackGridDefaultLayoutService.Apply(TracksGrid.Columns, GetTrackGridColumnKey)", code, StringComparison.Ordinal);
+        var layout = RepositorySource.Read(["BookStitch", "Services", "TrackGridDefaultLayoutService.cs"]);
+        Assert.Contains("\"ChapterProposal\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("column.Header?.ToString(), \"Kapitelvorschlag\"", code, StringComparison.Ordinal);
     }
 }

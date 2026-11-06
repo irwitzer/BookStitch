@@ -129,8 +129,7 @@ public sealed class FinalizedOutputValidationService : IFinalizedOutputValidatio
         if (tags.IsFieldEnabled(ProjectMetadataField.Genres) &&
             !Values(tags.Genres, tags.Genre).SequenceEqual(inspection.Tags.Genres, StringComparer.Ordinal))
             throw Invalid("genres");
-        if (tags.IsFieldEnabled(ProjectMetadataField.Year) && tags.Year is > 0 and <= 9999 &&
-            inspection.Tags.Year != tags.Year) throw Invalid("year");
+        ValidateScalar(ProjectMetadataField.ReleaseDate, tags.ReleaseDate?.ToString() ?? "", inspection.Tags.ReleaseDate);
         if (!string.IsNullOrWhiteSpace(snapshot.CoverPath) && System.IO.File.Exists(snapshot.CoverPath) &&
             new System.IO.FileInfo(snapshot.CoverPath).Length > 0 && !inspection.HasEmbeddedCover)
             throw Invalid("cover");

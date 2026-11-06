@@ -355,10 +355,6 @@ public sealed partial class WpfDialogRuntimeTests
                     new MetadataDate(2027, 4, 3),
                     MetadataOrigin.User);
                 metadataState.CanonicalMetadata.SetValue<int?>(
-                    ProjectMetadataField.Year,
-                    2027,
-                    MetadataOrigin.User);
-                metadataState.CanonicalMetadata.SetValue<int?>(
                     ProjectMetadataField.OutputTrackNumber,
                     4,
                     MetadataOrigin.User);
@@ -380,8 +376,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.Equal(
                     MetadataDisplayLabels.AbridgedStatus(AbridgedStatus.Abridged),
                     Assert.Single(dialog.AbridgedStatusValues).Value);
-                Assert.Equal("2027-04-03", Assert.Single(dialog.ReleaseDateValues).Value);
-                Assert.Equal("2027", Assert.Single(dialog.YearValues).Value);
+                Assert.Equal("2027.04.03", Assert.Single(dialog.ReleaseDateValues).Value);
                 Assert.Equal("4", Assert.Single(dialog.TrackNumberValues).Value);
                 Assert.Equal("12", Assert.Single(dialog.TrackCountValues).Value);
                 var series = Assert.Single(dialog.SeriesValues);
@@ -404,14 +399,14 @@ public sealed partial class WpfDialogRuntimeTests
             var dialog = CreateMetadataDialog(new ProjectMetadataState(), new MetadataPreferences());
             try
             {
-                var quickYear = Assert.IsType<TextBox>(dialog.FindName("ConceptYearTextBox"));
-                var publicationYear = Assert.IsType<TextBox>(dialog.FindName("ConceptPublicationYearTextBox"));
-                dialog.SpecialDrafts.Year = "2027";
+                var quickYear = Assert.IsType<ComboBox>(dialog.FindName("ConceptQuickAccessReleaseDateComboBox"));
+                var publicationYear = Assert.IsType<ComboBox>(dialog.FindName("ConceptPublicationReleaseDateComboBox"));
+                dialog.ReleaseDateDraft = "2027";
                 DrainDispatcher();
                 Assert.Equal("2027", quickYear.Text);
                 Assert.Equal("2027", publicationYear.Text);
 
-                dialog.SpecialDrafts.Year = "2028";
+                dialog.ReleaseDateDraft = "2028";
                 DrainDispatcher();
                 Assert.Equal("2028", quickYear.Text);
                 Assert.Equal("2028", publicationYear.Text);
@@ -436,6 +431,7 @@ public sealed partial class WpfDialogRuntimeTests
                 Assert.Equal(AudioWorkType.Audiobook, workWorkType.SelectedValue);
 
                 dialog.SpecialDrafts.Clear();
+                dialog.ReleaseDateDraft = "";
                 DrainDispatcher();
                 Assert.Equal(string.Empty, quickYear.Text);
                 Assert.Null(quickWorkType.SelectedValue);

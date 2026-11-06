@@ -61,8 +61,8 @@ public partial class ConceptSpecialMetadataFieldControl : UserControl
         }));
     }
 
-    private void YearEditor_PreviewTextInput(object sender, TextCompositionEventArgs e) =>
-        e.Handled = e.Text.Any(character => !char.IsDigit(character));
+    private void DateEditor_PreviewTextInput(object sender, TextCompositionEventArgs e) =>
+        e.Handled = e.Text.Any(character => !char.IsDigit(character) && character is not ('.' or '/' or '-'));
 
     private bool BeginEdit()
     {
@@ -76,11 +76,11 @@ public partial class ConceptSpecialMetadataFieldControl : UserControl
 
     private void FocusEditor()
     {
-        if (State?.IsYear == true)
+        if (State?.IsDate == true)
         {
-            YearEditor.Focus();
-            Keyboard.Focus(YearEditor);
-            YearEditor.CaretIndex = YearEditor.Text.Length;
+            DateEditor.Focus();
+            Keyboard.Focus(DateEditor);
+            DateEditor.CaretIndex = DateEditor.Text.Length;
         }
         else
         {
@@ -92,6 +92,6 @@ public partial class ConceptSpecialMetadataFieldControl : UserControl
     private void UpdateEditorKind()
     {
         EnumEditor.Visibility = State?.IsEnum == true ? Visibility.Visible : Visibility.Collapsed;
-        YearEditor.Visibility = State?.IsYear == true ? Visibility.Visible : Visibility.Collapsed;
+        DateEditor.Visibility = State?.IsDate == true ? Visibility.Visible : Visibility.Collapsed;
     }
 }

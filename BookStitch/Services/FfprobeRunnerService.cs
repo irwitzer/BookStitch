@@ -29,6 +29,7 @@ public sealed class FfprobeRunnerService
         if (string.IsNullOrWhiteSpace(ffprobePath))
             throw new InvalidOperationException(LocalizationText.Get("Tools.Ffprobe.NotConfigured"));
 
+        using var measurement = PerformanceMeasurement.Start("process.ffprobe");
         using var process = new Process();
         var stderr = new StringBuilder();
         var stdout = new StringBuilder();
@@ -105,6 +106,8 @@ public sealed class FfprobeRunnerService
         try
         {
             process.Start();
+            measurement?.Add("Calls");
+            if (arguments.Contains("-show_packets")) measurement?.Add("PacketMeasurements");
             if (runBelowNormalPriority)
             {
                 try { process.PriorityClass = ProcessPriorityClass.BelowNormal; }

@@ -60,7 +60,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
     private readonly ConceptMetadataFieldViewModel _isbnField;
     private readonly ConceptSpecialMetadataFieldState _abridgedStatusFieldState;
     private readonly ConceptSpecialMetadataFieldState _workTypeFieldState;
-    private readonly ConceptSpecialMetadataFieldState _yearFieldState;
+    private readonly ConceptSpecialMetadataFieldState _releaseDateFieldState;
     private readonly ConceptMinimalPresentationScope _minimalPresentationScope = new();
     private IReadOnlyList<string> _genres;
     private readonly Func<AppearanceMode> _getAppearanceMode;
@@ -235,7 +235,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
             });
         _abridgedStatusFieldState = CreateSpecialFieldState(ProjectMetadataField.AbridgedStatus);
         _workTypeFieldState = CreateSpecialFieldState(ProjectMetadataField.AudioWorkType);
-        _yearFieldState = CreateSpecialFieldState(ProjectMetadataField.Year);
+        _releaseDateFieldState = CreateSpecialFieldState(ProjectMetadataField.ReleaseDate);
         ConfigureEmbeddedMetadataFields();
         _metadataState.PropertyChanged += MetadataState_PropertyChanged;
         _observedCanonicalMetadata = _metadataState.CanonicalMetadata;
@@ -497,7 +497,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         SetupSeriesField.TabIndex = index++;
         SetupAbridgedStatusField.TabIndex = index++;
         SetupWorkTypeField.TabIndex = index++;
-        SetupYearField.TabIndex = index++;
+        SetupReleaseDateField.TabIndex = index++;
         SetupIsbnField.TabIndex = index++;
         SetupDescriptionField.TabIndex = index++;
         StartProjectButton.TabIndex = index++;
@@ -763,7 +763,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         SetupSeriesField.DataContext = _seriesFieldState;
         SetupAbridgedStatusField.DataContext = _abridgedStatusFieldState;
         SetupWorkTypeField.DataContext = _workTypeFieldState;
-        SetupYearField.DataContext = _yearFieldState;
+        SetupReleaseDateField.DataContext = _releaseDateFieldState;
         SetupIsbnField.DataContext = _isbnField;
         SetupDescriptionField.DataContext = _descriptionFieldState;
         SetupCompatibilityField.DataContext = this;
@@ -798,7 +798,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         _descriptionFieldState.RefreshCanonical();
         _abridgedStatusFieldState.RefreshCanonical();
         _workTypeFieldState.RefreshCanonical();
-        _yearFieldState.RefreshCanonical();
+        _releaseDateFieldState.RefreshCanonical();
         OnPropertyChanged(nameof(CompatibilityFieldText));
         OnPropertyChanged(nameof(IsCompatibilityDescriptionEnabled));
         RefreshEmbeddedMetadataCandidates();
@@ -881,7 +881,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
             nameof(ProjectMetadataField.Series) or
             nameof(ProjectMetadataField.AbridgedStatus) or
             nameof(ProjectMetadataField.AudioWorkType) or
-            nameof(ProjectMetadataField.Year) or
+            nameof(ProjectMetadataField.ReleaseDate) or
             nameof(ProjectMetadataField.ISBN))
         {
             QueueMetadataFieldRefresh();
@@ -922,7 +922,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         participants.Add(new SetupDraftParticipant(_isbnField.Label, () => _isbnField.HasDraft, _isbnField.DiscardDraft));
         participants.Add(new SetupDraftParticipant(_abridgedStatusFieldState.Label, () => _abridgedStatusFieldState.HasDraft, _abridgedStatusFieldState.DiscardDraft));
         participants.Add(new SetupDraftParticipant(_workTypeFieldState.Label, () => _workTypeFieldState.HasDraft, _workTypeFieldState.DiscardDraft));
-        participants.Add(new SetupDraftParticipant(_yearFieldState.Label, () => _yearFieldState.HasDraft, _yearFieldState.DiscardDraft));
+        participants.Add(new SetupDraftParticipant(_releaseDateFieldState.Label, () => _releaseDateFieldState.HasDraft, _releaseDateFieldState.DiscardDraft));
         participants.Add(new SetupDraftParticipant(_seriesFieldState.SeriesLabel, () => _seriesFieldState.HasSeriesNameDraft, _seriesFieldState.DiscardDraft));
         participants.Add(new SetupDraftParticipant(_seriesFieldState.SeriesPartLabel, () => _seriesFieldState.HasSeriesPartDraft, _seriesFieldState.DiscardDraft));
         participants.Add(new SetupDraftParticipant(_descriptionFieldState.DescriptionLabel, () => _descriptionFieldState.HasDraft, _descriptionFieldState.DiscardDraft));
@@ -1304,7 +1304,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
         {
             metadata.SetValue<IReadOnlyList<string>>(
                 field,
-                [value.Trim()],
+                value.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
                 MetadataOrigin.SourceAggregation);
         }
     }
@@ -1486,7 +1486,7 @@ public partial class DiscProjectSetupDialog : Window, INotifyPropertyChanged
             return requestedPreset;
 
         var requested = ExportPreset.Parse(requestedPreset);
-        if (requested.BitrateKbps <= _maxSourceBitrateKbps.Value)
+        if (!PresetBitrateWarningService.ExceedsTolerance(_maxSourceBitrateKbps.Value * 1000m, requested.BitrateKbps))
             return requestedPreset;
 
         var recommendedPreset = FindBestPresetForSourceBitrate(_maxSourceBitrateKbps.Value, requested.Channels);

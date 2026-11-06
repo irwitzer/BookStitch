@@ -98,9 +98,9 @@ public sealed class ProjectMetadataStore
             return false;
 
         if (fieldValue.TryGetValue<string>(out var fieldName))
-            return fieldName is "OriginalReleaseDate" or "PublicationDate";
+            return fieldName is "OriginalReleaseDate" or "PublicationDate" or "Year" or "Barcode" or "MusicBrainzReleaseId";
 
-        return fieldValue.TryGetValue<int>(out var legacyFieldId) && legacyFieldId is 26 or 27;
+        return fieldValue.TryGetValue<int>(out var legacyFieldId) && legacyFieldId is 26 or 27 or 28 or 35 or 38;
     }
 
     private static ProjectMetadataDocument FromMetadata(ProjectMetadata metadata)

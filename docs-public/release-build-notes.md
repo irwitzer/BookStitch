@@ -2,6 +2,8 @@
 
 BookStitch is a Windows WPF application targeting **.NET 10**. Build and test it on Windows with the .NET 10 SDK. Run the manual commands below from the repository root.
 
+The current product version is **2.4.0, unreleased**. See the cumulative [2.4.0 release notes](Release-Notes-2.4.0-EN.md) and [changelog](../Changelog-EN.md). Updating these documents does not publish a release.
+
 ## Build and test
 
 ```powershell

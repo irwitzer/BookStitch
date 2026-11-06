@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using BookStitch.Tests.TestHelpers;
 using Xunit;
 
@@ -22,7 +22,7 @@ public sealed class DiscProjectSetupDialogStructureTests
 
         Assert.Equal("ChooseOutputFolder_Click", Attribute(stateChip, "Click"));
         Assert.Equal("OpenOutputFolder_Click", Attribute(chooseButton, "Click"));
-        Assert.Equal("{StaticResource AccentOpenOutputFolderButtonStyle}", Attribute(chooseButton, "Style"));
+        Assert.Equal("{StaticResource OpenOutputFolderButtonStyle}", Attribute(chooseButton, "Style"));
         SourceContract.AssertInOrder(choose, "if (dialog.ShowDialog(this) != true)", "return;", "SetOutputFolder(dialog.FolderName, persistGlobally: true)");
         Assert.DoesNotContain("OutputFolderStateChipButton.IsEnabled", setOutputFolder);
         Assert.Contains("OpenOutputFolderButton.IsEnabled", setOutputFolder);
@@ -398,7 +398,7 @@ public sealed class DiscProjectSetupDialogStructureTests
         var description = SingleElement(document, "ConceptDescriptionFieldControl", "x:Name", "SetupDescriptionField");
         var abridgedStatus = SingleElement(document, "ConceptSpecialMetadataFieldControl", "x:Name", "SetupAbridgedStatusField");
         var workType = SingleElement(document, "ConceptSpecialMetadataFieldControl", "x:Name", "SetupWorkTypeField");
-        var year = SingleElement(document, "ConceptSpecialMetadataFieldControl", "x:Name", "SetupYearField");
+        var year = SingleElement(document, "ConceptSpecialMetadataFieldControl", "x:Name", "SetupReleaseDateField");
         var isbn = SingleElement(document, "ConceptMetadataFieldControl", "x:Name", "SetupIsbnField");
         var yearIsbnHost = SingleElement(document, "Grid", "x:Name", "SetupYearIsbnFieldsGrid");
         var page1 = SingleElement(document, "ScrollViewer", "x:Name", "SetupPage1");
@@ -414,7 +414,7 @@ public sealed class DiscProjectSetupDialogStructureTests
         Assert.Equal(["*", "{Binding ColumnGap, RelativeSource={RelativeSource AncestorType={x:Type controls:ConceptSeriesFieldControl}}}", "*"], ColumnWidths(sharedSeriesHost));
         Assert.Equal("Stretch", Attribute(description, "PresentationMode"));
         Assert.Equal(
-            ["SetupAbridgedStatusField", "SetupWorkTypeField", "SetupYearField"],
+            ["SetupAbridgedStatusField", "SetupWorkTypeField", "SetupReleaseDateField"],
             page1.Descendants()
                 .Where(element => element.Name.LocalName == "ConceptSpecialMetadataFieldControl")
                 .Select(element => Attribute(element, "x:Name")));
@@ -443,11 +443,11 @@ public sealed class DiscProjectSetupDialogStructureTests
             specialControl.Descendants(),
             element => element.Name.LocalName == "TextBlock" &&
                        Attribute(element, "Text").Contains("OriginLabel", StringComparison.Ordinal));
-        var yearWatermark = SingleElement(specialControl, "TextBlock", "x:Name", "YearWatermark");
-        Assert.Equal("{x:Static services:MetadataDateParser.YearWatermark}", Attribute(yearWatermark, "Text"));
+        var yearWatermark = SingleElement(specialControl, "TextBlock", "x:Name", "ReleaseDateWatermark");
+        Assert.Equal("{x:Static services:MetadataDateParser.ReleaseDateWatermark}", Attribute(yearWatermark, "Text"));
         var watermarkContract = string.Join(" ", yearWatermark.DescendantsAndSelf().Attributes().Select(attribute => attribute.Value));
-        Assert.Contains("IsYear", watermarkContract, StringComparison.Ordinal);
-        Assert.Contains("YearEditor", watermarkContract, StringComparison.Ordinal);
+        Assert.Contains("IsDate", watermarkContract, StringComparison.Ordinal);
+        Assert.Contains("DateEditor", watermarkContract, StringComparison.Ordinal);
 
         var drafts = SourceContract.ExtractMember(DialogSource, "private SetupDraftParticipant[] GetActiveSetupDraftParticipants()");
         Assert.Contains("_seriesFieldState.HasSeriesNameDraft", drafts, StringComparison.Ordinal);
@@ -457,7 +457,7 @@ public sealed class DiscProjectSetupDialogStructureTests
         Assert.Contains("_isbnField.HasDraft", drafts, StringComparison.Ordinal);
         Assert.Contains("_abridgedStatusFieldState.HasDraft", drafts, StringComparison.Ordinal);
         Assert.Contains("_workTypeFieldState.HasDraft", drafts, StringComparison.Ordinal);
-        Assert.Contains("_yearFieldState.HasDraft", drafts, StringComparison.Ordinal);
+        Assert.Contains("_releaseDateFieldState.HasDraft", drafts, StringComparison.Ordinal);
     }
 
     [Fact]

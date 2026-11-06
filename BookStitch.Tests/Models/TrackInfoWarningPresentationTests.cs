@@ -1,4 +1,4 @@
-﻿using BookStitch.Models;
+using BookStitch.Models;
 using BookStitch.Services;
 using Xunit;
 
@@ -13,7 +13,7 @@ public sealed class TrackInfoWarningPresentationTests
     [InlineData(2, "Stereo")]
     public void Original_channel_layout_uses_source_channels_independently_of_the_preset(int? channels, string expected)
     {
-        var track = new TrackInfo { Channels = channels, PreparedConvertedPreset = "AAC Mono 64 kbps", HasReusableConvertedFile = true };
+        var track = new TrackInfo { Channels = channels, PreparedConvertedPreset = "AAC Mono 64 kbps", HasReusableConvertedFile = true, PreparedAudio = new("aac", "LC", 44100, 1, 64000m) };
         Assert.Equal(expected, track.DisplayOriginalChannelLayout);
         Assert.Equal("Mono", track.DisplayPreparedChannelLayout);
         var notifications = new List<string?>();
@@ -57,6 +57,8 @@ public sealed class TrackInfoWarningPresentationTests
         Assert.Empty(track.DisplayPreparedChannelLayout);
         track.PreparedConvertedPreset = "AAC Mono 64 kbps";
         track.HasReusableConvertedFile = true;
+        Assert.Null(track.DisplayPreparedBitrateKbps);
+        track.PreparedAudio = new("aac", "LC", 44100, 1, 64000m);
         Assert.Equal(64, track.DisplayPreparedBitrateKbps);
         Assert.Equal("Mono", track.DisplayPreparedChannelLayout);
         track.HasReusableConvertedFile = false;
@@ -64,6 +66,7 @@ public sealed class TrackInfoWarningPresentationTests
         Assert.Empty(track.DisplayPreparedChannelLayout);
         track.PreparedConvertedPreset = "AAC Stereo 128 kbps";
         track.HasReusableConvertedFile = true;
+        track.PreparedAudio = new("aac", "LC", 48000, 2, 128000m);
         Assert.Equal(128, track.DisplayPreparedBitrateKbps);
         Assert.Equal("Stereo", track.DisplayPreparedChannelLayout);
         Assert.Equal(195, track.BitrateKbps);

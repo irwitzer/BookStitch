@@ -34,6 +34,16 @@ public sealed class ProjectResumePlanService
         var exportManifest = TryLoadExportManifest(ProjectFolderLayout.ResolveExportManifestPath(projectFolder))
             ?? TryLoadExportManifest(ProjectFolderLayout.ResolveWorkManifestPath(projectFolder));
         var audioDiscManifest = TryLoadAudioDiscManifest(ProjectFolderLayout.ResolveAudioDiscManifestPath(projectFolder));
+        if (importManifest is null && audioDiscManifest is null)
+        {
+            var folder = new FolderProjectManifestService().Read(projectFolder);
+            if (folder?.OriginalAacPlan?.IsOriginal == true) _ = folder.OriginalAacPlan.Preset;
+            if (folder?.AacPlan is { } aacPlan)
+            {
+                _ = aacPlan.Preset;
+                selectedPresetOverride ??= aacPlan.EffectivePreset;
+            }
+        }
 
         if (importManifest is null && exportManifest is null && audioDiscManifest is null)
             return null;

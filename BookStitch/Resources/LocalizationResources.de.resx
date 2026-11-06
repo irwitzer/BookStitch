@@ -10106,4 +10106,170 @@ Meaning: Startet die ausgewaehlte Vorschau erneut bei null; haelt am Ende 100 Pr
     <value>Das Projekt kann gelöscht oder gespeichert und später fortgesetzt werden.</value>
     <comment>Context: Kurzer Auswahldialog beim Schließen eines fehlgeschlagenen MP3-CD- oder Audio-CD-Imports. Meaning: Löschen entfernt den verwalteten Projektordner; Speichern erhält Metadaten und vollständig verarbeitete CDs und ermöglicht späteres Fortsetzen an der CD-Grenze. Externe Originalmedien bleiben unverändert. Placeholders: keine. Text darf umbrechen.</comment>
   </data>
+  <data name="Aac.Plan.Title" xml:space="preserve">
+    <value>AAC Pass-Through</value>
+    <comment>Context: Funktionsname und Dialogtitel für AAC-Pass-Through. Meaning: Sprachunabhängiger Funktionsname. TranslationRule: KeepOriginal. Nicht übersetzen; in jeder Sprache exakt AAC Pass-Through.</comment>
+  </data>
+  <data name="Aac.Plan.Accept" xml:space="preserve">
+    <value>Optimierten Vorschlag übernehmen</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Optimierten Vorschlag übernehmen Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.UseUser" xml:space="preserve">
+    <value>Benutzervorgaben verwenden – {0} · {1} Hz</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Benutzervorgaben verwenden – {0} · {1} Hz Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Back" xml:space="preserve">
+    <value>Zurück zum Projekt</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Zurück zum Projekt Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.UserAlternative" xml:space="preserve">
+    <value>Alternative mit Benutzervorgaben:</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Alternative mit Benutzervorgaben: Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Profile" xml:space="preserve">
+    <value>Effektives Ausgabeprofil: {0} · {1} Hz</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Effektives Ausgabeprofil: {0} · {1} Hz Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Group1" xml:space="preserve">
+    <value>1 – Technisch: {0} Tracks · {1} Audiolaufzeit</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: 1 – Technisch: {0} Tracks · {1} Audiolaufzeit Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Group2" xml:space="preserve">
+    <value>2 – Sample-Rate: {0} Tracks · {1} Audiolaufzeit</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: 2 – Sample-Rate: {0} Tracks · {1} Audiolaufzeit Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Group3" xml:space="preserve">
+    <value>3 – Bitrate: {0} Tracks · {1} Audiolaufzeit</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: 3 – Bitrate: {0} Tracks · {1} Audiolaufzeit Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Total" xml:space="preserve">
+    <value>Neu codieren: {0} Tracks · {1} Audiolaufzeit
+Verlustfrei übernehmen: {2} Tracks · {3} Audiolaufzeit
+Die Audiolaufzeit ist keine geschätzte Bearbeitungszeit.</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Neu codieren: {0} Tracks · {1} Audiolaufzeit Verlustfrei übernehmen: {2} Tracks · {3} Audiolaufzeit Die Audiolaufzeit ist keine geschätzte Bearbeitungszeit. Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.OriginalPreset" xml:space="preserve">
+    <value>AAC {0} {1} kbps (Original)</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: AAC {0} {1} kbps (Original) Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.SourceError" xml:space="preserve">
+    <value>Audioeigenschaften sind nicht zuverlässig bestimmbar oder die Quelle wurde verändert. Bitte Quellen erneut prüfen.</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Audioeigenschaften sind nicht zuverlässig bestimmbar oder die Quelle wurde verändert. Bitte Quellen erneut prüfen. Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.EncoderError" xml:space="preserve">
+    <value>Das Ausgabeprofil wird vom AAC-Encoder nicht sicher unterstützt.</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Das Ausgabeprofil wird vom AAC-Encoder nicht sicher unterstützt. Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.InvalidOriginal" xml:space="preserve">
+    <value>Der Pass-Through-Modus ist nicht mehr gültig. Bitte ein reguläres Preset ausdrücklich auswählen oder geeignete Originalquellen wiederherstellen.</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: Der Pass-Through-Modus ist nicht mehr gültig. Bitte ein reguläres Preset ausdrücklich auswählen oder geeignete Originalquellen wiederherstellen. Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Plan.Analyzing" xml:space="preserve">
+    <value>AAC-Verarbeitungsplan wird geprüft …</value>
+    <comment>Context: AAC-Entscheidungsdialog und Preflight neuer lokaler Ordnerprojekte. Meaning: AAC-Verarbeitungsplan wird geprüft … Platzhalter bleiben unverändert; Laufzeiten beziehen sich auf Audio, nicht auf Bearbeitungszeit.</comment>
+  </data>
+  <data name="Aac.Compact.Explanation" xml:space="preserve">
+    <value>BookStitch kann geeignete AAC-Tracks ohne erneute Codierung übernehmen. Dadurch bleibt die ursprüngliche Audioqualität erhalten.</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: BookStitch kann geeignete AAC-Tracks ohne erneute Codierung übernehmen. Dadurch bleibt die ursprüngliche Audioqualität erhalten. Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.Recommendation" xml:space="preserve">
+    <value>Empfohlenes Ausgabeprofil</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: Empfohlenes Ausgabeprofil Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.ReuseOne" xml:space="preserve">
+    <value>1 Track bleibt unverändert ({0})</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: 1 Track bleibt unverändert ({0}) Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.ReuseMany" xml:space="preserve">
+    <value>{0} Tracks bleiben unverändert ({1})</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: {0} Tracks bleiben unverändert ({1}) Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.ConvertOne" xml:space="preserve">
+    <value>1 Track wird neu codiert ({0})</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: 1 Track wird neu codiert ({0}) Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.ConvertMany" xml:space="preserve">
+    <value>{0} Tracks werden neu codiert ({1})</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: {0} Tracks werden neu codiert ({1}) Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.LessMinute" xml:space="preserve">
+    <value>unter 1 Min.</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: unter 1 Min. Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.Minutes" xml:space="preserve">
+    <value>{0} Min.</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: {0} Min. Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.Note" xml:space="preserve">
+    <value>Alternativ wird das gesamte Hörbuch mit den gewählten Benutzereinstellungen neu codiert. Die Zeitangaben sind Audiolaufzeiten, keine Bearbeitungszeiten.</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: Alternativ wird das gesamte Hörbuch mit den gewählten Benutzereinstellungen neu codiert. Die Zeitangaben sind Audiolaufzeiten, keine Bearbeitungszeiten. Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.Accept" xml:space="preserve">
+    <value>AAC Pass-Through verwenden</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: AAC Pass-Through verwenden Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.EncodeAll" xml:space="preserve">
+    <value>Alles neu codieren</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: Alles neu codieren Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.Profile" xml:space="preserve">
+    <value>AAC {0} · {1} kbit/s · {2} Hz</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: AAC {0} · {1} kbit/s · {2} Hz Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Aac.Compact.OriginalProfile" xml:space="preserve">
+    <value>AAC {0} · {1} kbit/s · {2} Hz (Original)</value>
+    <comment>Context: Kompakter AAC-Pass-Through-Entscheidungsdialog neuer Ordnerprojekte. Meaning: AAC {0} · {1} kbit/s · {2} Hz (Original) Placeholders: {0}/{1}/{2} gemäß Text; Zahlen und Audiolaufzeit sind dynamisch. TranslationNote: CompactUI; Text darf umbrechen. Keine geschätzte Verarbeitungszeit und keine menschliche Sprachfreigabe.</comment>
+  </data>
+  <data name="Metadata.Field.SortComposers" xml:space="preserve">
+    <value>Sortierkomponist</value>
+    <comment>Context: Metadateneditor, Sorting. Meaning: expliziter Sortierwert für Komponisten; Vorschläge sind unbestätigt.</comment>
+  </data>
+  <data name="Metadata.Field.MusicBrainzWorkId" xml:space="preserve">
+    <value>MusicBrainz Work ID</value>
+    <comment>Context: Metadateneditor, letztes Feld in Catalog Data. Meaning: Kennung des Werks, niemals einer Veröffentlichung. TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Metadata.Field.GoodreadsUrl" xml:space="preserve">
+    <value>Goodreads-URL</value>
+    <comment>Context: Metadateneditor, Catalog Data vor MusicBrainz Work ID. Meaning: Link zum Werk oder einer vom Benutzer gewählten Ausgabe. Keine automatische Auflösung.</comment>
+  </data>
+  <data name="Metadata.ReleaseDate.InfoTitle" xml:space="preserve">
+    <value>Release date formats</value>
+    <comment>Context: Englischer zugänglicher Info-i-Hinweis an beiden Release-Date-Ansichten. Meaning: zulässige Eingabeformate und Teilgenauigkeit. Explizit Englisch in allen Sprachen. TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Metadata.ReleaseDate.InfoBody" xml:space="preserve">
+    <value>Enter YYYY, YYYY.MM, YYYY.MM.DD or DD.MM.YYYY. Dots, slashes and hyphens are accepted, as are compact dates YYYYMMDD or DDMMYYYY. Press Enter to apply. A year or year/month keeps that precision; missing month/day values are never invented.</value>
+    <comment>Context: Englische Hilfe am Release-Date-Editor. Meaning: Kalenderprüfung, Eingabeformate und Teilgenauigkeit. Explizit Englisch in allen Sprachen. TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Tracks.Audio.BitrateIn" xml:space="preserve">
+    <value>Bitrate IN</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Bitrate der unveränderten Quelldatei. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI</comment>
+  </data>
+  <data name="Tracks.Audio.BitrateOut" xml:space="preserve">
+    <value>Bitrate OUT</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Bitrate der tatsächlich vorbereiteten Ausgabedatei; kein geschätzter Presetwert. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI</comment>
+  </data>
+  <data name="Tracks.Audio.SampleRateIn" xml:space="preserve">
+    <value>Hz IN</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: SampleRate der unveränderten Quelldatei. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Tracks.Audio.SampleRateOut" xml:space="preserve">
+    <value>Hz OUT</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: SampleRate der tatsächlich vorbereiteten Ausgabedatei; kein geschätzter Presetwert. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI TranslationRule: KeepOriginal</comment>
+  </data>
+  <data name="Tracks.Audio.ChannelsIn" xml:space="preserve">
+    <value>Kanal IN</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Channels der unveränderten Quelldatei. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI</comment>
+  </data>
+  <data name="Tracks.Audio.ChannelsOut" xml:space="preserve">
+    <value>Kanal OUT</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Channels der tatsächlich vorbereiteten Ausgabedatei; kein geschätzter Presetwert. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI</comment>
+  </data>
+  <data name="Tracks.Audio.ProfileIn" xml:space="preserve">
+    <value>Profil IN</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Profile der unveränderten Quelldatei. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI Codecprofil, kein Benutzerprofil oder Exportpreset.</comment>
+  </data>
+  <data name="Tracks.Audio.ProfileOut" xml:space="preserve">
+    <value>Profil OUT</value>
+    <comment>Context: Hauptfenster, technische Trackspalte. Meaning: Profile der tatsächlich vorbereiteten Ausgabedatei; kein geschätzter Presetwert. FixedTerms: IN und OUT bleiben in allen Sprachen unverändert groß. TranslationNote: CompactUI Codecprofil, kein Benutzerprofil oder Exportpreset.</comment>
+  </data>
 </root>

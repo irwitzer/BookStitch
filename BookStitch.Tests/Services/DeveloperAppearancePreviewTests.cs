@@ -18,16 +18,16 @@ public sealed class DeveloperAppearancePreviewTests
     public void ArrowVariantIsSessionOnlyAndClearsWhenDeveloperAccessEnds()
     {
         var (access, preview) = Create();
-        Assert.False(preview.TrackOrderVectors);
-        preview.SetTrackOrderVectors(true);
-        preview.SetBackground("Ivory");
         Assert.True(preview.TrackOrderVectors);
+        preview.SetTrackOrderVectors(false);
+        preview.SetBackground("Ivory");
+        Assert.False(preview.TrackOrderVectors);
         var fresh = new DeveloperAppearancePreview(access);
-        Assert.False(fresh.TrackOrderVectors);
+        Assert.True(fresh.TrackOrderVectors);
         access.VisibilityChoice = DeveloperToolsVisibilityChoice.Conceal;
-        Assert.False(preview.TrackOrderVectors);
-        preview.SetTrackOrderVectors(true);
-        Assert.False(preview.TrackOrderVectors);
+        Assert.True(preview.TrackOrderVectors);
+        preview.SetTrackOrderVectors(false);
+        Assert.True(preview.TrackOrderVectors);
     }
 
     [Fact]

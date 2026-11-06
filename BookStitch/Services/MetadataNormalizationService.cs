@@ -14,10 +14,10 @@ public sealed class MetadataNormalizationService
         return field switch
         {
             ProjectMetadataField.ISBN or
-            ProjectMetadataField.Barcode or
             ProjectMetadataField.ASIN or
             ProjectMetadataField.CatalogNumbers or
-            ProjectMetadataField.MusicBrainzReleaseId => text,
+            ProjectMetadataField.GoodreadsUrl or
+            ProjectMetadataField.MusicBrainzWorkId => text,
             ProjectMetadataField.Languages or
             ProjectMetadataField.OriginalLanguages or
             ProjectMetadataField.TargetLanguages => text,

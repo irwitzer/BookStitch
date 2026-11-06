@@ -28,9 +28,9 @@ public static class ConceptMetadataGroupCatalog
     [
         new(ProjectMetadataField.Keywords),
         new(ProjectMetadataField.ISBN),
-        new(ProjectMetadataField.Barcode),
         new(ProjectMetadataField.ASIN),
-        new(ProjectMetadataField.MusicBrainzReleaseId)
+        new(ProjectMetadataField.GoodreadsUrl),
+        new(ProjectMetadataField.MusicBrainzWorkId)
     ];
 
     public static IReadOnlyList<ConceptMetadataFieldDefinition> Sorting { get; } =
@@ -39,7 +39,8 @@ public static class ConceptMetadataGroupCatalog
         new(ProjectMetadataField.SortAuthors),
         new(ProjectMetadataField.SortNarrators),
         new(ProjectMetadataField.SortAlbum),
-        new(ProjectMetadataField.SortSeries)
+        new(ProjectMetadataField.SortSeries),
+        new(ProjectMetadataField.SortComposers)
     ];
 
     public static IReadOnlyList<ConceptMetadataFieldDefinition> DescriptionAdditional { get; } = [];

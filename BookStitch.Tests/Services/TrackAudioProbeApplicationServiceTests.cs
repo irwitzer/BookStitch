@@ -45,6 +45,7 @@ public sealed class TrackAudioProbeApplicationServiceTests
             Success = true,
             CodecType = "audio",
             CodecName = "aac",
+            AudioProfile = "HE-AAC",
             BitrateKbps = 125,
             Channels = 2,
             SampleRateHz = 44100,
@@ -71,6 +72,7 @@ public sealed class TrackAudioProbeApplicationServiceTests
         Assert.Equal(244, track.EmbeddedChapters.Count);
         Assert.Equal("001 NSA - Nationales Sicherheits-Amt", track.EmbeddedChapters[0].Title);
         Assert.Equal("244 NSA - Nationales Sicherheits-Amt", track.EmbeddedChapters[^1].Title);
+        Assert.Equal("HE-AAC v1", track.DisplayOriginalProfile);
         Assert.Equal(125, track.BitrateKbps);
         Assert.Equal(2, track.Channels);
         Assert.Equal("Stereo", track.ChannelLayout);

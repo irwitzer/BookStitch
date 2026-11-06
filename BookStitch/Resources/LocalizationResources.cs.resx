@@ -7224,8 +7224,8 @@ Platí pro nově importované obaly.</value>
     <comment>SourceHash: 432521673ac43923d14f7bfe76ed6f9e7a7d709b994665dfe8f10014ee580ff0</comment>
   </data>
   <data name="Developer.AlwaysShowCircleDriveButton" xml:space="preserve">
-    <value>Circle Drive Button immer anzeigen</value>
-    <comment>DevelopmentFallback: de; not a reviewed translation</comment>
+    <value>Vždy zobrazovat tlačítko Circle Drive</value>
+    <comment>SourceHash: c15685539edf9d2ee46aacf9ed1282b7f43b22960a1696e0191d301628d03cd2</comment>
   </data>
   <data name="Settings.ChapterSample.Tag4" xml:space="preserve">
     <value>04 - Cesty ve snu</value>
@@ -7570,5 +7570,192 @@ TranslationNote: Added for the 2026-10-24 complete-target-locale batch; cross-ch
   <data name="Project.Close.FailedDiscMessage" xml:space="preserve">
     <value>Projekt můžeš odstranit nebo uložit a později v něm pokračovat.</value>
     <comment>SourceHash: 17d4bd49839e9d5119d969eb532a27d79090823841d3fd760ccedd49ba6ae9e2</comment>
+  </data>
+  <data name="Aac.Plan.Title" xml:space="preserve">
+    <value>AAC Pass-Through</value>
+    <comment>SourceHash: 3a019d594fdd6c380af8ff18297a858d66e195df92b1f9d69d96598cd696f55e
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.Accept" xml:space="preserve">
+    <value>Přijmout optimalizovaný návrh</value>
+    <comment>SourceHash: 26a532b03c299e99b911c2e6ea44dfd94a40a828c2c39e45a5fc967e1c17ffe2</comment>
+  </data>
+  <data name="Aac.Plan.UseUser" xml:space="preserve">
+    <value>Použít uživatelská nastavení – {0} · {1} Hz</value>
+    <comment>SourceHash: 74772e639b504150bffead8c28837710a27cc6c999e747c33574cf2403215a3f</comment>
+  </data>
+  <data name="Aac.Plan.Back" xml:space="preserve">
+    <value>Zpět k projektu</value>
+    <comment>SourceHash: 2657a7ceb51bdef19e63675909bca9d91deba868ffd6927386cfef27a6b59717
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.UserAlternative" xml:space="preserve">
+    <value>Alternativa s tvým nastavením:</value>
+    <comment>SourceHash: 4753facd8b978af26758fdf2b8d5036550c08f11712465410a45bbd4099ef86e</comment>
+  </data>
+  <data name="Aac.Plan.Profile" xml:space="preserve">
+    <value>Účinný výstupní profil: {0} · {1} Hz</value>
+    <comment>SourceHash: ed48529dc347440aa0e7ca3b3d9192a314d7cbdf9da496679d2cfec5bfa0906a
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.Group1" xml:space="preserve">
+    <value>1 – Technické: {0} stop · délka audia {1}</value>
+    <comment>SourceHash: c920cd8a4bfa1eaaf711560b8402b94074c98580e32cd74ae66707a8230296b5</comment>
+  </data>
+  <data name="Aac.Plan.Group2" xml:space="preserve">
+    <value>2 – Vzorkovací frekvence: {0} stop · délka audia {1}</value>
+    <comment>SourceHash: 0a76cbc6485b676ef5b8e96277ef82198c305449ab395e42f4d83469b39b6047</comment>
+  </data>
+  <data name="Aac.Plan.Group3" xml:space="preserve">
+    <value>3 – Datový tok: {0} stop · délka audia {1}</value>
+    <comment>SourceHash: 1d20c9250bc41cefb23c45f283ceb76ea07949cc01f1b3c3141799f172318eae</comment>
+  </data>
+  <data name="Aac.Plan.Total" xml:space="preserve">
+    <value>Znovu zakódovat: {0} stop · délka audia {1}
+Převzít beze ztráty: {2} stop · délka audia {3}
+Délka audia není odhad doby zpracování.</value>
+    <comment>SourceHash: 0059e5ab4fabd5ecb49521b47d8c5f0256ca6a1ed03319f8765e0c4110ac8c2b</comment>
+  </data>
+  <data name="Aac.Plan.OriginalPreset" xml:space="preserve">
+    <value>AAC {0} {1} kbps (Originál)</value>
+    <comment>SourceHash: 7ee7b76fb2e8ae0ab3bcdcb640d7c01e6e6c5a30c7cb5e1516494e6fbba57895
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.SourceError" xml:space="preserve">
+    <value>Vlastnosti zvuku nelze spolehlivě určit nebo se zdroj změnil. Zdroje je nutné znovu zkontrolovat.</value>
+    <comment>SourceHash: bb323dac6bb4024fdd19585439d8637aa21a7521fe4430f4646c8f6802acd5ed
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.EncoderError" xml:space="preserve">
+    <value>Kodér AAC tento výstupní profil spolehlivě nepodporuje.</value>
+    <comment>SourceHash: c624ae03932bd980b3b359f5345fbe5bdb9fe0a2f82cef75f3b4279d5d69374a
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.InvalidOriginal" xml:space="preserve">
+    <value>Režim Pass-Through již není platný. Je nutné výslovně zvolit běžnou předvolbu nebo obnovit vhodné původní zdroje.</value>
+    <comment>SourceHash: 20d0376aabbd55d7bfc2a06fbbabc4892633147527c08c43a496e4d3a4a313b6
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Plan.Analyzing" xml:space="preserve">
+    <value>Kontrola plánu zpracování AAC …</value>
+    <comment>SourceHash: 77ed6dd0647f370485f4c943037fc09071840f5cd2756ffad319d09cdbb31c30
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Explanation" xml:space="preserve">
+    <value>BookStitch může vhodné stopy AAC převzít bez nového kódování a zachovat jejich původní kvalitu zvuku.</value>
+    <comment>SourceHash: c0f6c99511aac233cf90a2ab1fca33e71cb6b700ab4c60cfb90fd58223341216
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Recommendation" xml:space="preserve">
+    <value>Doporučený výstupní profil</value>
+    <comment>SourceHash: ec4d69b3383aae349894a64c1e8300768c54c81c8d994a4ec3fb4353b8b3e176
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.ReuseOne" xml:space="preserve">
+    <value>1 stopa zůstane beze změny ({0})</value>
+    <comment>SourceHash: 2d6e81e84f0bf9272926e0a372fad2d26688a2362a32f3005ba081e60322a185
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.ReuseMany" xml:space="preserve">
+    <value>Stopy beze změny: {0} ({1})</value>
+    <comment>SourceHash: 44b268160332a5389fa35d034b9e529f75ec07507c86698ce225347a7eb2db16
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.ConvertOne" xml:space="preserve">
+    <value>1 stopa bude znovu zakódována ({0})</value>
+    <comment>SourceHash: 09b86a1ea3e74c16390b8b680121e3163a96d7c8e9605a182f63ddd514497ec3
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.ConvertMany" xml:space="preserve">
+    <value>Stopy k novému kódování: {0} ({1})</value>
+    <comment>SourceHash: 59da162e1ffdf44d140b43945178c7ca6038979a5a0b1f30afb2b2f64c133dfb
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.LessMinute" xml:space="preserve">
+    <value>méně než 1 min</value>
+    <comment>SourceHash: bd47a71a2c1a5b5df70141c92ae33fdce950dd58422d1f1bd1d16653a23a7541
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Minutes" xml:space="preserve">
+    <value>{0} min</value>
+    <comment>SourceHash: f7744b090b9513ba533001b57a12b08025e86b8cb49e0deb4e22ab7156583204
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Note" xml:space="preserve">
+    <value>Případně lze celou audioknihu znovu zakódovat podle zvolených nastavení. Časy udávají délku zvuku, nikoli odhad doby zpracování.</value>
+    <comment>SourceHash: 3bcc14a5af37f9bc8c8128729d62527e6d789f0238da43bcf46cd2339ef3267b
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Accept" xml:space="preserve">
+    <value>Použít AAC Pass-Through</value>
+    <comment>SourceHash: fab5dc485d46acf6393c3a90b884e6d0c6a423528c8722b419b5ed38c4cf6186
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.EncodeAll" xml:space="preserve">
+    <value>Vše znovu zakódovat</value>
+    <comment>SourceHash: 0090994f2f2034b403b7d937ec51dbbc9107d2eca4c3fd4cd6d3a3cbfa9823ab
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.Profile" xml:space="preserve">
+    <value>AAC {0} · {1} kbit/s · {2} Hz</value>
+    <comment>SourceHash: 7c3dd21848d6ce0903763f6d2d0826ac9908f5602c259a95b01b0686d7314b97
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Aac.Compact.OriginalProfile" xml:space="preserve">
+    <value>AAC {0} · {1} kbit/s · {2} Hz (Originál)</value>
+    <comment>SourceHash: 96836faaf40fd27640c37833df2c55e50e929e8a048fd6249b9555ec0c019fc6
+TranslationNote: AAC compact-dialog authoring; no independent native-language review or manual UI approval.</comment>
+  </data>
+  <data name="Metadata.Field.SortComposers" xml:space="preserve">
+    <value>Skladatelé pro řazení</value>
+    <comment>SourceHash: faca4905077c43290a2b43b743e6d3b0d578987483fccc960f96a55814ba4a8a</comment>
+  </data>
+  <data name="Metadata.Field.MusicBrainzWorkId" xml:space="preserve">
+    <value>MusicBrainz Work ID</value>
+    <comment>SourceHash: aac5d0c6ed1ea465fca6a973bd84b3ac96e13624b142033feb41c7786577082f</comment>
+  </data>
+  <data name="Metadata.Field.GoodreadsUrl" xml:space="preserve">
+    <value>URL Goodreads</value>
+    <comment>SourceHash: 90fa1ad23bb25f8aeed82fd6c0c5f9662243602bd094ee43253e92ce51cd3416</comment>
+  </data>
+  <data name="Metadata.ReleaseDate.InfoTitle" xml:space="preserve">
+    <value>Release date formats</value>
+    <comment>SourceHash: d78966d221eefe3bea31193549e3d3daafeb458df0d43e061828d5ce70dae52f</comment>
+  </data>
+  <data name="Metadata.ReleaseDate.InfoBody" xml:space="preserve">
+    <value>Enter YYYY, YYYY.MM, YYYY.MM.DD or DD.MM.YYYY. Dots, slashes and hyphens are accepted, as are compact dates YYYYMMDD or DDMMYYYY. Press Enter to apply. A year or year/month keeps that precision; missing month/day values are never invented.</value>
+    <comment>SourceHash: 9fa6809533c8b49a512d1d78cd519a01fde8ca0efded93159b13279a332f2688</comment>
+  </data>
+  <data name="Tracks.Audio.BitrateIn" xml:space="preserve">
+    <value>Datový tok IN</value>
+    <comment>SourceHash: 55efde6ad67fdfb97a1ea2d7ccfeee5c132dc08c488038bd9fd02ca452b3c230</comment>
+  </data>
+  <data name="Tracks.Audio.BitrateOut" xml:space="preserve">
+    <value>Datový tok OUT</value>
+    <comment>SourceHash: 3d3be7991c2b4f57517caf422923cb4c12e70e82bda8a7d82f87e1a4d596b296</comment>
+  </data>
+  <data name="Tracks.Audio.SampleRateIn" xml:space="preserve">
+    <value>Hz IN</value>
+    <comment>SourceHash: f8ddff0995562e6d65d434e649b2f762bdc600e372049e59c8be0f94723fdb63</comment>
+  </data>
+  <data name="Tracks.Audio.SampleRateOut" xml:space="preserve">
+    <value>Hz OUT</value>
+    <comment>SourceHash: f1a480bdc3a6ca83633eddbadee4ece822c9e9c5cbefc8484b76bd09715b93c7</comment>
+  </data>
+  <data name="Tracks.Audio.ChannelsIn" xml:space="preserve">
+    <value>Kanál IN</value>
+    <comment>SourceHash: 406bb04bfd9fa8ba234a8c17681589d1cebe4ff7f3ee371c60eb99daaafa88b1</comment>
+  </data>
+  <data name="Tracks.Audio.ChannelsOut" xml:space="preserve">
+    <value>Kanál OUT</value>
+    <comment>SourceHash: c8c7984786ac5824d95273176274df14fd41b01368fa093b3be9552759866b57</comment>
+  </data>
+  <data name="Tracks.Audio.ProfileIn" xml:space="preserve">
+    <value>Profil IN</value>
+    <comment>SourceHash: 4ec133d93d044b36ca061c621eb3f823847de5d34efada589e65494f4646ce57</comment>
+  </data>
+  <data name="Tracks.Audio.ProfileOut" xml:space="preserve">
+    <value>Profil OUT</value>
+    <comment>SourceHash: a50149b909283dd9f75c5f9f96668e1c7cf2f1948859d9a0d0277dbb59adb3ad</comment>
   </data>
 </root>

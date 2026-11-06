@@ -65,17 +65,17 @@ public enum ProjectMetadataField
     Script,
     Publisher,
     ReleaseDate,
-    Year = 28,
+    ReservedYear = 28,
     Copyright = 29,
     PhonogramCopyright = 30,
     License = 31,
     Genres = 32,
     Categories = 33,
     ISBN = 34,
-    Barcode = 35,
+    ReservedBarcode = 35,
     ASIN = 36,
     CatalogNumbers = 37,
-    MusicBrainzReleaseId = 38,
+    ReservedReleaseId = 38,
     SortTitle = 39,
     SortAuthors = 40,
     SortNarrators = 41,
@@ -87,13 +87,19 @@ public enum ProjectMetadataField
     OutputTrackTotal = 47,
     Composers = 48,
     Cover = 49,
-    OriginalTitle = 50
+    OriginalTitle = 50,
+    SortComposers = 51,
+    MusicBrainzWorkId = 52,
+    GoodreadsUrl = 53
 }
 
 public static class ProjectMetadataFields
 {
     private static readonly HashSet<ProjectMetadataField> RetiredCanonicalFields =
     [
+        ProjectMetadataField.ReservedYear,
+        ProjectMetadataField.ReservedBarcode,
+        ProjectMetadataField.ReservedReleaseId,
         ProjectMetadataField.Performers,
         ProjectMetadataField.Contributors,
         ProjectMetadataField.Hosts,
@@ -128,10 +134,10 @@ public static class ProjectMetadataFields
         ProjectMetadataField.Categories or
         ProjectMetadataField.CatalogNumbers or
         ProjectMetadataField.SortAuthors or
+        ProjectMetadataField.SortComposers or
         ProjectMetadataField.SortNarrators => ProjectMetadataFieldValueKind.StringList,
         ProjectMetadataField.Series => ProjectMetadataFieldValueKind.SeriesList,
         ProjectMetadataField.ReleaseDate => ProjectMetadataFieldValueKind.MetadataDate,
-        ProjectMetadataField.Year or
         ProjectMetadataField.OutputTrackNumber or
         ProjectMetadataField.OutputTrackTotal => ProjectMetadataFieldValueKind.Integer,
         ProjectMetadataField.AudioWorkType => ProjectMetadataFieldValueKind.AudioWorkType,

@@ -4,6 +4,15 @@ namespace BookStitch.Models;
 
 public sealed record ExportPreset(string DisplayName, int BitrateKbps, int Channels)
 {
+    public bool IsPassThrough { get; init; }
+    public decimal? OriginalBitrateBitsPerSecond { get; init; }
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, ExportPreset> Originals = new(StringComparer.Ordinal);
+    public static ExportPreset RegisterOriginal(string displayName, int channels, decimal bitrate)
+    {
+        var preset = new ExportPreset(displayName, 0, channels) { IsPassThrough = true, OriginalBitrateBitsPerSecond = bitrate };
+        Originals[displayName] = preset;
+        return preset;
+    }
     public static IReadOnlyList<string> AvailableDisplayNames { get; } = Array.AsReadOnly(new[]
     {
         "AAC Mono 64 kbps", "AAC Mono 96 kbps", "AAC Stereo 96 kbps",
@@ -14,6 +23,7 @@ public sealed record ExportPreset(string DisplayName, int BitrateKbps, int Chann
 
     public static ExportPreset Parse(string? value)
     {
+        if (value is not null && Originals.TryGetValue(value, out var original)) return original;
         var text = string.IsNullOrWhiteSpace(value)
             ? DefaultDisplayName
             : value.Trim();
@@ -32,6 +42,7 @@ public sealed record ExportPreset(string DisplayName, int BitrateKbps, int Chann
 
     public string GetFolderName()
     {
+        if (IsPassThrough) return $"aac_original_{Channels}";
         var channelText = Channels == 1 ? "mono" : "stereo";
         return $"aac_{channelText}_{BitrateKbps}k";
     }

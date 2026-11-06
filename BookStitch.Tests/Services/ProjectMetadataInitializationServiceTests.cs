@@ -12,13 +12,13 @@ public sealed class ProjectMetadataInitializationServiceTests
     public void Apply_SuppressedYearDoesNotReturnFromLaterSourcesButOtherYearCanFillEmptyField()
     {
         var metadata = new ProjectMetadata();
-        metadata.SuppressValue(ProjectMetadataField.Year, "2026");
+        metadata.SuppressValue(ProjectMetadataField.ReleaseDate, "2026");
 
         _service.Apply(metadata, [Snapshot(year: 2026)], ProjectMetadataInitializationState.SubsequentSource);
-        Assert.Null(metadata.GetValue<int?>(ProjectMetadataField.Year).Value);
+        Assert.Null(metadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
 
         _service.Apply(metadata, [Snapshot(year: 2027)], ProjectMetadataInitializationState.SubsequentSource);
-        Assert.Equal(2027, metadata.GetValue<int?>(ProjectMetadataField.Year).Value);
+        Assert.Equal(new MetadataDate(2027), metadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
     }
 
     [Theory]
@@ -54,8 +54,8 @@ public sealed class ProjectMetadataInitializationServiceTests
             [Snapshot(year: 1997), Snapshot(year: 1997), Snapshot(year: 2001)],
             ProjectMetadataInitializationState.InitialSetComplete);
 
-        Assert.Equal(1997, metadata.GetValue<int?>(ProjectMetadataField.Year).Value);
-        Assert.Equal(MetadataOrigin.SourceAggregation, metadata.GetValue<int?>(ProjectMetadataField.Year).Origin);
+        Assert.Equal(new MetadataDate(1997), metadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Value);
+        Assert.Equal(MetadataOrigin.SourceAggregation, metadata.GetValue<MetadataDate?>(ProjectMetadataField.ReleaseDate).Origin);
     }
 
     [Fact]
@@ -970,10 +970,9 @@ public sealed class ProjectMetadataInitializationServiceTests
                 Languages = languages ?? [],
                 Series = series ?? [],
                 ISBN = isbn,
-                Barcode = barcode,
                 ASIN = asin,
                 AudioWorkType = audioWorkType,
-                Year = year
+                ReleaseDate = year.HasValue ? new MetadataDate(year.Value) : null
             }
         };
 }

@@ -1726,6 +1726,18 @@
     </Style>
 
 
+    <Style x:Key="TrackOrderButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
+        <Setter Property="Foreground" Value="{DynamicResource MainTextBrush}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Global context-menu system. Explicit application menus and the framework-generated
          TextBox/ComboBox editing menu share the same palette-aware presentation. -->
     <Style x:Key="BookStitchContextMenuStyle" TargetType="ContextMenu">
@@ -2075,7 +2087,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <ContentPresenter Grid.Column="0"
@@ -2084,6 +2096,7 @@
                                                   RecognizesAccessKey="True"/>
 
                                 <Path x:Name="SortArrow"
+                                      Margin="4,0,0,0"
                                       Grid.Column="1"
                                       Width="8"
                                       Height="5"

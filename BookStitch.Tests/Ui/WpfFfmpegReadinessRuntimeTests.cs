@@ -22,7 +22,8 @@ public sealed partial class WpfDialogRuntimeTests
             var xaml = RepositorySource.LoadXaml(["BookStitch", "MainWindow.xaml"]);
             var status = xaml.Descendants().Single(e => (string?)e.Attribute("Text") == "{Binding StatusText}");
             var minimumWidth = double.Parse((string)xaml.Root!.Attribute("MinWidth")!, CultureInfo.InvariantCulture);
-            var coverWidth = double.Parse((string)status.Parent!.Element(status.Name.Namespace + "Grid.ColumnDefinitions")!
+            var statusGrid = status.Ancestors().First(e => e.Element(status.Name.Namespace + "Grid.ColumnDefinitions") is not null);
+            var coverWidth = double.Parse((string)statusGrid.Element(status.Name.Namespace + "Grid.ColumnDefinitions")!
                 .Elements().Last().Attribute("Width")!, CultureInfo.InvariantCulture);
             var availableWidth = minimumWidth - coverWidth - 40;
             foreach (var locale in master.RootElement.GetProperty("locales").EnumerateArray())
